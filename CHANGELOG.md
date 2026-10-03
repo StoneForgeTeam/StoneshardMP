@@ -1,5 +1,9 @@
 # StoneshardMP changes
 
+## 0.18.3
+
+- Needs StoneForge 0.3.0 (off-screen instances, and hooks on undeclared scripts refused at load).
+
 ## 0.18.2
 
 - The debug dump (Ctrl+Shift+D) checks StoneForge's new off-screen instances against the loot GML they're to

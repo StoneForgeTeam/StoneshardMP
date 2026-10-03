@@ -1,9 +1,9 @@
 {
   "id": "stoneshardmp",
   "name": "StoneshardMP",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "author": "StoneForgeTeam",
   "description": "Co-op multiplayer for Stoneshard: up to 8 players in one world, over LiteNetLib.",
-  "stoneforge": "0.2.0",
+  "stoneforge": "0.3.0",
   "trusted": true
 }
