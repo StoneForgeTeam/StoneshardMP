@@ -1,0 +1,161 @@
+# StoneshardMP changes
+
+## 0.11.23
+
+- Fixed the host's game stopping on the first action a client sent: the world-turn readiness check (MpWorldTickReady)
+  called the game's cutscene check with no instance, and that check reads `object_index`. It now runs as the player.
+
+## 0.11.22
+
+- World turns are back on (the on-move model): a player's completed action is one world turn for everyone.
+  - A client's action reaches the host, which runs one idle world turn: time, upkeep and its units' turn loop. The
+    area's units move, and AreaUnits streams them to the client.
+  - The host's actions, and each turn it runs, send its clock to the clients.
+  - A client in the host's area only takes the clock. Its units there are the host's, so it runs no AI of its own;
+    that was what crashed the client in 0.11.14.
+  - A client elsewhere still gives its own area one idle turn per other player's action. Turns are queued and run
+    from the mod's tick once the world is ready, never inside the network handler.
+
+## 0.11.21
+
+- Multiplayer is a set of main menu screens again, as in the GML version, built on StoneForge's main menu layout:
+  - **Multiplayer** (after Play): Host Game, Join Game, Players & Settings, Back.
+  - **Hosting:** the game's Continue / New Game / Load Game, Players & Settings, Stop Hosting.
+  - **Joined:** the same, with Leave Game.
+  - The screen follows the session: it changes on its own when hosting starts or stops, a join succeeds, or the
+    connection drops. The session's status shows under the menu meanwhile.
+- **Join Game** opens a dialog in the game's confirm-panel frame: the host's address (remembered), Join and Cancel.
+  Enter joins.
+- **Players & Settings** (the journal-framed window, its frame put back): who's in the game; your name, the join
+  address and name tags. Hosting and joining moved out of it into the menu.
+
+## 0.11.20
+
+Protocol 11.
+- Synchronize the NPC animation-mode flag and render sprite used by scr_npc_change_animation, including work poses.
+
+## 0.11.18
+
+- Moved player-state binary serialization into StatePacket. Gameplay models no longer depend on the span wire reader/writer; all other packet payload serializers already reside under Net/Packets.
+- Preserved protocol 9 and the existing field order.
+
+## 0.11.17
+
+Protocol 9.
+- Migrated all packet contracts, connection data, and feature handlers to SpanReadWrite packet structs under Net/Packets.
+- Removed PacketType and anonymous serialization callbacks; added envelope validation and bounded string reads.
+- Verified round trips, Unicode, large rosters, truncated input, and trailing-data rejection.
+
+## 0.11.16
+
+- The Multiplayer window uses the game's journal frame, laid out as the journal: the tabs in its left pane, the page and the Host / Join / Leave / Close buttons in its right. It's built from StoneForge's reworked windows (any frame sprite).
+
+## 0.11.15
+
+- Disabled the on-move action-forwarding experiment after its receiving WorldTick handler closed the client; added full handler error logging for the next isolated diagnosis.
+
+## 0.11.14
+
+Protocol 7.
+- Replaced the disabled 600 ms experiment with legacy-style on-move world turns: each player's completed action advances the other players by one safe idle turn through the host.
+
+## 0.11.13
+
+- Temporarily disabled the fixed-world-clock experiment after it caused a freeze. Ghost/effect/state networking remains enabled.
+
+## 0.11.12
+
+- Matched the legacy tick gate's input-phase behavior: queued clicks and context actions remain responsive while waiting for a world tick.
+
+## 0.11.11
+
+Protocol 6.
+- Added the first host-authoritative, fixed out-of-combat world clock: safe idle turns and time are now driven by the host every 600 ms.
+
+## 0.11.10
+
+Protocol 5.
+
+- Inspection now uses the other player's actual resistance values, instead of the Caravan Dummy template. Ghosts are
+  labelled as players in that panel.
+
+## 0.11.9
+
+Protocol 4.
+
+- Inspection now shows another player's live health and energy percentages. The ghost remains locally invulnerable
+  until combat synchronization is implemented, so those values cannot be changed by unsynchronized local damage.
+
+## 0.11.8
+
+- Ghosts now start from the game's complete Caravan Dummy parameter record, allowing the normal inspection panel to
+  read their type, stats, resistances, and other expected unit fields safely.
+
+## 0.11.7
+
+- Passive ghosts now have a remote-player name and description for inspection, and bypass the inherited enemy
+  loot/corpse cleanup path when removed.
+
+## 0.11.6
+
+- Removed the training-dummy marker from ghosts as well. They are ordinary passive enemy-unit proxies, with no
+  dummy-specific context actions.
+
+## 0.11.5
+
+- Ghosts now inherit directly from the enemy unit rather than the training dummy. This removes the dummy-only
+  **Change protection class** right-click action while retaining passive unit collision and targeting behavior.
+
+## 0.11.4
+
+- Fixed passive ghosts inheriting the dummy unit's delayed stat-calculation alarm. Ghosts do not have (or need)
+  combat stat templates until combat synchronization is implemented.
+
+## 0.11.3
+
+- Ghosts are now passive dummy units in their remote player's occupied cell. They use normal unit collision and
+  targeting data, but stay neutral, invulnerable, and invisible to enemy AI until combat forwarding is added.
+
+## 0.11.2
+
+Protocol 3.
+
+- Visual effects now travel with the player who made them: hit flashes, spells, projectiles, and effects such as
+  burning or stun are drawn on the other games. They are sprite-only echoes, so they cannot deal damage, create
+  further effects, or otherwise run game logic remotely.
+
+## 0.11.1
+
+Protocol 2.
+
+- Ghosts: the other players in the same place as you (room, and dungeon floor) are drawn where and as their game draws
+  them:
+  - their look, built by the game's own compositor from their layers;
+  - their shadow, and a name tag (Name tags setting);
+  - smoothed for small moves and snapped for jumps.
+- Your state goes out every other frame (unreliable, latest only), your look whenever it changes and to newcomers.
+- The ghost is a StoneForge mod object (`o_stoneshardmp__ghost`). For now it's only a picture: it becomes a unit, which
+  attacks and spells can target, with combat.
+- Ctrl+Shift+G, the mirror test: your own ghost two cells to the right, to try it with one game.
+- The mod has GML functions (`GML\`): reading the player's state and look and building a ghost's sprites need GML
+  arrays, which StoneForge's C# can't hold yet.
+
+## 0.11.0
+
+The StoneForge port begins: StoneshardMP is now a C# mod on StoneForge, networked with LiteNetLib (UDP) in place of
+GameMaker's TCP sockets. It's protocol 1, so it can't play with the GML versions (0.10.x).
+
+- Session:
+  - The host runs a LiteNetLib server (UDP port 7777 by default). Players get slots: the host is 1 and the others
+    2-8, up to the host's Max players.
+  - The host relays packets between players and stamps each with its real sender.
+  - The handshake (protocol, version, name) rides on the connection request. A version mismatch or a full game is
+    refused with the reason shown to the joining player.
+  - LiteNetLib keeps the connection alive on its own thread, with a 30 s timeout, so a game frozen while loading
+    doesn't drop out.
+- Multiplayer window on the main menu:
+  - Host, Join and Leave.
+  - Your name (empty: your Steam name) and the host's address.
+  - The players in the game, with their versions and ping.
+- Settings on the mod's page in the Mods window: name, join address, port, max players.
+- Needs StoneForge with trusted mods. It's a trusted mod, so it needs allowing in the Mods window.

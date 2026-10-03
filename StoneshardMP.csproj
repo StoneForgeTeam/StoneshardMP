@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- For editing in an IDE only: the game compiles this folder's .cs files itself when it starts. StoneshardMP is
+       a trusted mod (mod.json "trusted": true): it's compiled against the whole of .NET and its own DLLs in lib\,
+       which the game loads with it. Nothing built here is loaded; bin and obj are ignored. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- (No implicit usings: the game compiles exactly the .cs files, usings and all.) -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <StoneForgeSdkDir Condition="'$(StoneForgeSdkDir)' == '' and '$(STONESHARD_DIR)' != ''">$(STONESHARD_DIR)\dotnet</StoneForgeSdkDir>
+    <StoneForgeSdkDir Condition="'$(StoneForgeSdkDir)' == ''">$(MSBuildThisFileDirectory)..\..\dotnet</StoneForgeSdkDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="StoneForge.API">
+      <HintPath>$(StoneForgeSdkDir)\StoneForge.API.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Its GML functions (GML folder) as C#: the generator makes StoneshardMP.Gml from them, as the game does. -->
+    <Analyzer Include="$(StoneForgeSdkDir)\StoneForge.GmlGenerator.dll" />
+    <AdditionalFiles Include="GML\**\*.gml" />
+    <Reference Include="LiteNetLib">
+      <HintPath>lib\LiteNetLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ValidateStoneForgeSdk" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(StoneForgeSdkDir)\StoneForge.API.dll')"
+           Text="Install StoneForge and set STONESHARD_DIR to the game folder, or pass -p:StoneForgeSdkDir=path-to-its-dotnet-folder." />
+  </Target>
+
+</Project>

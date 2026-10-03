@@ -1,0 +1,5 @@
+bin/
+obj/
+.vs/
+# The mod ships LiteNetLib (a trusted mod's own DLL).
+!lib/*.dll
