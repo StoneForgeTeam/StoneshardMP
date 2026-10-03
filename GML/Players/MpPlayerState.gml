@@ -1,6 +1,6 @@
 /// @stoneforge return string
 // Where and how our player is drawn this frame, for the others' copies of us ("" when there's no player): the place
-// (room, and "#f<floor>" in a dungeon - every floor of one is the same room), then what o_player draws with - stX /
+// (room, "#f<floor>" in a dungeon - every floor of one is the same room - and "@x_y", the world-map cell), then what o_player draws with - stX /
 // stY / stScale* (scr_spriteTransformUpdate: the bob and lean), frame, animation row, depth, visible, tilt, hit
 // flash (diss), alpha - its shadow as scr_draw_self_shadow places it, its cell, and its health/energy. "|" between.
 function MpPlayerState()
@@ -10,6 +10,9 @@ function MpPlayerState()
     var _place = room_get_name(room);
     if (variable_global_exists("floor_counter") && global.floor_counter > 0)
         _place += "#f" + string(global.floor_counter);
+    // (And the world-map cell: neighbouring areas of the world map are built in the same room.)
+    if (variable_global_exists("playerGridX"))
+        _place += "@" + string(global.playerGridX) + "_" + string(global.playerGridY);
     var _s = "";
     with (o_player)
     {

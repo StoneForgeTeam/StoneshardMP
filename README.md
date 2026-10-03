@@ -29,6 +29,8 @@ CHANGELOG.md for what works so far.
 - **One world:** areas and dungeons are built from the world seed, so everyone gets the same layout. When you leave
   an area you were running, what's in it (what's dead, taken or opened) goes to the others. A client coming into the
   host's world gets a copy of every area the host has, and takes the host's weather.
+- **Ground loot:** where you're together, the host's loot is the real one. Items dropped, picked up or left by a
+  kill show up for everyone there.
 - **Players & Settings** lists who's in the game and has your name, the join address and name tags. The port and
   player limit are on StoneshardMP's page in the Mods window.
 

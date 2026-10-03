@@ -18,7 +18,7 @@ namespace StoneshardMP.Net;
 public sealed class Session : INetEventListener
 {
     // What's sent between games: raise it whenever that changes, so mismatched games refuse each other.
-    public const ushort Protocol = 14;
+    public const ushort Protocol = 16;
     public const byte Everyone = 255;
     public const int MaxPlayers = 8;
     // (The connection request's key: only StoneshardMP games answer each other.)

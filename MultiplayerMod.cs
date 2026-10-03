@@ -23,6 +23,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private DebugDump _dump = null!;
     private JoinManager _join = null!;
     private WorldSync _world = null!;
+    private LootSync _loot = null!;
 
     public void Load(ModContext context)
     {
@@ -46,6 +47,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _world = new WorldSync(context, _session, _join);
         // A multiplayer world's saves are named for who plays in it.
         new SaveNames(context, _session, () => window.PlayerName);
+        // Live ground loot where players are together: the host's is the real one.
+        _loot = new LootSync(context, _session, () => _join.InSharedWorld);
         _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
@@ -60,6 +63,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _clock.Clear();
         _join.Clear();
         _world.Clear();
+        _loot.Clear();
     }
 
     public void Tick(double deltaTime)
@@ -70,6 +74,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             _menu.Tick();
             _join.Tick();
             _world.Tick();
+            _loot.Tick();
             _players.Tick();
             _effects.Tick();
             _areaUnits.Tick();

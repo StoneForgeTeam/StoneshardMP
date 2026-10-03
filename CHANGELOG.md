@@ -1,5 +1,30 @@
 # StoneshardMP changes
 
+## 0.14.1
+
+Protocol 16.
+- Dropped items fly for everyone. Loot goes out the moment it appears, with its throw if it's still in the air (where it
+  is, the tile it's landing on, its speed and gravity), and the other game flies its copy along the same arc to the
+  same tile, with the landing sound and dust. Before, it only went out once it had landed, and popped in.
+- A client's own drop no longer vanishes and comes back. It goes to the host in the air, with a token; the host throws
+  its copy along the same arc, and when that comes back with the token the client's own item becomes the shared one.
+  One the host doesn't bring back within 5 seconds is removed.
+- Loot is checked every 4 frames instead of 12, so throws are caught early in their arc.
+
+## 0.14.0
+
+Protocol 15. Live ground loot, ported from the GML version's loot sync (LootSync, LootPacket).
+- Where the host and clients are together, the host's ground loot is the real one. A client arriving gets the host's
+  list: what it has from the same save is matched up, the rest made from the host's data, and anything else removed.
+  After that the host sends what changes every few frames: new loot once it has landed (drops, kills), and loot that
+  left (picked up by anyone).
+- A client's pickups go to the host, which removes the item too. A client's drops go to the host, which makes them;
+  they come back as the one shared item, where it landed on the host. A drop is only counted as one when it turns up
+  next to the client right after the game's "dropped" line, so the game swapping an item for a new one (food going
+  off) can't multiply items. The host takes at most 10 drops a second from a client, against a runaway loop.
+- A player's place now includes the world-map cell. Neighbouring areas of the world map are built in the same room,
+  so players (and NPCs, and loot) in two different areas were treated as together.
+
 ## 0.13.2
 
 - A multiplayer world's saves are named for who plays in it rather than for the host's character: the Load Game

@@ -43,6 +43,7 @@ public static class PacketCodec
             SaveRequestPacket.PacketId => SaveRequestPacket.Read(ref reader),
             HostLeftPacket.PacketId => HostLeftPacket.Read(ref reader),
             WorldDataPacket.PacketId => WorldDataPacket.Read(ref reader),
+            LootPacket.PacketId => LootPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");
