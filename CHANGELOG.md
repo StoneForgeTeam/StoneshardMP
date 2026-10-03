@@ -1,5 +1,14 @@
 # StoneshardMP changes
 
+## 0.12.1
+
+- A client no longer waits for the host to finish making its own character. As soon as the host's new game has its
+  world seed (before its character creation), the waiting players start making theirs alongside it, on the host's
+  world map. A character finished before the host's world is ready is kept on the host and let in once it is (the
+  GML version's `mp_host_new_game`).
+- The host's New Game, while hosting, goes straight into the Adventure with permadeath off. The prologue is a world
+  of its own, so it's left out.
+
 ## 0.12.0
 
 Protocol 12. The host keeps everyone's save, as the GML version did: a client has no save data of its own.

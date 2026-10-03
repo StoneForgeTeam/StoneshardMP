@@ -7,7 +7,7 @@ namespace StoneshardMP.UI;
 // The Multiplayer screens of the main menu, made of its own buttons (StoneForge's MainMenu), as the game's Play screen
 // is - one for each state of the session, switched as it changes (the host leaving, a connection lost...):
 // - Multiplayer (after Play): Host Game, Join Game (its dialog: JoinDialog), Players & Settings (MultiplayerWindow), Back.
-// - Hosting: the game's Continue / New Game / Load Game, and Stop Hosting.
+// - Hosting: the game's Continue and Load Game, New Game (straight into the Adventure), and Stop Hosting.
 // - Joined: Players & Settings and Leave Game only - a client plays the host's world, launched into it (or into making
 //   a character for it) when the host is in it (JoinManager).
 // The session's status shows under the menu meanwhile.
@@ -85,7 +85,9 @@ public sealed class MultiplayerMenu
                 break;
             case Screen.Hosting:
                 MainMenu.AddButton(_context, VanillaButton.Continue);
-                MainMenu.AddButton(_context, VanillaButton.NewGame);
+                // (A shared world: straight into the Adventure, no permadeath - the prologue is a world of its own. The
+                // players waiting make their characters alongside: JoinManager.)
+                MainMenu.AddButton(_context, "New Game", Gml.MpJoinStartNew);
                 MainMenu.AddButton(_context, VanillaButton.LoadGame);
                 MainMenu.AddButton(_context, "Players & Settings", _window.Open);
                 MainMenu.AddButton(_context, "Stop Hosting", () => _session.Stop("Stopped hosting"));

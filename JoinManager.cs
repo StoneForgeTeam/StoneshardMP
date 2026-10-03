@@ -13,13 +13,15 @@ using StoneshardMP.Net.Packets;
 namespace StoneshardMP;
 
 // The host keeps everyone's save (legacy StoneshardMP's design): a client has no save data of its own.
-// - A client that's in asks to join (JoinRequestPacket). The host answers once it's in a world - it pressed Continue,
-//   New Game or Load Game: until then the client waits.
+// - A client that's in asks to join (JoinRequestPacket). The host answers once it's in a world - it pressed Continue
+//   or Load Game - or has begun a new one (New Game: its world's seed is made before its own character is): until
+//   then the client waits.
 // - The host has a character for that player: it sends its world (its save data) with that character in it
 //   (MpJoinBuildSave), and the client loads it (in place of a save of its own: scr_slotLoad).
 // - It hasn't: the client makes one - straight into the game's new game (Adventure: the class picked at Verren) on
 //   the host's world map (its seed, given as it's made: scr_characterMapInit). Its first save sends the character to
-//   the host and asks again - and it's let in as above.
+//   the host and asks again - and it's let in as above. A host making its own new character too: the client makes
+//   theirs alongside, its character kept until the host's world is ready.
 // - The client's saves are never written here (scr_slotUpdate): each sends its character to the host, which keeps it
 //   in its world's save data (MpJoinStoreCharacter) - saved with the host's own saves.
 public sealed class JoinManager
@@ -41,6 +43,8 @@ public sealed class JoinManager
     private int _calm;
     // (A new character's game is started from Tick, never inside the network handler.)
     private bool _startNew;
+    // Host: we've begun a new world (New Game) - its seed is made, the players waiting can make their characters now.
+    private bool _hostNewWorld;
 
     public JoinManager(ModContext context, Session session, Func<string> playerName)
     {
@@ -58,10 +62,14 @@ public sealed class JoinManager
         Scripts.scr_slotLoad.Before(context, call => Gml.MpJoinTakePending());
         // A client's saves go to the host, not here.
         Scripts.scr_slotUpdate.Before(context, call => ClientSave());
-        // A client's new character is made on the host's world map.
+        // A new game's save data is being made (its seed just rolled, in scr_gameDataMapInit): a client's new character
+        // takes the host's world map; a host's new world lets the waiting players start theirs.
         Scripts.scr_characterMapInit.Before(context, call =>
         {
-            if (_state == ClientState.MakingCharacter && _hostSeed >= 0 && !Game.Global["is_load_game"].AsBool)
+            bool newGame = !Game.Global["is_load_game"].AsBool;
+            if (_session.Mode == Session.SessionMode.Host)
+                _hostNewWorld = newGame;
+            else if (_state == ClientState.MakingCharacter && _hostSeed >= 0 && newGame)
                 Gml.MpJoinApplySeed(_hostSeed);
             return false;
         });
@@ -83,6 +91,7 @@ public sealed class JoinManager
         _hostSeed = -1;
         _calm = 0;
         _startNew = false;
+        _hostNewWorld = false;
         Status = null;
     }
 
@@ -99,14 +108,27 @@ public sealed class JoinManager
 
     private void HostTick()
     {
+        // (Back on the main menu: no new world begun any more.)
+        if (Gm.InMainMenu && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger))
+            _hostNewWorld = false;
         if (!Gml.MpHostInWorld())
         {
             foreach (var (slot, request) in _requests.ToList())
-                if (!request.Told)
+            {
+                // A new world of ours has nobody's character in it: they make theirs now, alongside us (unless they
+                // have - it's kept here until our world is ready, and they're let in then).
+                if (_hostNewWorld && !_pendingCharacters.ContainsKey(request.Name))
+                {
+                    _requests.Remove(slot);
+                    _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, Gml.MpWorldSeed()), to: slot);
+                    _context.Log($"{request.Name} is making a new character alongside ours");
+                }
+                else if (!request.Told)
                 {
                     _session.Send(new JoinReplyPacket(JoinReply.Wait, -1), to: slot);
                     _requests[slot] = (request.Name, true);
                 }
+            }
             return;
         }
         // Characters made while we were in the menu: into the world we're now in (one it has already wins).
