@@ -2,6 +2,7 @@
 /// @stoneforge param dropWindow bool
 /// @stoneforge param settling bool
 /// @stoneforge param pendingMs int
+/// @stoneforge param spots string
 // Follower, every few frames once we have the owner's snapshot: what to tell the owner - JSON {taken: [the owner's
 // ids of loot we picked up], drops: [{j: JSON, f: throw, t: token}]} - "" if nothing. (Legacy:
 // scr_mp_loot_client_step.)
@@ -11,11 +12,13 @@
 //   the synced item (MpLootFollowerAdd). One the owner doesn't bring back within a few seconds (it didn't take it) is
 //   removed: the owner's list decides what lies here.
 // A drop is decided once, when we first see the loot: it must turn up next to our player while dropWindow is open
-// (our player just dropped something: the game's "dropped" log line). Any other unbound loot isn't ours to add - the
+// (our player just dropped something: the game's "dropped" log line), or by where one of our arrows just landed
+// (spots: "x,y;x,y", MpLootShotSpot - an arrow drops its ammo by its target), or have flown there in one of our own
+// throws (an o_physical_shell of ours carrying it: marked our drop while it's still in the air). Any other unbound loot isn't ours to add - the
 // game swapping an item for a new one (food changing), loot made here that the owner makes too - and is removed: the
 // owner's list decides what lies here (reporting those made the owner create copies endlessly). Except while settling
 // (the first seconds after the snapshot: loot still turning up is the area finishing loading here).
-function MpLootFollowerStep(dropWindow, settling, pendingMs)
+function MpLootFollowerStep(dropWindow, settling, pendingMs, spots)
 {
     if (!instance_exists(o_player) || !variable_global_exists("mp_loot_map"))
         return "";
@@ -29,9 +32,28 @@ function MpLootFollowerStep(dropWindow, settling, pendingMs)
             array_push(_taken, _hids[_i]);
         }
     }
+    // Items in our throws: ours.
+    with (o_physical_shell)
+    {
+        if (variable_instance_exists(id, "loot_object") && instance_exists(loot_object) && variable_instance_exists(id, "owner")
+            && is_player(owner) && !MpLootFlag(loot_object, 2))
+            MpLootFlagSet(loot_object, 4);
+    }
+    // Where loot can be our drop: by our player while the drop window is open, by our arrows' landing spots.
+    var _near = [];
+    if (dropWindow)
+        array_push(_near, [o_player.x, o_player.y]);
+    if (spots != "")
+    {
+        var _parts = string_split(spots, ";");
+        for (var _s = 0; _s < array_length(_parts); _s++)
+        {
+            var _xy = string_split(_parts[_s], ",");
+            if (array_length(_xy) == 2)
+                array_push(_near, [real(_xy[0]), real(_xy[1])]);
+        }
+    }
     var _drops = [];
-    var _px = o_player.x;
-    var _py = o_player.y;
     var _all = MpLootAll();
     for (var _j = 0; _j < array_length(_all); _j++)
     {
@@ -41,8 +63,17 @@ function MpLootFollowerStep(dropWindow, settling, pendingMs)
         if (!MpLootFlag(_inst, 2))
         {
             MpLootFlagSet(_inst, 2);
-            if (dropWindow && !MpLootFlag(_inst, 1) && point_distance(_inst.x, _inst.y, _px, _py) <= 80)
-                MpLootFlagSet(_inst, 4);
+            if (!MpLootFlag(_inst, 1))
+            {
+                for (var _n = 0; _n < array_length(_near); _n++)
+                {
+                    if (point_distance(_inst.x, _inst.y, _near[_n][0], _near[_n][1]) <= 80)
+                    {
+                        MpLootFlagSet(_inst, 4);
+                        break;
+                    }
+                }
+            }
         }
         if (!MpLootFlag(_inst, 4))
         {

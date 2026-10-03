@@ -17,7 +17,8 @@ namespace StoneshardMP.Features.Loot;
 //   new loot once it has landed, loot that left (picked up by anyone).
 // - A follower takes it: twins from the same save are bound, the rest made from the owner's data, anything else
 //   removed. Its own pickups go to the owner, which removes them too. Its own drops go to the owner, which makes
-//   them; they come back in its changes, and the follower's own copy becomes the one synced item.
+//   them; they come back in its changes, and the follower's own copy becomes the one synced item. Its own drops are
+//   what it drops by itself, the ammo its arrows leave by their target, and the items it throws.
 // - Throws are shared: loot goes out the moment it appears, with its throw if it's in the air, and the other game flies
 //   its copy along the same arc to the same tile (MpLootFlight / MpLootFly).
 // Loot sync shares no state with a place nobody else is in: there, WorldSync shares it as the location's save.
@@ -39,6 +40,8 @@ public sealed class LootSync
     private readonly Func<bool> _inSharedWorld;
     private int _frame;
     private long _dropUntil;
+    // Where our arrows just dropped their ammo ("x,y"), and until when that counts as our drop.
+    private readonly List<(string Spot, long Until)> _shots = new();
     // Our place, and our role there.
     private string? _place;
     private bool _owning, _following;
@@ -62,6 +65,14 @@ public sealed class LootSync
         {
             if (call.Args.Length > 0 && call.Args[0].AsString == "playerDropItems")
                 _dropUntil = Environment.TickCount64 + DropWindowMs;
+            return false;
+        });
+        // One of our arrows landing: it drops its ammo by its target, far from us - our drop all the same.
+        context.OnCode("gml_Object_o_arrow_Other_11", before: (self, _) =>
+        {
+            string spot = Gml.MpLootShotSpot(self);
+            if (spot.Length > 0)
+                _shots.Add((spot, Environment.TickCount64 + DropWindowMs));
             return false;
         });
     }
@@ -137,7 +148,9 @@ public sealed class LootSync
             return;
         }
         long now = Environment.TickCount64;
-        string report = Gml.MpLootFollowerStep(now <= _dropUntil, now - _syncedAt < SettleMs, DropPendingMs);
+        _shots.RemoveAll(shot => shot.Until < now);
+        string report = Gml.MpLootFollowerStep(now <= _dropUntil, now - _syncedAt < SettleMs, DropPendingMs,
+            string.Join(";", _shots.Select(shot => shot.Spot)));
         if (report.Length == 0)
             return;
         using var doc = JsonDocument.Parse(report);

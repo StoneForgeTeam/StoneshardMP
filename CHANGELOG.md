@@ -1,5 +1,12 @@
 # StoneshardMP changes
 
+## 0.17.1
+
+- A client's arrows and bolts no longer lose their ammo. An arrow drops it by its target, far from the shooter, and
+  the loot sync only counted loot turning up next to the client as the client's own drop - so the client removed it
+  as loot the host doesn't have. An arrow's landing spot now counts too, for a moment after it lands
+  (MpLootShotSpot), and so does an item the client throws (marked its drop while it's in the air).
+
 ## 0.17.0
 
 Protocol 19. Contracts are shared, ported from the GML version's contract sync (ContractSync, ContractPacket).
