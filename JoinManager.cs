@@ -126,12 +126,15 @@ public sealed class JoinManager
     // Each frame.
     public void Tick()
     {
-        // (Back to the menu - the host left its world, or is gone - whatever our session's doing now.)
+        // Back to the menu - the host left its world, or is gone - whatever our session's doing now. Tried each frame
+        // until it's under way: the game refuses a room change mid-conversation or mid-cutscene (the new character's
+        // intro, at Osbrook's tavern, is both).
         if (_leave)
         {
-            _leave = false;
-            if (Gm.InGame)
-                Gml.MpLeaveToMenu();
+            if (Gm.InMainMenu)
+                _leave = false;
+            else if (!Gm.InstanceExists(GameObjectId.o_smoothRoomChanger) && Gml.MpLeaveToMenu())
+                _leave = false;
         }
         if (_session.Mode == Session.SessionMode.Host)
             HostTick();
@@ -373,6 +376,9 @@ public sealed class JoinManager
     // the host instead of keeping the save - the first one (the end of the new character's intro) asking to join.
     private bool ClientSave()
     {
+        // (On our way back to the menu: no save kept of the host's world here either.)
+        if (_leave)
+            return true;
         if (_session.Mode != Session.SessionMode.Client || !ClientPlaying)
             return false;
         string character = Gml.MpJoinCharacterSections();

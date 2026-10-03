@@ -1,5 +1,11 @@
 # StoneshardMP changes
 
+## 0.12.3
+
+- A client making its character when the host leaves now goes back to the main menu too. The game refuses a room
+  change mid-conversation or mid-cutscene (the new character's intro at Osbrook's tavern is both), and the return
+  was tried only once. It's now retried each frame until it's under way, and no save is kept meanwhile.
+
 ## 0.12.2
 
 Protocol 13.
