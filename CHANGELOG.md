@@ -1,5 +1,13 @@
 # StoneshardMP changes
 
+## 0.13.1
+
+- A client is only in the game for the others once it plays the host's world. While it makes its character it's on
+  a copy of the host's map, where the same rooms are somewhere else, so the host used to see it standing beside them
+  in the tavern intro. Until then it sends no position (the others have no Player object for it).
+- The same goes for the world clock: a client making its character no longer gives the host a world turn per action,
+  and doesn't take the host's clock in its intro.
+
 ## 0.13.0
 
 Protocol 14. The shared world is back, ported from the GML version's world sync (WorldSync, WorldDataPacket).

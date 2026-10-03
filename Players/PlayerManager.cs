@@ -36,6 +36,7 @@ public sealed class PlayerManager
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly Func<bool> _showNames;
+    private readonly Func<bool> _inSharedWorld;
     private readonly Player _object;
     private readonly Dictionary<int, View> _views = new();
     private RemotePlayer? _mirror;
@@ -44,11 +45,12 @@ public sealed class PlayerManager
     private string _sentProfile = "";
     private bool _wasInGame;
 
-    public PlayerManager(ModContext context, Session session, Func<bool> showNames)
+    public PlayerManager(ModContext context, Session session, Func<bool> showNames, Func<bool> inSharedWorld)
     {
         _context = context;
         _session = session;
         _showNames = showNames;
+        _inSharedWorld = inSharedWorld;
         _object = new Player(this);
         context.Objects.Add(_object);
         session.On<StatePacket>( (from, r) =>
@@ -73,7 +75,8 @@ public sealed class PlayerManager
         _frame++;
         if (Keyboard.Down(Keyboard.Control) && Keyboard.Down(Keyboard.Shift) && Keyboard.Pressed('G'))
             ToggleMirror();
-        bool inGame = Gm.InGame;
+        // (A client not yet in the host's world - making its character - is out of the game to everyone.)
+        bool inGame = Gm.InGame && _inSharedWorld();
         PlayerState? mine = null;
         if (inGame)
         {

@@ -109,6 +109,11 @@ public sealed class JoinManager
     /// map, nor on its way in).</summary>
     public bool ClientInWorld => _state == ClientState.InWorld;
 
+    /// <summary>Whether our game is the shared world: always for the host (or alone), and for a client only once it
+    /// plays the host's world - making its character it's on a copy of the host's map, where the same room names are
+    /// somewhere else.</summary>
+    public bool InSharedWorld => _session.Mode != Session.SessionMode.Client || ClientInWorld;
+
     private string HostName => _session.Players.FirstOrDefault(p => p.Slot == 0)?.Name ?? "the host";
 
     public void Clear()

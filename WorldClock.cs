@@ -16,6 +16,7 @@ namespace StoneshardMP;
 public sealed class WorldClock
 {
     private readonly Session _session;
+    private readonly Func<bool> _inSharedWorld;
     private readonly Queue<int> _remoteActions = new();
     private bool _tracking;
     private int _turns;
@@ -24,9 +25,10 @@ public sealed class WorldClock
     // network handler, as the host's are).
     private int _idleTurns;
 
-    public WorldClock(Session session)
+    public WorldClock(Session session, Func<bool> inSharedWorld)
     {
         _session = session;
+        _inSharedWorld = inSharedWorld;
         session.On<WorldActionPacket>(RequestAction);
         session.On<WorldTickPacket>(ReceiveAction);
     }
@@ -42,7 +44,9 @@ public sealed class WorldClock
 
     public void Tick()
     {
-        if (!_session.Connected)
+        // (A client making its character isn't in the host's world: its actions aren't the host's turns, nor is the
+        // host's clock its intro's.)
+        if (!_session.Connected || !_inSharedWorld())
         {
             Clear();
             return;
@@ -106,7 +110,7 @@ public sealed class WorldClock
 
     private void ReceiveAction(RemotePlayer sender, WorldTickPacket packet)
     {
-        if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0)
+        if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0 || !_inSharedWorld())
             return;
         int tick = packet.Tick;
         int source = packet.Source;
