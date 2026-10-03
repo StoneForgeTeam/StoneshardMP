@@ -40,6 +40,8 @@ public static class PacketCodec
             JoinReplyPacket.PacketId => JoinReplyPacket.Read(ref reader),
             JoinWorldPacket.PacketId => JoinWorldPacket.Read(ref reader),
             JoinCharacterPacket.PacketId => JoinCharacterPacket.Read(ref reader),
+            SaveRequestPacket.PacketId => SaveRequestPacket.Read(ref reader),
+            HostLeftPacket.PacketId => HostLeftPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

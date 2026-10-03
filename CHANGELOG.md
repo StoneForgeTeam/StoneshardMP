@@ -1,5 +1,17 @@
 # StoneshardMP changes
 
+## 0.12.2
+
+Protocol 13.
+- The host leaving its world sends everyone in it back to the main menu (HostLeft). There they wait, and join again
+  automatically when the host plays again (Continue, Load Game or New Game).
+- The host's Save & Exit first has everyone in its world save (SaveRequest). Each client autosaves, which sends its
+  character to the host. The exit waits for all of them, up to 15 seconds, so the host's exit save holds everyone's
+  latest characters (the GML version's SAVE_ALL / exit hold).
+- A host that's gone (Stop Hosting, connection lost) also sends a client in its world back to the main menu.
+- Characters a host receives while out of a world (made alongside its new game, or saved as it left) now replace
+  what its next world has for those players, since they're newer.
+
 ## 0.12.1
 
 - A client no longer waits for the host to finish making its own character. As soon as the host's new game has its

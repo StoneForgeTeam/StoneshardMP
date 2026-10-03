@@ -9,6 +9,7 @@ using StoneshardMP.Net.Packets;
 [assembly: HookScript(nameof(Scripts.scr_slotLoad))]
 [assembly: HookScript(nameof(Scripts.scr_slotUpdate))]
 [assembly: HookScript(nameof(Scripts.scr_characterMapInit))]
+[assembly: HookScript(nameof(Scripts.scr_smoothSaveExit))]
 
 namespace StoneshardMP;
 
@@ -24,12 +25,18 @@ namespace StoneshardMP;
 //   theirs alongside, its character kept until the host's world is ready.
 // - The client's saves are never written here (scr_slotUpdate): each sends its character to the host, which keeps it
 //   in its world's save data (MpJoinStoreCharacter) - saved with the host's own saves.
+// - Leaving: the host's Save & Exit (scr_smoothSaveExit) waits for everyone in its world to save first
+//   (SaveRequestPacket - each client's save sends its character), up to ExitWait, so its exit save holds everyone.
+//   Back on the main menu the host tells everyone (HostLeftPacket): they go back to theirs, and join again when it
+//   plays again. A host gone (stopped, connection lost) sends a client in its world back to the menu too.
 public sealed class JoinManager
 {
     private enum ClientState { Idle, Asked, MakingCharacter, Received, Loading, InWorld }
 
     // (How long a client waits for a calm moment before loading the host's world: half a second of one.)
     private const int CalmFrames = 30;
+    // (How long the host's Save & Exit waits for everyone's saves.)
+    private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(15);
 
     private readonly ModContext _context;
     private readonly Session _session;
@@ -45,6 +52,15 @@ public sealed class JoinManager
     private bool _startNew;
     // Host: we've begun a new world (New Game) - its seed is made, the players waiting can make their characters now.
     private bool _hostNewWorld;
+    // Host: in a world last frame (to tell everyone when we've left it); Save & Exit holding for these players' saves
+    // until then; letting it through.
+    private bool _hostWasInWorld;
+    private readonly HashSet<int> _exitWaiting = new();
+    private DateTime _exitDeadline;
+    private bool _exitGo;
+    // Client: back to the main menu (the host left), and save now (the host asked) - both done from Tick.
+    private bool _leave;
+    private bool _saveNow;
 
     public JoinManager(ModContext context, Session session, Func<string> playerName)
     {
@@ -55,8 +71,16 @@ public sealed class JoinManager
         session.On<JoinReplyPacket>(OnReply);
         session.On<JoinWorldPacket>(OnWorld);
         session.On<JoinCharacterPacket>(OnCharacter);
+        session.On<SaveRequestPacket>(OnSaveRequest);
+        session.On<HostLeftPacket>(OnHostLeft);
         session.Changed += OnSessionChanged;
-        session.PlayerLeft += player => _requests.Remove(player.Slot);
+        session.PlayerLeft += player =>
+        {
+            _requests.Remove(player.Slot);
+            _exitWaiting.Remove(player.Slot);
+        };
+        // The host's Save & Exit: everyone in our world saves first.
+        Scripts.scr_smoothSaveExit.Before(context, call => HoldExit());
 
         // A save of ours - unless the host's world is waiting to load: that becomes the save data.
         Scripts.scr_slotLoad.Before(context, call => Gml.MpJoinTakePending());
@@ -92,12 +116,23 @@ public sealed class JoinManager
         _calm = 0;
         _startNew = false;
         _hostNewWorld = false;
+        _hostWasInWorld = false;
+        _exitWaiting.Clear();
+        _exitGo = false;
+        _saveNow = false;
         Status = null;
     }
 
     // Each frame.
     public void Tick()
     {
+        // (Back to the menu - the host left its world, or is gone - whatever our session's doing now.)
+        if (_leave)
+        {
+            _leave = false;
+            if (Gm.InGame)
+                Gml.MpLeaveToMenu();
+        }
         if (_session.Mode == Session.SessionMode.Host)
             HostTick();
         else if (_session.Mode == Session.SessionMode.Client)
@@ -108,6 +143,21 @@ public sealed class JoinManager
 
     private void HostTick()
     {
+        bool inWorld = Gml.MpHostInWorld();
+        if (_hostWasInWorld && !inWorld && Gm.InMainMenu)
+        {
+            _hostWasInWorld = false;
+            _session.Send(new HostLeftPacket());
+            _context.Log("Left our world: everyone in it goes back to the main menu");
+        }
+        else if (inWorld)
+            _hostWasInWorld = true;
+        if (_exitWaiting.Count > 0 && DateTime.UtcNow >= _exitDeadline)
+        {
+            _context.Log($"Save & Exit: {_exitWaiting.Count} player(s) didn't save in time - leaving anyway");
+            _exitWaiting.Clear();
+            ExitNow();
+        }
         // (Back on the main menu: no new world begun any more.)
         if (Gm.InMainMenu && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger))
             _hostNewWorld = false;
@@ -131,11 +181,11 @@ public sealed class JoinManager
             }
             return;
         }
-        // Characters made while we were in the menu: into the world we're now in (one it has already wins).
+        // Characters sent while we weren't in a world (made alongside our new game, or saved as we left): into the world
+        // we're now in - they're newer than what it has.
         foreach (var (name, character) in _pendingCharacters.ToList())
         {
-            if (!Gml.MpJoinHasCharacter(name))
-                Gml.MpJoinStoreCharacter(name, character);
+            Gml.MpJoinStoreCharacter(name, character);
             _pendingCharacters.Remove(name);
         }
         foreach (var (slot, request) in _requests.ToList())
@@ -168,6 +218,39 @@ public sealed class JoinManager
         string character = JoinCompression.Decompress(packet.Character);
         if (!Gml.MpJoinStoreCharacter(packet.Name, character))
             _pendingCharacters[packet.Name] = character;
+        // (A held Save & Exit: one more saved.)
+        if (_exitWaiting.Remove(sender.Slot) && _exitWaiting.Count == 0)
+            ExitNow();
+    }
+
+    // scr_smoothSaveExit, on the host: with players in our world, ask them to save and hold the exit until they have
+    // (OnCharacter) or ExitWait is up - then it runs for real (ExitNow).
+    private bool HoldExit()
+    {
+        if (_session.Mode != Session.SessionMode.Host || _exitGo)
+        {
+            _exitGo = false;
+            return false;
+        }
+        if (_exitWaiting.Count > 0)
+            return true;
+        foreach (var player in _session.Players)
+            if (player.State != null)
+                _exitWaiting.Add(player.Slot);
+        if (_exitWaiting.Count == 0)
+            return false;
+        _exitDeadline = DateTime.UtcNow + ExitWait;
+        _session.Send(new SaveRequestPacket());
+        _context.Log($"Save & Exit: waiting for {_exitWaiting.Count} player(s) to save");
+        return true;
+    }
+
+    private void ExitNow()
+    {
+        if (!Gm.InGame)
+            return;
+        _exitGo = true;
+        Game.CallScript("scr_smoothSaveExit", default);
     }
 
     // ---- client ----
@@ -177,7 +260,11 @@ public sealed class JoinManager
         if (_session.Mode != Session.SessionMode.Client)
         {
             if (_state != ClientState.Idle)
+            {
+                // The host's gone: out of its world too.
+                _leave = ClientPlaying;
                 Clear();
+            }
             return;
         }
         // In: ask to join the host's world.
@@ -216,6 +303,24 @@ public sealed class JoinManager
         }
     }
 
+    private void OnSaveRequest(RemotePlayer sender, SaveRequestPacket packet)
+    {
+        if (_session.Mode == Session.SessionMode.Client && sender.Slot == 0 && ClientPlaying)
+            _saveNow = true;
+    }
+
+    // The host left its world: back to the main menu, and asking to join again (it answers when it plays again).
+    private void OnHostLeft(RemotePlayer sender, HostLeftPacket packet)
+    {
+        if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0 || _state == ClientState.Idle)
+            return;
+        _leave = ClientPlaying;
+        _state = ClientState.Idle;
+        _calm = 0;
+        Ask();
+        Status = $"{HostName} left their world - waiting for them to play again...";
+    }
+
     private void OnWorld(RemotePlayer sender, JoinWorldPacket packet)
     {
         if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0)
@@ -236,6 +341,13 @@ public sealed class JoinManager
         {
             _startNew = false;
             Gml.MpJoinStartNew();
+        }
+        // The host is saving to leave: our save sends it our character (ClientSave).
+        if (_saveNow)
+        {
+            _saveNow = false;
+            if (Gm.InGame)
+                Game.CallScript("scr_smoothSaveAuto", default);
         }
         switch (_state)
         {
