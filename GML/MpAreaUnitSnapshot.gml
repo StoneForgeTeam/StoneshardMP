@@ -1,11 +1,11 @@
 /// @stoneforge return string
-// The owning game exports every real NPC/animal/enemy in its current room. Remote player ghosts are excluded.
+// The owning game exports every real NPC/animal/enemy in its current room. Other players' objects are excluded.
 function MpAreaUnitSnapshot()
 {
     var _units = [];
     with (o_enemy)
     {
-        if (object_index == o_stoneshardmp__ghost)
+        if (object_index == o_stoneshardmp__player)
             continue;
         var _look = {};
         var _vars = ["idle_spr", "default_sprite", "fight_sprite", "corpse_sprite",

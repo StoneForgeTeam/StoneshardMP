@@ -1,5 +1,5 @@
 /// @stoneforge return string
-// Where and how our player is drawn this frame, for the others' ghosts of us ("" when there's no player): the place
+// Where and how our player is drawn this frame, for the others' copies of us ("" when there's no player): the place
 // (room, and "#f<floor>" in a dungeon - every floor of one is the same room), then what o_player draws with - stX /
 // stY / stScale* (scr_spriteTransformUpdate: the bob and lean), frame, animation row, depth, visible, tilt, hit
 // flash (diss), alpha - its shadow as scr_draw_self_shadow places it, its cell, and its health/energy. "|" between.

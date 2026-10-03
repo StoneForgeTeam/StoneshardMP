@@ -1,16 +1,16 @@
 using StoneForge;
 
-namespace StoneshardMP.Ghosts;
+namespace StoneshardMP.Players;
 
-// Another player's character on our screen (o_stoneshardmp__ghost): their look, drawn where and as their game draws
+// Another player's character on our screen (o_stoneshardmp__player): their look, drawn where and as their game draws
 // them, with their shadow and a name tag. It is a passive child of o_enemy, so it occupies its actual cell and the
 // game recognizes it as a character, without inheriting the training dummy's protection-class interaction.
-// Which player's it is: its mp_slot. What it draws comes from GhostManager's view of them.
-public sealed class Ghost : GameObject
+// Which player's it is: its mp_slot. What it draws comes from PlayerManager's view of them.
+public sealed class Player : GameObject
 {
-    private readonly GhostManager _manager;
+    private readonly PlayerManager _manager;
 
-    public Ghost(GhostManager manager) : base("ghost", "o_enemy")
+    public Player(PlayerManager manager) : base("player", "o_enemy")
     {
         _manager = manager;
         Sprite = "s_dummy";
@@ -47,7 +47,7 @@ public sealed class Ghost : GameObject
         self["MP"] = 1000000000;
         // o_enemy schedules Alarm 2 to derive stats from bSTR/bAGI/etc. A passive visual proxy has none of
         // those base-stat fields, and must never run that calculation.
-        Gml.MpGhostInitialize(self);
+        Gml.MpPlayerInitialize(self);
     }
 
     // The inherited o_enemy Destroy event has loot and corpse work intended for a real mob. This runs before that

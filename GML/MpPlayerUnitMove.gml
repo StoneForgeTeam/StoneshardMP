@@ -2,9 +2,9 @@
 /// @stoneforge param unit GmValue
 /// @stoneforge param cellX int
 /// @stoneforge param cellY int
-// Move a remote ghost's underlying dummy unit through the same collision/occupancy grids a normal unit uses. Its
+// Move another player's underlying dummy unit through the same collision/occupancy grids a normal unit uses. Its
 // visual sprite is drawn separately in C#, so this only controls targeting and where the game considers it to be.
-function MpGhostUnitMove(unit, cellX, cellY)
+function MpPlayerUnitMove(unit, cellX, cellY)
 {
     if (!instance_exists(unit) || !instance_exists(o_controller))
         return;

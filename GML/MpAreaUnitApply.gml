@@ -69,7 +69,7 @@ function MpAreaUnitApply(snapshot)
             image_alpha = _u.alpha;
             scr_set_hl();
         }
-        MpGhostUnitMove(_inst, _u.x, _u.y);
+        MpPlayerUnitMove(_inst, _u.x, _u.y);
     }
     with (o_player)
     {
@@ -88,7 +88,7 @@ function MpAreaUnitApply(snapshot)
     var _gone = [];
     with (o_enemy)
     {
-        if (object_index != o_stoneshardmp__ghost && (!variable_instance_exists(id, "mp_area_seen") || mp_area_seen != _epoch))
+        if (object_index != o_stoneshardmp__player && (!variable_instance_exists(id, "mp_area_seen") || mp_area_seen != _epoch))
             array_push(_gone, id);
     }
     for (var _g = 0; _g < array_length(_gone); _g++)

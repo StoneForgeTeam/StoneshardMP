@@ -5,12 +5,12 @@
 /// @stoneforge param old2 double
 /// @stoneforge param old3 double
 /// @stoneforge param old4 double
-// A ghost's sprites (its 5 animation rows, "s0,s1,s2,s3,s4") built from another player's look (MpPlayerLook's JSON)
+// A player object's sprites (its 5 animation rows, "s0,s1,s2,s3,s4") built from another player's look (MpPlayerLook's JSON)
 // by the game's own compositor: scr_playerSpriteUpdate run against their layers, our player's globals put back after.
-// It frees what's in playerSpriteArray, so it's handed the ghost's previous sprites (old0-4, -4 for none) rather than
+// It frees what's in playerSpriteArray, so it's handed the object's previous sprites (old0-4, -4 for none) rather than
 // ours. Each layer's sprite and mask sit at their origins in the other game while it composites, then back as they
 // were. Call it in a Draw event (it draws to surfaces). "" if the look can't be built.
-function MpGhostBuild(look, old0, old1, old2, old3, old4)
+function MpPlayerBuild(look, old0, old1, old2, old3, old4)
 {
     var _look = json_parse(look);
     if (!is_array(_look) || array_length(_look) < 5)

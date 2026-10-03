@@ -4,7 +4,7 @@ using System.Globalization;
 namespace StoneshardMP.Net;
 
 // The resistance values the game's enemy inspection card reads. They change far less often than movement/vitals,
-// so GhostManager sends this profile only when it changes (and to a newcomer).
+// so PlayerManager sends this profile only when it changes (and to a newcomer).
 public sealed record PlayerProfile(float[] Values)
 {
     public static readonly string[] ResistanceNames =

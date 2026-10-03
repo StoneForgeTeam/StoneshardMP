@@ -59,7 +59,7 @@ public sealed class EffectManager
                 Instance source = Game.CallBuiltin("instance_find", root, i).AsInstance.Persist();
                 if (source.IsNone || !source.Exists || !VisibleSprite(source))
                     continue;
-                // On-unit effects belonging to another player's ghost already have their own locally received visual.
+                // On-unit effects belonging to another player's object already have their own locally received visual.
                 if (rootName == "o_onUnitEffectSprite" && !source["ownerIsPlayer"].AsBool)
                     continue;
                 current.Add(source["id"].AsInt);

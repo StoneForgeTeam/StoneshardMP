@@ -7,27 +7,27 @@ using StoneshardMP.Net.Packets;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP.Ghosts;
+namespace StoneshardMP.Players;
 
-// The other players' ghosts: our state sent every other frame and our look when it changes (and to newcomers); each
-// player in the same place as us gets a ghost (Ghost), made again after a room change, gone when they leave or go
-// elsewhere. Ctrl+Shift+G: the mirror test - our own ghost two cells to the right, for trying it with one game.
-public sealed class GhostManager
+// The other players on our screen: our state sent every other frame and our look when it changes (and to newcomers); each
+// player in the same place as us gets a Player object, made again after a room change, gone when they leave or go
+// elsewhere. Ctrl+Shift+G: the mirror test - our own player copied two cells to the right, for trying it with one game.
+public sealed class PlayerManager
 {
-    // A ghost's look and smoothing, kept by player (a room change makes the instance again, not the look).
+    // A player's look and smoothing, kept by player (a room change makes the instance again, not the look).
     private sealed class View
     {
         public required RemotePlayer Player;
-        public Instance Ghost;
+        public Instance Unit;
         public int[] Sprites = { -4, -4, -4, -4, -4 };
         public int BuiltVersion = -1;
         public float VisX, VisY;
         public bool Placed;
     }
 
-    // (A player's ghost goes when nothing's been heard of where they are for this long.)
+    // (A player's object goes when nothing's been heard of where they are for this long.)
     private const long StaleMs = 3000;
-    // The ghost's local hit pool stays huge because receiving a remote player's state is not yet combat authority.
+    // The player object's local hit pool stays huge because receiving a remote player's state is not yet combat authority.
     // Its displayed percentage is still exact: the inspection UI works from current / maximum.
     private const double ProxyVitalMaximum = 1000000000;
     private const int MirrorSlot = 99;
@@ -36,7 +36,7 @@ public sealed class GhostManager
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly Func<bool> _showNames;
-    private readonly Ghost _ghost;
+    private readonly Player _object;
     private readonly Dictionary<int, View> _views = new();
     private RemotePlayer? _mirror;
     private int _frame;
@@ -44,13 +44,13 @@ public sealed class GhostManager
     private string _sentProfile = "";
     private bool _wasInGame;
 
-    public GhostManager(ModContext context, Session session, Func<bool> showNames)
+    public PlayerManager(ModContext context, Session session, Func<bool> showNames)
     {
         _context = context;
         _session = session;
         _showNames = showNames;
-        _ghost = new Ghost(this);
-        context.Objects.Add(_ghost);
+        _object = new Player(this);
+        context.Objects.Add(_object);
         session.On<StatePacket>( (from, r) =>
         {
             from.State = r.State;
@@ -62,7 +62,7 @@ public sealed class GhostManager
             from.LookVersion++;
         });
         session.On<ProfilePacket>( (from, r) => from.Profile = PlayerProfile.Parse(r.Values));
-        // (A newcomer gets our look at once; a player gone takes their ghost.)
+        // (A newcomer gets our look at once; a player who's gone takes their object.)
         session.PlayerJoined += _ => { _sentLook = ""; _sentProfile = ""; };
         session.PlayerLeft += player => Forget(player.Slot);
     }
@@ -109,13 +109,13 @@ public sealed class GhostManager
             }
         }
         else if (_wasInGame || _frame % 60 == 0)
-            // Out of the game: the others' ghosts of us go.
+            // Out of the game: the others' copies of us go.
             _session.Send(new StatePacket(null), delivery: DeliveryMethod.Sequenced);
         _wasInGame = inGame;
         Place(mine);
     }
 
-    // Each player in our place has a live ghost; nobody else has one.
+    // Each player in our place has a live Player object; nobody else has one.
     private void Place(PlayerState? mine)
     {
         var players = _session.Players.ToList();
@@ -128,24 +128,24 @@ public sealed class GhostManager
                 _views[player.Slot] = view = new View { Player = player };
             var state = player.State;
             bool here = mine != null && state != null && state.Place == mine.Place && now - player.StateAt < StaleMs;
-            bool exists = !view.Ghost.IsNone && view.Ghost.Exists;
-            if (here && !exists && _ghost.Index >= 0)
+            bool exists = !view.Unit.IsNone && view.Unit.Exists;
+            if (here && !exists && _object.Index >= 0)
             {
                 // A dummy unit starts centred in the remote player's occupied cell. Its own x/y then remain the
                 // unit position; VisX/VisY below stay independent, for the player's smooth drawn movement.
-                view.Ghost = _ghost.Create(state!.CellX * 26 + 13, state.CellY * 26 + 13, state.Depth).Persist();
-                view.Ghost["mp_slot"] = player.Slot;
+                view.Unit = _object.Create(state!.CellX * 26 + 13, state.CellY * 26 + 13, state.Depth).Persist();
+                view.Unit["mp_slot"] = player.Slot;
                 view.Placed = false;
             }
             else if (!here && exists)
             {
-                Game.CallBuiltin("instance_destroy", view.Ghost);
-                view.Ghost = default;
+                Game.CallBuiltin("instance_destroy", view.Unit);
+                view.Unit = default;
             }
         }
     }
 
-    // A ghost's Step: follows their state - smoothly for small moves, at once for jumps.
+    // A player's Step: follows their state - smoothly for small moves, at once for jumps.
     internal void Step(Instance self)
     {
         if (ViewOf(self) is not { Player.State: { } state } view)
@@ -161,9 +161,9 @@ public sealed class GhostManager
             view.VisX += (state.X - view.VisX) * 0.5f;
             view.VisY += (state.Y - view.VisY) * 0.5f;
         }
-        // Keep the real unit in the occupancy grids too. That lets the game recognize a ghost as a character,
+        // Keep the real unit in the occupancy grids too. That lets the game recognize a player as a character,
         // while Draw deliberately uses the remote player's smoother visual position instead.
-        Gml.MpGhostUnitMove(self, state.CellX, state.CellY);
+        Gml.MpPlayerUnitMove(self, state.CellX, state.CellY);
         self["name"] = view.Player.Name;
         self["type"] = "Player";
         self["desc"] = "Another player.";
@@ -181,14 +181,14 @@ public sealed class GhostManager
         self["depth"] = state.Depth;
     }
 
-    // A ghost's Draw Begin: its sprites built again when their look has changed.
+    // A player's Draw Begin: its sprites built again when their look has changed.
     internal void Build(Instance self)
     {
         if (ViewOf(self) is not { } view || view.BuiltVersion == view.Player.LookVersion || view.Player.Look.Length == 0)
             return;
         view.BuiltVersion = view.Player.LookVersion;
         var s = view.Sprites;
-        string built = Gml.MpGhostBuild(view.Player.Look, s[0], s[1], s[2], s[3], s[4]);
+        string built = Gml.MpPlayerBuild(view.Player.Look, s[0], s[1], s[2], s[3], s[4]);
         var parts = built.Split(',');
         if (parts.Length != 5)
         {
@@ -199,7 +199,7 @@ public sealed class GhostManager
             s[i] = int.TryParse(parts[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out int sprite) ? sprite : -4;
     }
 
-    // A ghost's Draw: their shadow, their look, a name tag.
+    // A player's Draw: their shadow, their look, a name tag.
     internal void Draw(Instance self)
     {
         if (ViewOf(self) is not { Player.State: { } state } view || !state.Visible)
@@ -228,7 +228,7 @@ public sealed class GhostManager
         Game.CallBuiltin("draw_set_valign", valign);
     }
 
-    // Everything gone (the mod switched off): ghosts and their sprites.
+    // Everything gone (the mod switched off): the players and their sprites.
     public void Clear()
     {
         foreach (int slot in _views.Keys.ToList())
@@ -242,7 +242,7 @@ public sealed class GhostManager
         {
             _mirror = new RemotePlayer(MirrorSlot, "Mirror", _context.Manifest.Version);
             _sentLook = "";
-            _context.Log("Mirror test on: your ghost two cells to the right (Ctrl+Shift+G again: off)");
+            _context.Log("Mirror test on: a copy of you two cells to the right (Ctrl+Shift+G again: off)");
         }
         else
         {
@@ -258,8 +258,8 @@ public sealed class GhostManager
             return;
         if (!Game.Running)
             return;
-        if (!view.Ghost.IsNone && view.Ghost.Exists)
-            Game.CallBuiltin("instance_destroy", view.Ghost);
+        if (!view.Unit.IsNone && view.Unit.Exists)
+            Game.CallBuiltin("instance_destroy", view.Unit);
         foreach (int sprite in view.Sprites)
             if (SpriteExists(sprite))
                 Game.CallBuiltin("sprite_delete", sprite);
@@ -280,9 +280,9 @@ public sealed class GhostManager
         return Math.Max(1, Math.Round(ProxyVitalMaximum * fraction));
     }
 
-    private static void ApplyProfile(Instance ghost, PlayerProfile? profile)
+    private static void ApplyProfile(Instance unit, PlayerProfile? profile)
     {
         for (int i = 0; i < PlayerProfile.ResistanceNames.Length; i++)
-            ghost[PlayerProfile.ResistanceNames[i]] = profile?.Values[i] ?? 0;
+            unit[PlayerProfile.ResistanceNames[i]] = profile?.Values[i] ?? 0;
     }
 }

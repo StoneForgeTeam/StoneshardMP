@@ -1,7 +1,7 @@
 using System;
 using StoneForge;
 using StoneshardMP.Effects;
-using StoneshardMP.Ghosts;
+using StoneshardMP.Players;
 using StoneshardMP.Net;
 using StoneshardMP.UI;
 
@@ -10,12 +10,12 @@ namespace StoneshardMP;
 // StoneshardMP on StoneForge: co-op over LiteNetLib. A trusted mod (mod.json "trusted": true) - it needs the
 // network, and brings LiteNetLib (lib\). Being ported feature by feature from the GML version (MSL), milestone by
 // milestone; so far: the session - hosting, joining, players coming and going (Net\Session) - and the other
-// players' ghosts (Ghosts\GhostManager).
+// players on our screen (Players\PlayerManager).
 public sealed class MultiplayerMod : IStoneMod, ITickable
 {
     private ModContext _context = null!;
     private Session _session = null!;
-    private GhostManager _ghosts = null!;
+    private PlayerManager _players = null!;
     private EffectManager _effects = null!;
     private AreaUnits _areaUnits = null!;
     private MultiplayerMenu _menu = null!;
@@ -28,7 +28,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _context = context;
         var settings = new MpSettings(context.Settings);
         _session = new Session(context.Manifest.Version, context.Log);
-        _ghosts = new GhostManager(context, _session, () => settings.ShowNames.Value);
+        _players = new PlayerManager(context, _session, () => settings.ShowNames.Value);
         _effects = new EffectManager(context, _session);
         _areaUnits = new AreaUnits(_session);
         // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
@@ -49,7 +49,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     public void Unload()
     {
         _session.Stop("");
-        _ghosts.Clear();
+        _players.Clear();
         _effects.Clear();
         _areaUnits.Clear();
         _clock.Clear();
@@ -63,7 +63,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         {
             _menu.Tick();
             _join.Tick();
-            _ghosts.Tick();
+            _players.Tick();
             _effects.Tick();
             _areaUnits.Tick();
             _clock.Tick();

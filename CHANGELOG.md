@@ -1,5 +1,11 @@
 # StoneshardMP changes
 
+## 0.12.4
+
+- Ghosts are now called players. Another player on your screen is the game object `o_stoneshardmp__player`
+  (was `o_stoneshardmp__ghost`), written as `Players\Player` and `Players\PlayerManager` in C#, with GML helpers
+  `MpPlayerBuild`, `MpPlayerInitialize` and `MpPlayerUnitMove`. Nothing else changes, and the protocol stays 13.
+
 ## 0.12.3
 
 - A client making its character when the host leaves now goes back to the main menu too. The game refuses a room
