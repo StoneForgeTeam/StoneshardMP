@@ -2,6 +2,7 @@ using LiteNetLib;
 using StoneshardMP.Net.Packets;
 using LiteNetLib.Utils;
 using StoneForge;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Areas;
@@ -20,7 +21,7 @@ public sealed class AreaUnits
     {
         if (!_session.Connected || !Gm.InGame || _session.Mode != Session.SessionMode.Host || ++_frame % 6 != 0)
             return;
-        PlayerState? mine = PlayerState.Parse(Gml.MpPlayerState());
+        PlayerState? mine = OurPlayer.State();
         if (mine == null)
             return;
         string snapshot = Gml.MpAreaUnitSnapshot();
@@ -37,7 +38,7 @@ public sealed class AreaUnits
             return;
         string place = packet.Place;
         string snapshot = packet.Snapshot;
-        PlayerState? mine = PlayerState.Parse(Gml.MpPlayerState());
+        PlayerState? mine = OurPlayer.State();
         if (mine?.Place == place)
             Gml.MpAreaUnitApply(snapshot);
     }

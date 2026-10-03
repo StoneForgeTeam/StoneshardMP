@@ -1,5 +1,6 @@
 using System;
 using StoneForge;
+using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Menu;
@@ -87,7 +88,7 @@ public sealed class MultiplayerMenu
                 MainMenu.AddButton(_context, VanillaButton.Continue);
                 // (A shared world: straight into the Adventure, no permadeath - the prologue is a world of its own. The
                 // players waiting make their characters alongside: JoinManager.)
-                MainMenu.AddButton(_context, "New Game", Gml.MpJoinStartNew);
+                MainMenu.AddButton(_context, "New Game", JoinSave.StartNew);
                 MainMenu.AddButton(_context, VanillaButton.LoadGame);
                 MainMenu.AddButton(_context, "Players & Settings", _window.Open);
                 MainMenu.AddButton(_context, "Stop Hosting", () => _session.Stop("Stopped hosting"));

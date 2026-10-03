@@ -80,12 +80,12 @@ public sealed class PlayerManager
         PlayerState? mine = null;
         if (inGame)
         {
-            mine = PlayerState.Parse(Gml.MpPlayerState());
+            mine = OurPlayer.State();
             if (mine != null && _frame % 2 == 0)
                 _session.Send(new StatePacket(mine), delivery: DeliveryMethod.Sequenced);
             if (_frame % 30 == 0)
             {
-                string look = Gml.MpPlayerLook();
+                string look = OurPlayer.Look();
                 if (look.Length > 0 && look != _sentLook)
                 {
                     _sentLook = look;
@@ -97,7 +97,7 @@ public sealed class PlayerManager
                     }
                 }
             }
-            string profile = Gml.MpPlayerProfile();
+            string profile = OurPlayer.Profile();
             if (profile.Length > 0 && (_frame % 30 == 0 || profile != _sentProfile))
             {
                 _sentProfile = profile;
@@ -191,7 +191,7 @@ public sealed class PlayerManager
             return;
         view.BuiltVersion = view.Player.LookVersion;
         var s = view.Sprites;
-        string built = Gml.MpPlayerBuild(view.Player.Look, s[0], s[1], s[2], s[3], s[4]);
+        string built = OurPlayer.Build(view.Player.Look, s);
         var parts = built.Split(',');
         if (parts.Length != 5)
         {

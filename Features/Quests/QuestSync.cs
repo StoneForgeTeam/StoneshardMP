@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.World;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
@@ -140,7 +141,7 @@ public sealed class QuestSync
     // Whether we share our story: the host in a world with players, a client in the host's.
     private bool Sharing => _session.Mode switch
     {
-        Session.SessionMode.Host => Gml.MpHostInWorld() && _session.Players.Any(),
+        Session.SessionMode.Host => JoinSave.HostInWorld() && _session.Players.Any(),
         Session.SessionMode.Client => _join.ClientInWorld,
         _ => false,
     };
@@ -170,7 +171,7 @@ public sealed class QuestSync
         script.Before(_context, call =>
         {
             if (!_applying && Sharing && outgoing(call.Args) is { } args)
-                _session.Send(new SharedCallPacket(Gml.MpWorldSeed(), script.Name, args));
+                _session.Send(new SharedCallPacket(SharedWorld.WorldSeed(), script.Name, args));
             return false;
         });
     }
@@ -178,7 +179,7 @@ public sealed class QuestSync
     private void Apply(RemotePlayer sender, SharedCallPacket packet)
     {
         // Only listed scripts, from and for a game in our world.
-        if (!_shared.ContainsKey(packet.Script) || !Sharing || packet.Seed != Gml.MpWorldSeed())
+        if (!_shared.ContainsKey(packet.Script) || !Sharing || packet.Seed != SharedWorld.WorldSeed())
             return;
         // (As our player, as the game's own calls are made.)
         Instance player = Game.CallBuiltin("instance_find", (int)GameObjectId.o_player, 0).AsInstance;

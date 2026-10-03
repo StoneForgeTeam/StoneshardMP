@@ -1,5 +1,30 @@
 # StoneshardMP changes
 
+## 0.18.1
+
+- The world turn and a new player object's setup are C# too, with StoneForge's new alarms (`instance.Alarm[n]`):
+  the turn is held while the player's own (alarms 1 and 4) is under way, and sets the skills' alarm 10; a player
+  object's alarm 2 (o_enemy's stat setup) is stopped. 27 GML functions are left: the loot sync, the area units, moving
+  a player's unit through the grids, and the debug dump.
+
+## 0.18.0
+
+- Most of the mod's GML is C# now, using StoneForge's new arrays and structs (GmArray, GmStruct): 43 of its 73 GML
+  functions. Nothing changes in game, and the protocol stays 19.
+  - Joining (`Features/Join/JoinSave.cs`), with the save data's JSON handled by System.Text.Json.
+  - The shared world (`Features/World/SharedWorld.cs`): tile and dungeon seeds, locations, tiles, the world copy and
+    the weather. Floors a dungeon rebuilt are counted in C#, not in a game global.
+  - Contracts (`Features/Contracts/ContractData.cs`), save names (`Features/Saves/SaveNames.cs`) and the clock
+    (`Features/Clock/GameClock.cs`).
+  - Our player (`Features/Players/OurPlayer.cs`): its state, look and resistances, and building another player's
+    sprites. Its state is now a `PlayerState` straight away, worked out once a frame, where seven features each read
+    and parsed it every frame.
+  - `GameData.cs`: small helpers for the game's ds_maps and ds_lists, its instances, and values as JSON.
+- Still GML: the loot sync and the area units, which go through every ground item or NPC every few frames (off-screen
+  ones too, which StoneForge can't list from C# yet); the world tick and anything setting an alarm (`alarm[n]` wasn't
+  reachable from C#: 0.18.1); the debug dump; and moving another player's unit through the game's grids, which the area units
+  GML uses too.
+
 ## 0.17.1
 
 - A client's arrows and bolts no longer lose their ammo. An arrow drops it by its target, far from the shooter, and

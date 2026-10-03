@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using StoneshardMP.Net.Packets;
 using StoneForge;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Clock;
@@ -51,7 +52,7 @@ public sealed class WorldClock
             Clear();
             return;
         }
-        int turns = Gml.MpWorldTurns();
+        int turns = GameClock.Turns();
         if (turns < 0)
         {
             Clear();
@@ -70,11 +71,11 @@ public sealed class WorldClock
             // remain two distinct world turns rather than accidentally collapsing into one.
             if (turns != _turns)
                 Publish(_session.Slot, turns);
-            while (_remoteActions.Count > 0 && Gml.MpWorldTickReady())
+            while (_remoteActions.Count > 0 && GameClock.TickReady())
             {
                 int source = _remoteActions.Dequeue();
-                Gml.MpWorldTick();
-                Publish(source, Gml.MpWorldTurns());
+                GameClock.Tick();
+                Publish(source, GameClock.Turns());
             }
             return;
         }
@@ -85,12 +86,12 @@ public sealed class WorldClock
             _session.Send(new WorldActionPacket(), to: 0);
             return;
         }
-        while (_idleTurns > 0 && Gml.MpWorldTickReady())
+        while (_idleTurns > 0 && GameClock.TickReady())
         {
             _idleTurns--;
             if (!InHostsArea())
-                Gml.MpWorldTick();
-            _turns = Gml.MpWorldTurns();
+                GameClock.Tick();
+            _turns = GameClock.Turns();
         }
     }
 
@@ -103,7 +104,7 @@ public sealed class WorldClock
     private void Publish(int source, int turns)
     {
         _turns = turns;
-        string clock = Gml.MpWorldClock();
+        string clock = GameClock.Snapshot();
         _tick++;
         _session.Send(new WorldTickPacket(_tick, (byte)source, clock));
     }
@@ -131,7 +132,7 @@ public sealed class WorldClock
     private bool InHostsArea()
     {
         var host = _session.Players.FirstOrDefault(p => p.Slot == 0);
-        var mine = PlayerState.Parse(Gml.MpPlayerState());
+        var mine = OurPlayer.State();
         return host?.State != null && mine != null && host.State.Place == mine.Place;
     }
 
@@ -145,6 +146,6 @@ public sealed class WorldClock
             !int.TryParse(fields[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out int days) ||
             !int.TryParse(fields[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out int months))
             return;
-        Gml.MpWorldClockApply(seconds, minutes, hours, days, months);
+        GameClock.Apply(seconds, minutes, hours, days, months);
     }
 }

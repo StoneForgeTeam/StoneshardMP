@@ -5,6 +5,7 @@ using LiteNetLib;
 using StoneshardMP.Net.Packets;
 using LiteNetLib.Utils;
 using StoneForge;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Effects;
@@ -116,7 +117,7 @@ public sealed class EffectManager
         var key = (from.Slot, id);
         // Effects belong to a room just like their player. Do not create (or leave) an echo in a different
         // place when one player goes through a door, changes an overworld cell, or changes dungeon floor.
-        PlayerState? mine = PlayerState.Parse(Gml.MpPlayerState());
+        PlayerState? mine = OurPlayer.State();
         if (mine == null || from.State?.Place != mine.Place)
         {
             if (_remote.Remove(key, out var elsewhere) && elsewhere.Exists)

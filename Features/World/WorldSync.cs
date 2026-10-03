@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
@@ -22,12 +23,12 @@ namespace StoneshardMP.Features.World;
 
 // One world for everyone in it (legacy StoneshardMP's world sync):
 // - Built alike: an area's layout seeds (first visit, respawn) and a dungeon's floors come from the world seed, not
-//   randomize()/irandom, so every game in the same world builds the same area or dungeon (MpTileSeedValidate,
-//   MpDungeonSeed). Always, solo too - an area a host builds before anyone joins is the one they'll find.
+//   randomize()/irandom, so every game in the same world builds the same area or dungeon (SharedWorld.TileSeedValidate,
+//   SharedWorld.DungeonSeed). Always, solo too - an area a host builds before anyone joins is the one they'll find.
 // - Kept alike: when a game saves a location it was running (leaving it: o_roomEntitySaver), what's in it - what's
-//   dead, taken, opened - goes to the others, who keep it as their own save of that location (MpLocationStore). A
+//   dead, taken, opened - goes to the others, who keep it as their own save of that location (SharedWorld.LocationStore). A
 //   client that followed the host there doesn't: the host's copy is the real one. A world-map tile goes out too
-//   (MpTileApply) when its seeds are set, when one of its dungeon's values is (its floor seeds, saved floor graphs,
+//   (SharedWorld.TileApply) when its seeds are set, when one of its dungeon's values is (its floor seeds, saved floor graphs,
 //   boss, open, cage, mob levels, contract...), and when a location on it is
 //   saved - leaving a dungeon floor, its graph is saved into the dungeon's maps in place.
 // - Caught up: a client coming into the host's world asks for a copy of everything the host has - every location's
@@ -52,7 +53,9 @@ public sealed class WorldSync
     // Host: players waiting for a copy, and the one being copied (where it's got to).
     private readonly Queue<int> _copyQueue = new();
     private int _copyTo = -1;
-    private int _copyLocations, _copyTiles, _copyLocation, _copyTile;
+    private List<(GmValue Location, GmValue Room, GmValue Preset)> _copyLocations = new();
+    private List<(double X, double Y)> _copyTiles = new();
+    private int _copyLocation, _copyTile;
     // (Taking another game's tile: its dungeon keys aren't news to send back.)
     private bool _applying;
     private bool _wasInWorld;
@@ -76,7 +79,7 @@ public sealed class WorldSync
 
         Scripts.scr_globaltile_seed_validate.Before(context, call =>
         {
-            string tile = Gml.MpTileSeedValidate(Arg(call, 0), Arg(call, 1), Arg(call, 2));
+            string tile = SharedWorld.TileSeedValidate(Arg(call, 0), Arg(call, 1), Arg(call, 2));
             if (tile.Length > 0)
                 _changedTiles.Add(tile);
             return true;
@@ -94,7 +97,7 @@ public sealed class WorldSync
         // A floor's layout seed: the vanilla irandom draws from the world seed's.
         Scripts.scr_dungeonFloorSeedGenerate.Before(context, call =>
         {
-            double seed = Gml.MpDungeonSeed(1, Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt);
+            double seed = SharedWorld.DungeonSeed(1, Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt);
             if (seed >= 0)
                 Game.CallBuiltin("random_set_seed", seed);
             return false;
@@ -102,7 +105,7 @@ public sealed class WorldSync
         // Which floors are special: rolled from the world seed, then the generator back as it was (the floor's own).
         Scripts.scr_dungeonSpecialRoomInit.Before(context, call =>
         {
-            double seed = Gml.MpDungeonSeed(2, 0);
+            double seed = SharedWorld.DungeonSeed(2, 0);
             if (seed < 0)
                 return false;
             GmValue previous = Game.CallBuiltin("random_get_seed");
@@ -114,7 +117,7 @@ public sealed class WorldSync
         // A floor rejected: counted, for its next seed.
         context.OnCode("gml_Object_o_dungeon_controller_Other_15", before: (_, _) =>
         {
-            Gml.MpDungeonRetryNote();
+            SharedWorld.DungeonRetry();
             return false;
         });
         // A location saved as we leave it: to the others, if we were running it.
@@ -140,7 +143,7 @@ public sealed class WorldSync
     // Whether we share our world: the host in a world with players, a client in the host's.
     private bool Sharing => _session.Mode switch
     {
-        Session.SessionMode.Host => Gml.MpHostInWorld() && _session.Players.Any(),
+        Session.SessionMode.Host => JoinSave.HostInWorld() && _session.Players.Any(),
         Session.SessionMode.Client => _join.ClientInWorld,
         _ => false,
     };
@@ -159,7 +162,7 @@ public sealed class WorldSync
         foreach (string tile in _changedTiles)
         {
             int sep = tile.IndexOf('_');
-            string state = Gml.MpTileExport(double.Parse(tile[..sep]), double.Parse(tile[(sep + 1)..]));
+            string state = SharedWorld.TileExport(double.Parse(tile[..sep]), double.Parse(tile[(sep + 1)..]));
             if (state.Length > 0)
                 Send(WorldData.Tile, state);
         }
@@ -177,14 +180,14 @@ public sealed class WorldSync
         bool inWorld = _join.ClientInWorld && Gm.InGame;
         if (inWorld && !_wasInWorld)
         {
-            _session.Send(new WorldDataPacket(WorldData.CopyRequest, Gml.MpWorldSeed(), Array.Empty<byte>()), to: 0);
+            _session.Send(new WorldDataPacket(WorldData.CopyRequest, SharedWorld.WorldSeed(), Array.Empty<byte>()), to: 0);
             _context.Log("In the host's world: asking for its copy of the world");
         }
         _wasInWorld = inWorld;
         // Following the host where we are (it's here too).
         if (!inWorld || ++_frame % 6 != 0)
             return;
-        string? mine = PlayerState.Parse(Gml.MpPlayerState())?.Place;
+        string? mine = OurPlayer.State()?.Place;
         if (mine == null)
             return;
         if (mine != _place)
@@ -205,7 +208,7 @@ public sealed class WorldSync
         // A client that followed the host here leaves the host's copy as the real one.
         if (_session.Mode == Session.SessionMode.Client && _followedHere)
             return;
-        string state = Gml.MpLocationExportSaved(saver);
+        string state = SharedWorld.LocationExportSaved(saver);
         if (state.Length > 0)
             Send(WorldData.Location, state);
         // Its tile too: leaving a dungeon floor, the floor's graph is saved in the dungeon's maps, filled in place
@@ -221,21 +224,26 @@ public sealed class WorldSync
         {
             if (!_copyQueue.TryDequeue(out int next))
                 return;
-            string[] counts = Gml.MpWorldCopyBegin().Split('|');
             _copyTo = next;
-            _copyLocations = int.Parse(counts[0]);
-            _copyTiles = int.Parse(counts[1]);
+            (_copyLocations, _copyTiles) = SharedWorld.CopyList();
             _copyLocation = _copyTile = 0;
             string name = _session.Players.FirstOrDefault(p => p.Slot == next)?.Name ?? "a player";
-            _context.Log($"Copying our world to {name}: {_copyLocations} locations, {_copyTiles} tiles");
+            _context.Log($"Copying our world to {name}: {_copyLocations.Count} locations, {_copyTiles.Count} tiles");
             // (The weather too.)
             _weatherSent = "";
         }
-        for (int i = 0; i < CopyTilesPerFrame && _copyTile < _copyTiles; i++)
-            Send(WorldData.Tile, Gml.MpWorldCopyItem(true, _copyTile++), _copyTo);
-        for (int i = 0; i < CopyLocationsPerFrame && _copyLocation < _copyLocations; i++)
-            Send(WorldData.Location, Gml.MpWorldCopyItem(false, _copyLocation++), _copyTo);
-        if (_copyTile >= _copyTiles && _copyLocation >= _copyLocations)
+        // (Each as it is now: the list is only which ones.)
+        for (int i = 0; i < CopyTilesPerFrame && _copyTile < _copyTiles.Count; i++)
+        {
+            var (x, y) = _copyTiles[_copyTile++];
+            Send(WorldData.Tile, SharedWorld.TileExport(x, y), _copyTo);
+        }
+        for (int i = 0; i < CopyLocationsPerFrame && _copyLocation < _copyLocations.Count; i++)
+        {
+            var (location, room, preset) = _copyLocations[_copyLocation++];
+            Send(WorldData.Location, SharedWorld.LocationExport(location, room, preset), _copyTo);
+        }
+        if (_copyTile >= _copyTiles.Count && _copyLocation >= _copyLocations.Count)
             _copyTo = -1;
     }
 
@@ -246,7 +254,7 @@ public sealed class WorldSync
     {
         if (++_frame % 30 != 0)
             return;
-        string state = Gml.MpWeatherState();
+        string state = SharedWorld.WeatherState();
         if (state.Length == 0 || state == _weatherSent)
             return;
         _weatherSent = state;
@@ -258,13 +266,13 @@ public sealed class WorldSync
     private void Send(WorldData kind, string state, int to = Session.Everyone)
     {
         if (state.Length > 0)
-            _session.Send(new WorldDataPacket(kind, Gml.MpWorldSeed(), JoinCompression.Compress(state)), to);
+            _session.Send(new WorldDataPacket(kind, SharedWorld.WorldSeed(), JoinCompression.Compress(state)), to);
     }
 
     private void Receive(RemotePlayer sender, WorldDataPacket packet)
     {
         // Only from and for a game in our world.
-        if (!Sharing || packet.Seed != Gml.MpWorldSeed())
+        if (!Sharing || packet.Seed != SharedWorld.WorldSeed())
             return;
         switch (packet.Kind)
         {
@@ -273,17 +281,17 @@ public sealed class WorldSync
                     _copyQueue.Enqueue(sender.Slot);
                 break;
             case WorldData.Location:
-                string result = Gml.MpLocationStore(JoinCompression.Decompress(packet.Data));
+                string result = SharedWorld.LocationStore(JoinCompression.Decompress(packet.Data));
                 if (result.Length > 0)
                     _context.Log($"From {sender.Name}: {result}");
                 break;
             case WorldData.Tile:
                 _applying = true;
-                try { Gml.MpTileApply(JoinCompression.Decompress(packet.Data)); }
+                try { SharedWorld.TileApply(JoinCompression.Decompress(packet.Data)); }
                 finally { _applying = false; }
                 break;
             case WorldData.Weather when _session.Mode == Session.SessionMode.Client && sender.Slot == 0:
-                Gml.MpWeatherApply(JoinCompression.Decompress(packet.Data));
+                SharedWorld.WeatherApply(JoinCompression.Decompress(packet.Data));
                 break;
         }
     }

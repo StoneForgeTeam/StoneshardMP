@@ -21,7 +21,7 @@ public sealed class RemotePlayer
     // Where and how they're drawn (null: not in a game), and when that last came (Environment.TickCount64).
     public PlayerState? State { get; set; }
     public long StateAt { get; set; }
-    // Their look (MpPlayerLook's JSON), and a count of the times it's changed.
+    // Their look (OurPlayer.Look's JSON), and a count of the times it's changed.
     public string Look { get; set; } = "";
     public int LookVersion { get; set; }
     // Values that describe the player in the standard inspection card (null until their first Profile packet).

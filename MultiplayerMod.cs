@@ -85,6 +85,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
 
     public void Tick(double deltaTime)
     {
+        // (Where our player is, worked out again this frame when asked.)
+        OurPlayer.NewFrame();
         _session.Poll();
         if (Game.Running)
         {

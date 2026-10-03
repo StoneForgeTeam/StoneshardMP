@@ -47,7 +47,7 @@ public sealed class Player : GameObject
         self["MP"] = 1000000000;
         // o_enemy schedules Alarm 2 to derive stats from bSTR/bAGI/etc. A passive visual proxy has none of
         // those base-stat fields, and must never run that calculation.
-        Gml.MpPlayerInitialize(self);
+        self.Alarm[2] = -1;
     }
 
     // The inherited o_enemy Destroy event has loot and corpse work intended for a real mob. This runs before that

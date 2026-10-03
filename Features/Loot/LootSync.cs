@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using StoneForge;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
 
@@ -92,7 +93,7 @@ public sealed class LootSync
             return;
         string? place = null;
         if (_session.Connected && Gm.InGame && _inSharedWorld() && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger))
-            place = PlayerState.Parse(Gml.MpPlayerState())?.Place;
+            place = OurPlayer.State()?.Place;
         // Who's here with us: the host owns, clients in its place follow.
         var here = place == null ? new List<RemotePlayer>() : _session.Players.Where(p => p.State?.Place == place).ToList();
         bool owning = _session.Mode == Session.SessionMode.Host && here.Count > 0;

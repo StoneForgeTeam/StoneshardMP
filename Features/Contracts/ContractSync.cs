@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using StoneForge;
+using StoneshardMP.Features.World;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Quests;
 using StoneshardMP.Net;
@@ -20,11 +20,11 @@ namespace StoneshardMP.Features.Contracts;
 // - Compared, not hooked: contracts change in many places (dialogue, kills, items, the clock), so twice a second every
 //   contract - every kind, and every one handed out - is compared with what was last sent, and the changed ones go to
 //   the others (ContractPacket), who copy them into theirs in place: the game's references to a contract (journal,
-//   diary, its dungeon) see the change, and a taken one goes into their journal (MpContractApply). A client just in
+//   diary, its dungeon) see the change, and a taken one goes into their journal (ContractData.Apply). A client just in
 //   the host's world gets a full copy.
 // - The host's clock: taken contracts' deadlines count down hourly, which drifted apart counted in every game (a
 //   clock jump, or standing on the dungeon's tile, stops one game's count but not another's). While playing together
-//   the host counts them (MpContractClockHour: paused while any player is at the contract's dungeon) and clients
+//   the host counts them (ContractData.ClockHour: paused while any player is at the contract's dungeon) and clients
 //   don't; a failure reaches them with the contract.
 // - A village's contract counts (out, completed) are shared calls (QuestSync), and a dungeon's contract values come
 //   with the dungeon (WorldSync): a contract's index is the same in every game.
@@ -86,7 +86,7 @@ public sealed class ContractSync
     // Whether we share contracts: the host in a world with players, a client in the host's.
     private bool Sharing => _session.Mode switch
     {
-        Session.SessionMode.Host => Gml.MpHostInWorld() && _session.Players.Any(),
+        Session.SessionMode.Host => JoinSave.HostInWorld() && _session.Players.Any(),
         Session.SessionMode.Client => _join.ClientInWorld,
         _ => false,
     };
@@ -98,7 +98,7 @@ public sealed class ContractSync
         // A client just in the host's world: asks for the host's full copy.
         bool inWorld = _session.Mode == Session.SessionMode.Client && _join.ClientInWorld;
         if (inWorld && !_wasInWorld)
-            _session.Send(new ContractPacket(ContractKind.CopyRequest, Gml.MpWorldSeed(), 0, 0, Array.Empty<byte>()), to: 0);
+            _session.Send(new ContractPacket(ContractKind.CopyRequest, SharedWorld.WorldSeed(), 0, 0, Array.Empty<byte>()), to: 0);
         _wasInWorld = inWorld;
         if (!sharing)
         {
@@ -113,14 +113,11 @@ public sealed class ContractSync
             return;
         for (byte list = 0; list < 2; list++)
         {
-            string export = Gml.MpContractsExport(list);
-            if (export.Length == 0)
+            if (ContractData.Export(list) is not { } contracts)
                 continue;
-            using var doc = JsonDocument.Parse(export);
-            int index = 0;
-            foreach (var item in doc.RootElement.EnumerateArray())
+            for (int index = 0; index < contracts.Count; index++)
             {
-                string json = item.GetString() ?? "";
+                string json = contracts[index];
                 string key = $"{list}:{index}";
                 if (json.Length > 0 && (!_sent.TryGetValue(key, out string? was) || was != json))
                 {
@@ -128,13 +125,12 @@ public sealed class ContractSync
                     if (!first)
                         Send(ContractKind.Changed, list, index, json, Session.Everyone);
                 }
-                index++;
             }
         }
     }
 
     private void Send(ContractKind kind, byte list, int index, string json, int to)
-        => _session.Send(new ContractPacket(kind, Gml.MpWorldSeed(), list, index, JoinCompression.Compress(json)), to);
+        => _session.Send(new ContractPacket(kind, SharedWorld.WorldSeed(), list, index, JoinCompression.Compress(json)), to);
 
     // Host: every contract, as a full copy, to a client just in our world.
     private void SendAll(int to)
@@ -142,21 +138,17 @@ public sealed class ContractSync
         int sent = 0;
         for (byte list = 0; list < 2; list++)
         {
-            string export = Gml.MpContractsExport(list);
-            if (export.Length == 0)
+            if (ContractData.Export(list) is not { } contracts)
                 continue;
-            using var doc = JsonDocument.Parse(export);
-            int index = 0;
-            foreach (var item in doc.RootElement.EnumerateArray())
+            for (int index = 0; index < contracts.Count; index++)
             {
-                string json = item.GetString() ?? "";
+                string json = contracts[index];
                 if (json.Length > 0)
                 {
                     _sent[$"{list}:{index}"] = json;
                     Send(ContractKind.Full, list, index, json, to);
                     sent++;
                 }
-                index++;
             }
         }
         string name = _session.Players.FirstOrDefault(p => p.Slot == to)?.Name ?? "a player";
@@ -166,7 +158,7 @@ public sealed class ContractSync
     private void Receive(RemotePlayer sender, ContractPacket packet)
     {
         // Only from and for a game in our world.
-        if (!Sharing || packet.Seed != Gml.MpWorldSeed())
+        if (!Sharing || packet.Seed != SharedWorld.WorldSeed())
             return;
         if (packet.Kind == ContractKind.CopyRequest)
         {
@@ -177,7 +169,7 @@ public sealed class ContractSync
         // (A client's full copy is the host's alone.)
         if (packet.Kind == ContractKind.Full && (_session.Mode != Session.SessionMode.Client || sender.Slot != 0))
             return;
-        string now = Gml.MpContractApply(packet.List, packet.Index, JoinCompression.Decompress(packet.Data),
+        string now = ContractData.Apply(packet.List, packet.Index, JoinCompression.Decompress(packet.Data),
             packet.Kind == ContractKind.Full, _session.Mode == Session.SessionMode.Host);
         // What we have now counts as sent: not sent back.
         if (now.Length > 0)
@@ -195,9 +187,10 @@ public sealed class ContractSync
         // The world-map cells the other players are on ("@x_y" ends their place).
         string occupied = string.Concat(_session.Players
             .Select(p => p.State?.Place)
-            .Where(place => place != null && place.Contains('@'))
-            .Select(place => place![(place.LastIndexOf('@') + 1)..] + ","));
-        string line = Gml.MpContractClockHour(occupied);
+            .OfType<string>()
+            .Where(place => place.Contains('@'))
+            .Select(place => place[(place.LastIndexOf('@') + 1)..] + ","));
+        string line = ContractData.ClockHour(occupied);
         if (line.Length > 0)
             _context.Log("Contract clock:" + line);
         return true;

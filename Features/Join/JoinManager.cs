@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.World;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
 
@@ -18,13 +19,13 @@ namespace StoneshardMP.Features.Join;
 //   or Load Game - or has begun a new one (New Game: its world's seed is made before its own character is): until
 //   then the client waits.
 // - The host has a character for that player: it sends its world (its save data) with that character in it
-//   (MpJoinBuildSave), and the client loads it (in place of a save of its own: scr_slotLoad).
+//   (JoinSave.BuildSave), and the client loads it (in place of a save of its own: scr_slotLoad).
 // - It hasn't: the client makes one - straight into the game's new game (Adventure: the class picked at Verren) on
 //   the host's world map (its seed, given as it's made: scr_characterMapInit). Its first save sends the character to
 //   the host and asks again - and it's let in as above. A host making its own new character too: the client makes
 //   theirs alongside, its character kept until the host's world is ready.
 // - The client's saves are never written here (scr_slotUpdate): each sends its character to the host, which keeps it
-//   in its world's save data (MpJoinStoreCharacter) - saved with the host's own saves.
+//   in its world's save data (JoinSave.StoreCharacter) - saved with the host's own saves.
 // - Leaving: the host's Save & Exit (scr_smoothSaveExit) waits for everyone in its world to save first
 //   (SaveRequestPacket - each client's save sends its character), up to ExitWait, so its exit save holds everyone.
 //   Back on the main menu the host tells everyone (HostLeftPacket): they go back to theirs, and join again when it
@@ -83,7 +84,7 @@ public sealed class JoinManager
         Scripts.scr_smoothSaveExit.Before(context, call => HoldExit());
 
         // A save of ours - unless the host's world is waiting to load: that becomes the save data.
-        Scripts.scr_slotLoad.Before(context, call => Gml.MpJoinTakePending());
+        Scripts.scr_slotLoad.Before(context, call => JoinSave.TakePending());
         // A client's saves go to the host, not here.
         Scripts.scr_slotUpdate.Before(context, call => ClientSave());
         // A new game's save data is being made (its seed just rolled, in scr_gameDataMapInit): a client's new character
@@ -94,7 +95,7 @@ public sealed class JoinManager
             if (_session.Mode == Session.SessionMode.Host)
                 _hostNewWorld = newGame;
             else if (_state == ClientState.MakingCharacter && _hostSeed >= 0 && newGame)
-                Gml.MpJoinApplySeed(_hostSeed);
+                JoinSave.ApplySeed(_hostSeed);
             return false;
         });
     }
@@ -142,7 +143,7 @@ public sealed class JoinManager
         {
             if (Gm.InMainMenu)
                 _leave = false;
-            else if (!Gm.InstanceExists(GameObjectId.o_smoothRoomChanger) && Gml.MpLeaveToMenu())
+            else if (!Gm.InstanceExists(GameObjectId.o_smoothRoomChanger) && JoinSave.LeaveToMenu())
                 _leave = false;
         }
         if (_session.Mode == Session.SessionMode.Host)
@@ -155,7 +156,7 @@ public sealed class JoinManager
 
     private void HostTick()
     {
-        bool inWorld = Gml.MpHostInWorld();
+        bool inWorld = JoinSave.HostInWorld();
         if (_hostWasInWorld && !inWorld && Gm.InMainMenu)
         {
             _hostWasInWorld = false;
@@ -173,7 +174,7 @@ public sealed class JoinManager
         // (Back on the main menu: no new world begun any more.)
         if (Gm.InMainMenu && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger))
             _hostNewWorld = false;
-        if (!Gml.MpHostInWorld())
+        if (!JoinSave.HostInWorld())
         {
             foreach (var (slot, request) in _requests.ToList())
             {
@@ -182,7 +183,7 @@ public sealed class JoinManager
                 if (_hostNewWorld && !_pendingCharacters.ContainsKey(request.Name))
                 {
                     _requests.Remove(slot);
-                    _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, Gml.MpWorldSeed()), to: slot);
+                    _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, SharedWorld.WorldSeed()), to: slot);
                     _context.Log($"{request.Name} is making a new character alongside ours");
                 }
                 else if (!request.Told)
@@ -197,21 +198,21 @@ public sealed class JoinManager
         // we're now in - they're newer than what it has.
         foreach (var (name, character) in _pendingCharacters.ToList())
         {
-            Gml.MpJoinStoreCharacter(name, character);
+            JoinSave.StoreCharacter(name, character);
             _pendingCharacters.Remove(name);
         }
         foreach (var (slot, request) in _requests.ToList())
         {
             _requests.Remove(slot);
-            string save = Gml.MpJoinBuildSave(request.Name);
+            string save = JoinSave.BuildSave(request.Name);
             if (save.Length == 0)
             {
-                _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, Gml.MpWorldSeed()), to: slot);
+                _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, SharedWorld.WorldSeed()), to: slot);
                 _context.Log($"{request.Name} is making a new character for this world");
                 continue;
             }
             byte[] data = JoinCompression.Compress(save);
-            _session.Send(new JoinReplyPacket(JoinReply.WorldFollows, Gml.MpWorldSeed()), to: slot);
+            _session.Send(new JoinReplyPacket(JoinReply.WorldFollows, SharedWorld.WorldSeed()), to: slot);
             _session.Send(new JoinWorldPacket(data), to: slot);
             _context.Log($"{request.Name} is joining this world ({save.Length / 1024} KB of save, {data.Length / 1024} KB sent)");
         }
@@ -228,7 +229,7 @@ public sealed class JoinManager
         if (_session.Mode != Session.SessionMode.Host)
             return;
         string character = JoinCompression.Decompress(packet.Character);
-        if (!Gml.MpJoinStoreCharacter(packet.Name, character))
+        if (!JoinSave.StoreCharacter(packet.Name, character))
             _pendingCharacters[packet.Name] = character;
         // (A held Save & Exit: one more saved.)
         if (_exitWaiting.Remove(sender.Slot) && _exitWaiting.Count == 0)
@@ -337,7 +338,7 @@ public sealed class JoinManager
     {
         if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0)
             return;
-        if (!Gml.MpJoinSetPending(JoinCompression.Decompress(packet.Save), HostName))
+        if (!JoinSave.SetPending(JoinCompression.Decompress(packet.Save), HostName))
         {
             Status = $"{HostName}'s world arrived damaged - leave and join again";
             return;
@@ -352,7 +353,7 @@ public sealed class JoinManager
         if (_startNew)
         {
             _startNew = false;
-            Gml.MpJoinStartNew();
+            JoinSave.StartNew();
         }
         // The host is saving to leave: our save sends it our character (ClientSave).
         if (_saveNow)
@@ -364,8 +365,8 @@ public sealed class JoinManager
         switch (_state)
         {
             case ClientState.Received:
-                _calm = Gml.MpJoinCalm() ? _calm + 1 : 0;
-                if (_calm >= CalmFrames && Gml.MpJoinStartLoad())
+                _calm = JoinSave.Calm() ? _calm + 1 : 0;
+                if (_calm >= CalmFrames && JoinSave.StartLoad())
                 {
                     _state = ClientState.Loading;
                     Status = $"Joining {HostName}'s world";
@@ -390,7 +391,7 @@ public sealed class JoinManager
             return true;
         if (_session.Mode != Session.SessionMode.Client || !ClientPlaying)
             return false;
-        string character = Gml.MpJoinCharacterSections();
+        string character = JoinSave.CharacterJson();
         if (character.Length > 0)
             _session.Send(new JoinCharacterPacket(_playerName(), JoinCompression.Compress(character)), to: 0);
         if (_state == ClientState.MakingCharacter)

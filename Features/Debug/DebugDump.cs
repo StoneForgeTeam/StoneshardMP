@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Clock;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Debug;
@@ -32,12 +34,12 @@ public sealed class DebugDump
                 Session.SessionMode.Client => $"client{_session.Slot}",
                 _ => "solo",
             };
-            var state = PlayerState.Parse(Gml.MpPlayerState());
+            var state = OurPlayer.State();
             var lines = Gml.MpDebugNearby(12).Split('\n', StringSplitOptions.RemoveEmptyEntries).OrderBy(l => l, StringComparer.Ordinal);
             string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StoneShard");
             Directory.CreateDirectory(folder);
             string file = Path.Combine(folder, $"stoneshardmp-dump-{role}-{Environment.ProcessId}.txt");
-            File.WriteAllText(file, $"{DateTime.Now:HH:mm:ss} {role} place={state?.Place} cell={state?.CellX},{state?.CellY} clock={Gml.MpWorldClock()}\n"
+            File.WriteAllText(file, $"{DateTime.Now:HH:mm:ss} {role} place={state?.Place} cell={state?.CellX},{state?.CellY} clock={GameClock.Snapshot()}\n"
                 + string.Join("\n", lines) + "\n");
             _context.Log("Dump written: " + file);
         }
