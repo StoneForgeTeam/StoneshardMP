@@ -2,6 +2,7 @@ using System;
 using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Clock;
+using StoneshardMP.Features.Contracts;
 using StoneshardMP.Features.Debug;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
@@ -33,6 +34,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private WorldSync _world = null!;
     private LootSync _loot = null!;
     private QuestSync _quests = null!;
+    private ContractSync _contracts = null!;
 
     public void Load(ModContext context)
     {
@@ -60,6 +62,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _loot = new LootSync(context, _session, () => _join.InSharedWorld);
         // One story: quest steps, reputation, dialogue and location flags, crime records; quest items held by anyone.
         _quests = new QuestSync(context, _session, _join);
+        // One set of contracts: the host's, kept alike, with deadlines on the host's clock.
+        _contracts = new ContractSync(context, _session, _join, _quests);
         _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
@@ -76,6 +80,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _world.Clear();
         _loot.Clear();
         _quests.Clear();
+        _contracts.Clear();
     }
 
     public void Tick(double deltaTime)
@@ -88,6 +93,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             _world.Tick();
             _loot.Tick();
             _quests.Tick();
+            _contracts.Tick();
             _players.Tick();
             _effects.Tick();
             _areaUnits.Tick();

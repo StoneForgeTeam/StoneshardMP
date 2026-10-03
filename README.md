@@ -33,6 +33,8 @@ CHANGELOG.md for what works so far.
   kill show up for everyone there.
 - **Quests:** one story for everyone. Quest steps, reputation, what's been said to whom, and crime records are shared,
   and a quest item counts as long as anyone has it.
+- **Contracts:** the host's contracts are everyone's: taken, progressed and handed in for all, with deadlines on the
+  host's clock.
 - **Players & Settings** lists who's in the game and has your name, the join address and name tags. The port and
   player limit are on StoneshardMP's page in the Mods window.
 

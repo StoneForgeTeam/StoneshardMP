@@ -45,6 +45,7 @@ public static class PacketCodec
             WorldDataPacket.PacketId => WorldDataPacket.Read(ref reader),
             SharedCallPacket.PacketId => SharedCallPacket.Read(ref reader),
             QuestItemsPacket.PacketId => QuestItemsPacket.Read(ref reader),
+            ContractPacket.PacketId => ContractPacket.Read(ref reader),
             LootPacket.PacketId => LootPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };

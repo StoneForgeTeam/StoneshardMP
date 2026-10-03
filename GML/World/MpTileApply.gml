@@ -24,8 +24,6 @@ function MpTileApply(state)
     for (var _d = 0; _d < array_length(_names); _d++)
     {
         var _key = _names[_d];
-        if (!MpDungeonKeyShared(_key))
-            continue;
         var _v = variable_struct_get(_s.dungeon, _key);
         if (is_struct(_v) && variable_struct_exists(_v, "m"))
         {

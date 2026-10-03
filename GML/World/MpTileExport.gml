@@ -2,8 +2,9 @@
 /// @stoneforge param tileX double
 /// @stoneforge param tileY double
 // A world-map tile as JSON for the others (MpTileApply): the seeds its areas are built from (-1: not set here), and
-// its dungeon, if it has one - every shared value (MpDungeonKeyShared): numbers and text as they are, its maps (the
-// saved floor graphs, which rooms dropped what, the boss's name) as {m: their JSON}, its level list as {l: [...]}.
+// its dungeon, if it has one - every value: numbers and text as they are, its maps (the saved floor graphs, which
+// rooms dropped what, the boss's name) as {m: their JSON}, its level list as {l: [...]}. (Its contract_map is an
+// index into the handed-out contracts, the same in every game: ContractSync.)
 // "" outside a world. (Legacy: scr_mp_tile_send, and the dungeon keys of scr_mp_world_copy_to.)
 function MpTileExport(tileX, tileY)
 {
@@ -22,7 +23,7 @@ function MpTileExport(tileX, tileY)
         for (var _d = 0; _d < array_length(_names); _d++)
         {
             var _key = _names[_d];
-            if (!is_string(_key) || !MpDungeonKeyShared(_key))
+            if (!is_string(_key))
                 continue;
             var _v = ds_map_find_value(_map, _key);
             if (ds_map_is_map(_map, _key))

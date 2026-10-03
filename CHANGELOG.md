@@ -1,5 +1,19 @@
 # StoneshardMP changes
 
+## 0.17.0
+
+Protocol 19. Contracts are shared, ported from the GML version's contract sync (ContractSync, ContractPacket).
+- The host's contracts: a client in the host's world makes none of its own (they're made at random over time in
+  every game) and has the host's. A client coming into the host's world gets a full copy.
+- Twice a second every contract (every kind, and every one handed out) is compared with what was last sent, and the
+  changed ones go to the others: taken, progress, targets, completed, handed in. They're copied in place, so the
+  journal, the diary and the contract's dungeon see the change, and a taken contract goes into the others' journal.
+- Deadlines count on the host's clock alone while playing together, paused while any player is at the contract's
+  dungeon. A contract failed on the host's clock fails for everyone: listed as failed, the morale hit, its quest items
+  gone.
+- A village's contract counts (out, completed) are shared calls, and a dungeon's contract values now come with the
+  dungeon (0.15.0 held them back): a contract's index is the same in every game.
+
 ## 0.16.0
 
 Protocol 18. One story for everyone in a world, ported from the GML version's quest sync (QuestSync).

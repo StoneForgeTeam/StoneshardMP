@@ -162,7 +162,9 @@ public sealed class QuestSync
 
     // ---- shared calls ----
 
-    private void Share(Script script, Func<GmValue[], GmValue[]?> outgoing)
+    /// <summary>Shares a script's calls: each one goes to the others, made with the arguments <paramref name="outgoing"/>
+    /// gives (null: not this call), and they make it too. The mod declares it hookable ([assembly: HookScript]).</summary>
+    public void Share(Script script, Func<GmValue[], GmValue[]?> outgoing)
     {
         _shared[script.Name] = outgoing;
         script.Before(_context, call =>

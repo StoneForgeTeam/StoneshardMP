@@ -27,8 +27,8 @@ namespace StoneshardMP.Features.World;
 // - Kept alike: when a game saves a location it was running (leaving it: o_roomEntitySaver), what's in it - what's
 //   dead, taken, opened - goes to the others, who keep it as their own save of that location (MpLocationStore). A
 //   client that followed the host there doesn't: the host's copy is the real one. A world-map tile goes out too
-//   (MpTileApply) when its seeds are set, when one of its dungeon's shared values is (MpDungeonKeyShared: its floor
-//   seeds, saved floor graphs, boss, open, cage, mob levels... - not its contract), and when a location on it is
+//   (MpTileApply) when its seeds are set, when one of its dungeon's values is (its floor seeds, saved floor graphs,
+//   boss, open, cage, mob levels, contract...), and when a location on it is
 //   saved - leaving a dungeon floor, its graph is saved into the dungeon's maps in place.
 // - Caught up: a client coming into the host's world asks for a copy of everything the host has - every location's
 //   state and every tile - which goes out a few a frame.
@@ -81,10 +81,10 @@ public sealed class WorldSync
                 _changedTiles.Add(tile);
             return true;
         });
-        // A dungeon's shared value set (MpDungeonKeyShared) - a number or text, a map, a list: its tile to send.
+        // A dungeon's value set - a number or text, a map, a list: its tile to send.
         Func<ScriptCall, bool> dungeonSet = call =>
         {
-            if (!_applying && Arg(call, 0).AsString is { } key && key != DungeonResetKey && Gml.MpDungeonKeyShared(key))
+            if (!_applying && Arg(call, 0).AsString is { } key && key != DungeonResetKey)
                 QueueTile(Arg(call, 2), Arg(call, 3));
             return false;
         };
