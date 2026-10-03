@@ -31,6 +31,8 @@ CHANGELOG.md for what works so far.
   host's world gets a copy of every area the host has, and takes the host's weather.
 - **Ground loot:** where you're together, the host's loot is the real one. Items dropped, picked up or left by a
   kill show up for everyone there.
+- **Quests:** one story for everyone. Quest steps, reputation, what's been said to whom, and crime records are shared,
+  and a quest item counts as long as anyone has it.
 - **Players & Settings** lists who's in the game and has your name, the join address and name tags. The port and
   player limit are on StoneshardMP's page in the Mods window.
 

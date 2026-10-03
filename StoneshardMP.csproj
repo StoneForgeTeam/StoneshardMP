@@ -29,8 +29,7 @@
   </ItemGroup>
 
   <Target Name="ValidateStoneForgeSdk" BeforeTargets="ResolveReferences">
-    <Error Condition="!Exists('$(StoneForgeSdkDir)\StoneForge.API.dll')"
-           Text="Install StoneForge and set STONESHARD_DIR to the game folder, or pass -p:StoneForgeSdkDir=path-to-its-dotnet-folder." />
+    <Error Condition="!Exists('$(StoneForgeSdkDir)\StoneForge.API.dll')" Text="Install StoneForge and set STONESHARD_DIR to the game folder, or pass -p:StoneForgeSdkDir=path-to-its-dotnet-folder." />
   </Target>
 
 </Project>

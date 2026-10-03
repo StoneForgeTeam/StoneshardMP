@@ -8,6 +8,7 @@ using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
 using StoneshardMP.Features.Menu;
 using StoneshardMP.Features.Players;
+using StoneshardMP.Features.Quests;
 using StoneshardMP.Features.Saves;
 using StoneshardMP.Features.World;
 using StoneshardMP.Net;
@@ -31,6 +32,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private JoinManager _join = null!;
     private WorldSync _world = null!;
     private LootSync _loot = null!;
+    private QuestSync _quests = null!;
 
     public void Load(ModContext context)
     {
@@ -56,6 +58,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         new SaveNames(context, _session, () => window.PlayerName);
         // Live ground loot where players are together: the host's is the real one.
         _loot = new LootSync(context, _session, () => _join.InSharedWorld);
+        // One story: quest steps, reputation, dialogue and location flags, crime records; quest items held by anyone.
+        _quests = new QuestSync(context, _session, _join);
         _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
@@ -71,6 +75,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _join.Clear();
         _world.Clear();
         _loot.Clear();
+        _quests.Clear();
     }
 
     public void Tick(double deltaTime)
@@ -82,6 +87,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             _join.Tick();
             _world.Tick();
             _loot.Tick();
+            _quests.Tick();
             _players.Tick();
             _effects.Tick();
             _areaUnits.Tick();

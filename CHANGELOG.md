@@ -1,5 +1,20 @@
 # StoneshardMP changes
 
+## 0.16.0
+
+Protocol 18. One story for everyone in a world, ported from the GML version's quest sync (QuestSync).
+- Shared calls: every call to a script that changes the shared story goes to the others, who make the same call, so
+  their quest book, journal and reputation log update the game's own way (SharedCallPacket). That's the ten quest
+  scripts (start, progress, complete, failed, fields, timestamps, discard, complete-until, next target, dismiss),
+  settlement reputation (its tile filled in where the caller stands), dialogue flags (what's been said, offered,
+  settled), a location's flags, and a faction's crime record (status, penalty, attacks, state, time). Calls made
+  while applying one aren't sent back.
+- Shared quest items: both games run the quest triggers every turn and every hour, and they check *our* character
+  for the lost plane, the black tablet's key and relic, 1000 gold (the abbey contract) or the thief's wine. The
+  player without it wound the quest back. While the triggers run, "has it" now means anyone in the world has it
+  (QuestItemsPacket: who passes which check, sent as soon as it changes).
+- Not yet: the Gwynel house cutscene steps the GML version also shared, and contracts.
+
 ## 0.15.0
 
 Protocol 17. Dungeons are shared whole.
