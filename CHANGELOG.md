@@ -1,5 +1,17 @@
 # StoneshardMP changes
 
+## 0.15.0
+
+Protocol 17. Dungeons are shared whole.
+- A dungeon's values on its world-map tile all go to the others now, not just its four layout values: its saved floor
+  graphs (a floor one game has built is rebuilt from that exact layout in the others), which rooms dropped what,
+  whether its boss is alive, whether it's open, its reset timer, the trapgate's cage, its mob levels, its size, tier
+  and faction. Its contract (whether it has one, its NPC and boss, complete) stays in each game until contracts are
+  shared: the contract is an index into each game's own list.
+- They go out when one is set, and whenever a player leaves a location (a dungeon floor's graph is filled in place,
+  with nothing to hook). The reset timer, which counts down every hour on every dungeon alike, only goes with other
+  changes.
+
 ## 0.14.2
 
 - Tidied up: each feature has its own folder under `Features` (Players, Effects, Menu, Areas, Clock, Join, Saves,

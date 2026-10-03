@@ -9,6 +9,8 @@ using StoneshardMP.Net.Packets;
 // The game scripts the shared world replaces or skips (the patcher makes them hookable).
 [assembly: HookScript(nameof(Scripts.scr_globaltile_seed_validate))]
 [assembly: HookScript(nameof(Scripts.scr_globaltile_dungeon_set))]
+[assembly: HookScript(nameof(Scripts.scr_globaltile_dungeon_set_map))]
+[assembly: HookScript(nameof(Scripts.scr_globaltile_dungeon_set_list))]
 [assembly: HookScript(nameof(Scripts.scr_dungeonFloorSeedGenerate))]
 [assembly: HookScript(nameof(Scripts.scr_dungeonSpecialRoomInit))]
 [assembly: HookScript(nameof(Scripts.scr_weatherEveryHourUpdate))]
@@ -24,8 +26,10 @@ namespace StoneshardMP.Features.World;
 //   MpDungeonSeed). Always, solo too - an area a host builds before anyone joins is the one they'll find.
 // - Kept alike: when a game saves a location it was running (leaving it: o_roomEntitySaver), what's in it - what's
 //   dead, taken, opened - goes to the others, who keep it as their own save of that location (MpLocationStore). A
-//   client that followed the host there doesn't: the host's copy is the real one. Tiles whose seeds or dungeon
-//   layout are set go out too (MpTileApply).
+//   client that followed the host there doesn't: the host's copy is the real one. A world-map tile goes out too
+//   (MpTileApply) when its seeds are set, when one of its dungeon's shared values is (MpDungeonKeyShared: its floor
+//   seeds, saved floor graphs, boss, open, cage, mob levels... - not its contract), and when a location on it is
+//   saved - leaving a dungeon floor, its graph is saved into the dungeon's maps in place.
 // - Caught up: a client coming into the host's world asks for a copy of everything the host has - every location's
 //   state and every tile - which goes out a few a frame.
 // - One sky: the host's weather and fog; a client in its world rolls none of its own.
@@ -36,10 +40,9 @@ public sealed class WorldSync
     private const int CopyLocationsPerFrame = 4;
     private const int CopyTilesPerFrame = 20;
 
-    private static readonly HashSet<string> DungeonLayoutKeys = new()
-    {
-        "DungeonSeed", "dungeon_questFloor", "dungeon_modificationFloor", "dungeon_secretFloor",
-    };
+    // (A dungeon's reset timer counts down every hour on every dungeon, in every game alike - the clock is shared - so
+    // it isn't news to send; it goes along with the rest when anything else is.)
+    private const string DungeonResetKey = "dungeon_reset";
 
     private readonly ModContext _context;
     private readonly Session _session;
@@ -78,15 +81,16 @@ public sealed class WorldSync
                 _changedTiles.Add(tile);
             return true;
         });
-        Scripts.scr_globaltile_dungeon_set.Before(context, call =>
+        // A dungeon's shared value set (MpDungeonKeyShared) - a number or text, a map, a list: its tile to send.
+        Func<ScriptCall, bool> dungeonSet = call =>
         {
-            if (!_applying && Arg(call, 0).AsString is { } key && DungeonLayoutKeys.Contains(key))
-            {
-                GmValue x = Arg(call, 2), y = Arg(call, 3);
-                _changedTiles.Add($"{(x.IsUndefined ? Game.Global["playerGridX"] : x).AsReal}_{(y.IsUndefined ? Game.Global["playerGridY"] : y).AsReal}");
-            }
+            if (!_applying && Arg(call, 0).AsString is { } key && key != DungeonResetKey && Gml.MpDungeonKeyShared(key))
+                QueueTile(Arg(call, 2), Arg(call, 3));
             return false;
-        });
+        };
+        Scripts.scr_globaltile_dungeon_set.Before(context, dungeonSet);
+        Scripts.scr_globaltile_dungeon_set_map.Before(context, dungeonSet);
+        Scripts.scr_globaltile_dungeon_set_list.Before(context, dungeonSet);
         // A floor's layout seed: the vanilla irandom draws from the world seed's.
         Scripts.scr_dungeonFloorSeedGenerate.Before(context, call =>
         {
@@ -204,6 +208,9 @@ public sealed class WorldSync
         string state = Gml.MpLocationExportSaved(saver);
         if (state.Length > 0)
             Send(WorldData.Location, state);
+        // Its tile too: leaving a dungeon floor, the floor's graph is saved in the dungeon's maps, filled in place
+        // (no setter to hook).
+        QueueTile(GmValue.Undefined, GmValue.Undefined);
     }
 
     // ---- the host's copy for a newcomer ----
@@ -280,6 +287,10 @@ public sealed class WorldSync
                 break;
         }
     }
+
+    // A world-map tile to send ("x_y"; undefined: the one we're on).
+    private void QueueTile(GmValue x, GmValue y)
+        => _changedTiles.Add($"{(x.IsUndefined ? Game.Global["playerGridX"] : x).AsReal}_{(y.IsUndefined ? Game.Global["playerGridY"] : y).AsReal}");
 
     private static GmValue Arg(ScriptCall call, int index) => index < call.Args.Length ? call.Args[index] : GmValue.Undefined;
 }
