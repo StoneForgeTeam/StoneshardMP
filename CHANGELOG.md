@@ -1,5 +1,12 @@
 # StoneshardMP changes
 
+## 0.18.2
+
+- The debug dump (Ctrl+Shift+D) checks StoneForge's new off-screen instances against the loot GML they're to
+  replace. Its first line counts the room's ground loot by `Instances.All(o_loot, includeCulled: true)` and by
+  `MpLootAll`, how many are culled and whether their built-ins read, and which of MpLootAll's are missing from
+  StoneForge's list.
+
 ## 0.18.1
 
 - The world turn and a new player object's setup are C# too, with StoneForge's new alarms (`instance.Alarm[n]`):

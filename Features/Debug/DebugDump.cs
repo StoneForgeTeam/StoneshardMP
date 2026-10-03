@@ -40,12 +40,37 @@ public sealed class DebugDump
             Directory.CreateDirectory(folder);
             string file = Path.Combine(folder, $"stoneshardmp-dump-{role}-{Environment.ProcessId}.txt");
             File.WriteAllText(file, $"{DateTime.Now:HH:mm:ss} {role} place={state?.Place} cell={state?.CellX},{state?.CellY} clock={GameClock.Snapshot()}\n"
-                + string.Join("\n", lines) + "\n");
+                + CullingCheck() + "\n" + string.Join("\n", lines) + "\n");
             _context.Log("Dump written: " + file);
         }
         catch (Exception e)
         {
             _context.Log("Dump failed: " + e.Message);
+        }
+    }
+
+    // StoneForge's off-screen instances against the GML they're to replace: the room's ground loot by
+    // Instances.All(o_loot, includeCulled) - culled ones read through their pointer - and by MpLootAll (which also
+    // leaves out loot in flight and persistent loot). Every MpLootAll id should be in StoneForge's list.
+    private static string CullingCheck()
+    {
+        try
+        {
+            var all = Instances.All(GameObjectId.o_loot, includeCulled: true);
+            var ids = all.Select(i => i.Get("id").AsInstance).ToHashSet();
+            int culled = all.Count(i => i.IsCulled);
+            int readable = all.Count(i => i.IsCulled && i.Get("object_index").AsInt > 0);
+            var gml = Gml.MpLootAll().AsArray;
+            int gmlCount = gml?.Length ?? -1;
+            int missing = 0;
+            for (int i = 0; i < gmlCount; i++)
+                if (!ids.Contains(gml![i].AsInstance))
+                    missing++;
+            return $"culling check: StoneForge {all.Count} loot ({culled} culled, {readable} of them read) | GML {gmlCount} | GML ids missing from StoneForge's: {missing}";
+        }
+        catch (Exception e)
+        {
+            return "culling check failed: " + e;
         }
     }
 }
