@@ -4,7 +4,7 @@ using LiteNetLib.Utils;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Areas;
 
 public sealed class AreaUnits
 {

@@ -5,7 +5,7 @@ using StoneshardMP.Net;
 // The game script saving names into (the patcher makes it hookable).
 [assembly: HookScript(nameof(Scripts.scr_slotMapSave))]
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Saves;
 
 // A multiplayer world's saves are named for who plays in it, not for the host's character: the host's saves write
 // the players' names into the character folder's info (MpSavePlayers), and the save menu shows them as that folder's

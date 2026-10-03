@@ -7,7 +7,7 @@ using LiteNetLib.Utils;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP.Effects;
+namespace StoneshardMP.Features.Effects;
 
 // Streams the visible, sprite-only side of the local player's effects. The source objects stay entirely local:
 // receiving games make an Effect (no parent, no game logic) and refresh its draw properties until it ends.

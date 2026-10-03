@@ -11,7 +11,7 @@ using StoneshardMP.Net.Packets;
 [assembly: HookScript(nameof(Scripts.scr_characterMapInit))]
 [assembly: HookScript(nameof(Scripts.scr_smoothSaveExit))]
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Join;
 
 // The host keeps everyone's save (legacy StoneshardMP's design): a client has no save data of its own.
 // - A client that's in asks to join (JoinRequestPacket). The host answers once it's in a world - it pressed Continue

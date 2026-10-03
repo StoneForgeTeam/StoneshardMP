@@ -4,7 +4,7 @@ using System.Linq;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Debug;
 
 // Diagnostics: Ctrl+Shift+D writes what's around the player (MpDebugNearby) with this game's role, place and clock to
 // %LOCALAPPDATA%\StoneShard\stoneshardmp-dump-<role>-<process>.txt - one file per game, so two games on one PC can be

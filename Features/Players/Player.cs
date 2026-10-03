@@ -1,6 +1,6 @@
 using StoneForge;
 
-namespace StoneshardMP.Players;
+namespace StoneshardMP.Features.Players;
 
 // Another player's character on our screen (o_stoneshardmp__player): their look, drawn where and as their game draws
 // them, with their shadow and a name tag. It is a passive child of o_enemy, so it occupies its actual cell and the

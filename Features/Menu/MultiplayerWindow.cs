@@ -3,7 +3,7 @@ using System.Linq;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP.UI;
+namespace StoneshardMP.Features.Menu;
 
 // Players & Settings (the Multiplayer screens' button): who's in the game, and our multiplayer settings - our name,
 // the join address, the port and player limit we host with, name tags (also on the mod's page in the Mods window).

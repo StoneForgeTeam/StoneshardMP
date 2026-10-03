@@ -2,7 +2,7 @@ using System;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP.UI;
+namespace StoneshardMP.Features.Menu;
 
 // The Multiplayer screens of the main menu, made of its own buttons (StoneForge's MainMenu), as the game's Play screen
 // is - one for each state of the session, switched as it changes (the host leaving, a connection lost...):

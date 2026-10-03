@@ -6,7 +6,7 @@ using StoneshardMP.Net.Packets;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Clock;
 
 // Legacy StoneshardMP's "On move" model, without its timer: one completed normal action is one world turn.
 // Clients notify the host; the host serializes those actions and tells every game who caused each one. The actor

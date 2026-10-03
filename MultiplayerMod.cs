@@ -1,16 +1,23 @@
 using System;
 using StoneForge;
-using StoneshardMP.Effects;
-using StoneshardMP.Players;
+using StoneshardMP.Features.Areas;
+using StoneshardMP.Features.Clock;
+using StoneshardMP.Features.Debug;
+using StoneshardMP.Features.Effects;
+using StoneshardMP.Features.Join;
+using StoneshardMP.Features.Loot;
+using StoneshardMP.Features.Menu;
+using StoneshardMP.Features.Players;
+using StoneshardMP.Features.Saves;
+using StoneshardMP.Features.World;
 using StoneshardMP.Net;
-using StoneshardMP.UI;
 
 namespace StoneshardMP;
 
 // StoneshardMP on StoneForge: co-op over LiteNetLib. A trusted mod (mod.json "trusted": true) - it needs the
 // network, and brings LiteNetLib (lib\). Being ported feature by feature from the GML version (MSL), milestone by
 // milestone; so far: the session - hosting, joining, players coming and going (Net\Session) - and the other
-// players on our screen (Players\PlayerManager).
+// players on our screen (Features\Players\PlayerManager) - each feature in its own folder under Features.
 public sealed class MultiplayerMod : IStoneMod, ITickable
 {
     private ModContext _context = null!;

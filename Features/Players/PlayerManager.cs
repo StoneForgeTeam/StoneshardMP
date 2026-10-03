@@ -7,7 +7,7 @@ using StoneshardMP.Net.Packets;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP.Players;
+namespace StoneshardMP.Features.Players;
 
 // The other players on our screen: our state sent every other frame and our look when it changes (and to newcomers); each
 // player in the same place as us gets a Player object, made again after a room change, gone when they leave or go

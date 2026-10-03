@@ -1,5 +1,11 @@
 # StoneshardMP changes
 
+## 0.14.2
+
+- Tidied up: each feature has its own folder under `Features` (Players, Effects, Menu, Areas, Clock, Join, Saves,
+  World, Loot, Debug) and namespace (`StoneshardMP.Features.<Folder>`), and the packets are grouped the same way under
+  `Net\Packets`. Nothing changes in game.
+
 ## 0.14.1
 
 Protocol 16.

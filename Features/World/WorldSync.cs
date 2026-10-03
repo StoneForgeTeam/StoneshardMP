@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
 
@@ -15,7 +16,7 @@ using StoneshardMP.Net.Packets;
 [assembly: HookScript(nameof(Scripts.scr_smokeEveryHourUpdate))]
 [assembly: HookScript(nameof(Scripts.scr_smokeEveryMinuteUpdate))]
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.World;
 
 // One world for everyone in it (legacy StoneshardMP's world sync):
 // - Built alike: an area's layout seeds (first visit, respawn) and a dungeon's floors come from the world seed, not

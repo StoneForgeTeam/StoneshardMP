@@ -9,7 +9,7 @@ using StoneshardMP.Net.Packets;
 // The game script whose "dropped" log line marks the player's own drops (the patcher makes it hookable).
 [assembly: HookScript(nameof(Scripts.scr_actionsLogItem))]
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Loot;
 
 // Live ground loot where players are together (legacy StoneshardMP's loot sync). The host owns a place it shares
 // with clients - its loot is the real one - and they follow:

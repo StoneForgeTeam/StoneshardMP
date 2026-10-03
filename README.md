@@ -43,6 +43,9 @@ game twice.
 - To build it against an installed StoneForge, set `STONESHARD_DIR` to the game folder (or run it from the game's
   `mods` folder).
 - `Net\Session.cs` is the session: a star with the host as slot 0, which relays clients' packets.
+- `Features\` has one folder per feature (Players, Effects, Menu, Areas, Clock, Join, Saves, World, Loot, Debug),
+  each in its own `StoneshardMP.Features.<Folder>` namespace. Its packets are in the same-named folder under
+  `Net\Packets`, and its GML in the same-named folder under `GML\`. `MultiplayerMod.cs` wires them together.
 - `Net\Packets` contains one struct per packet, each with its numeric ID and span-based Read/Write contract. `PacketCodec` validates and decodes envelopes; `Session.On<T>` and `Session.Send(packet)` dispatch typed messages. Raise `Session.Protocol` whenever the wire format changes.
 
 ## Licences

@@ -2,7 +2,7 @@ using System;
 using StoneForge;
 using StoneshardMP.Net;
 
-namespace StoneshardMP.UI;
+namespace StoneshardMP.Features.Menu;
 
 // Join Game's dialog: the host's address (kept as the Join address setting), Join and Cancel - in the game's confirm
 // panel (s_skill_confirm_panel: its message area 26,26 256x55, its two buttons' places at 53,90 and 155,90).

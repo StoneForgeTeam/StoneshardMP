@@ -1,6 +1,6 @@
 using StoneForge;
 
-namespace StoneshardMP.Effects;
+namespace StoneshardMP.Features.Effects;
 
 // One harmless remote visual effect. It has no parent and replaces its draw, so the game's real spell/hit/projectile
 // code never runs here; EffectManager supplies exactly the sprite properties received over the network.

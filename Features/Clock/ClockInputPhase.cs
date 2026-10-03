@@ -1,6 +1,6 @@
 using StoneForge;
 
-namespace StoneshardMP;
+namespace StoneshardMP.Features.Clock;
 
 // Mirrors the legacy manager's two tiny injections: input events occur after Begin Step and before the first
 // unit Step. While that window is open the out-of-combat gate does not reject a click; it merely holds the
