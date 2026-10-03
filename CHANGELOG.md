@@ -1,5 +1,28 @@
 # StoneshardMP changes
 
+## 0.12.0
+
+Protocol 12. The host keeps everyone's save, as the GML version did: a client has no save data of its own.
+
+- Joining: once in, a client asks to join the host's world. It waits on the main menu (the status says so) until the
+  host presses Continue, New Game or Load Game; the client's Joined screen has no Play buttons of its own.
+- The host's world has a character for that player: the host sends its world (its save data, with that character in
+  it and the host's dialogue progress added) and the client loads it, as a save of its own would load.
+- It hasn't: the client goes straight into a new game (Adventure: the class picked at Verren) on the host's world map
+  (its seed). Its first save sends the character to the host and asks again, and it's let into the host's world.
+- A client's saves are never written to its own disk: each sends its character to the host, which keeps it in its
+  world's save data (`mpPlayersDataMap`) - saved with the host's saves.
+- Saves and characters travel gzipped (JSON), in new packets: JoinRequest, JoinReply, JoinWorld, JoinCharacter.
+- Not yet (from the GML version): the host asking everyone to save when it saves or leaves, re-joining when the host
+  loads another save, and blocking a host's world from being loaded on its own.
+
+## 0.11.24
+
+- Diagnostics: Ctrl+Shift+D writes everything within 12 cells of the player (object, cell, sprite and frame,
+  visibility, depth; units' state, animation flags, AI and sync binding) with the game's role, place and clock to
+  `%LOCALAPPDATA%\StoneShard\stoneshardmp-dump-<role>-<process>.txt`, one file per game, to compare the host's and a
+  client's view of an area.
+
 ## 0.11.23
 
 - Fixed the host's game stopping on the first action a client sent: the world-turn readiness check (MpWorldTickReady)

@@ -20,6 +20,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private AreaUnits _areaUnits = null!;
     private MultiplayerMenu _menu = null!;
     private WorldClock _clock = null!;
+    private DebugDump _dump = null!;
+    private JoinManager _join = null!;
 
     public void Load(ModContext context)
     {
@@ -32,11 +34,14 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
         // streamed back by AreaUnits), the host's own turn the clients' clocks.
         _clock = new WorldClock(_session);
+        _dump = new DebugDump(context, _session);
         // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile) and the
         // Players & Settings window.
         var window = context.UI.MainMenu.Add(new MultiplayerWindow(_session, settings, SteamName));
         var join = context.UI.MainMenu.Add(new JoinDialog(_session, settings, () => window.PlayerName));
-        _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window);
+        // The host keeps everyone's save: a client joins the host's world, or makes a character for it.
+        _join = new JoinManager(context, _session, () => window.PlayerName);
+        _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
 
@@ -48,6 +53,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _effects.Clear();
         _areaUnits.Clear();
         _clock.Clear();
+        _join.Clear();
     }
 
     public void Tick(double deltaTime)
@@ -56,10 +62,12 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         if (Game.Running)
         {
             _menu.Tick();
+            _join.Tick();
             _ghosts.Tick();
             _effects.Tick();
             _areaUnits.Tick();
             _clock.Tick();
+            _dump.Tick();
         }
     }
 

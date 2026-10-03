@@ -23,7 +23,9 @@ CHANGELOG.md for what works so far.
   **Players & Settings**, **Back**.
 - **Host Game** listens on the port (UDP 7777 by default) and shows the game's Continue / New Game / Load Game, to
   start playing, and **Stop Hosting**. To be reached over the internet, the host forwards that port on their router.
-- **Join Game** asks for the host's address. Once in, the same Play buttons show, with **Leave Game**.
+- **Join Game** asks for the host's address. Once in, you join the host's world when the host is in it (Continue,
+  New Game or Load Game): with your character if the host's world has it, or straight into making one (on the host's
+  world map) if not. The host keeps everyone's save - nothing is saved on a client's PC.
 - **Players & Settings** lists who's in the game and has your name, the join address and name tags. The port and
   player limit are on StoneshardMP's page in the Mods window.
 
