@@ -22,6 +22,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private WorldClock _clock = null!;
     private DebugDump _dump = null!;
     private JoinManager _join = null!;
+    private WorldSync _world = null!;
 
     public void Load(ModContext context)
     {
@@ -41,6 +42,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         var join = context.UI.MainMenu.Add(new JoinDialog(_session, settings, () => window.PlayerName));
         // The host keeps everyone's save: a client joins the host's world, or makes a character for it.
         _join = new JoinManager(context, _session, () => window.PlayerName);
+        // One world for everyone in it: areas built alike, what's in them shared, the host's weather.
+        _world = new WorldSync(context, _session, _join);
         _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
@@ -54,6 +57,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _areaUnits.Clear();
         _clock.Clear();
         _join.Clear();
+        _world.Clear();
     }
 
     public void Tick(double deltaTime)
@@ -63,6 +67,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         {
             _menu.Tick();
             _join.Tick();
+            _world.Tick();
             _players.Tick();
             _effects.Tick();
             _areaUnits.Tick();

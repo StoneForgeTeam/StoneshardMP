@@ -26,6 +26,9 @@ CHANGELOG.md for what works so far.
 - **Join Game** asks for the host's address. Once in, you join the host's world when the host is in it (Continue,
   New Game or Load Game): with your character if the host's world has it, or straight into making one (on the host's
   world map) if not. The host keeps everyone's save - nothing is saved on a client's PC.
+- **One world:** areas and dungeons are built from the world seed, so everyone gets the same layout. When you leave
+  an area you were running, what's in it (what's dead, taken or opened) goes to the others. A client coming into the
+  host's world gets a copy of every area the host has, and takes the host's weather.
 - **Players & Settings** lists who's in the game and has your name, the join address and name tags. The port and
   player limit are on StoneshardMP's page in the Mods window.
 

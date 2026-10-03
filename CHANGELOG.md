@@ -1,5 +1,20 @@
 # StoneshardMP changes
 
+## 0.13.0
+
+Protocol 14. The shared world is back, ported from the GML version's world sync (WorldSync, WorldDataPacket).
+- **Same layout:** an area's layout seeds (first visit or respawn) and a dungeon's floors (layout, and which floors
+  are special) come from the world seed instead of a random roll. Every game in the same world builds the same area
+  and dungeon. This applies solo too, so areas a host builds before anyone joins are the ones others will find. A
+  dungeon floor the game rejects and rebuilds counts the attempt, so it doesn't rebuild the same floor forever.
+- **Same contents:** when a game leaves a location it was running, its saved state (what's dead, taken or opened,
+  and its flags) goes to the others, who keep it as their own save of that location. A client that followed the host
+  in a location doesn't send it: the host's copy is the real one. Tiles whose seeds or dungeon layout are set go out
+  too.
+- **Catching up:** a client coming into the host's world asks for the host's copy of the world, every location's
+  state and every world-map tile, sent a few a frame.
+- **Weather:** a client in the host's world takes its weather and fog instead of rolling its own.
+
 ## 0.12.4
 
 - Ghosts are now called players. Another player on your screen is the game object `o_stoneshardmp__player`

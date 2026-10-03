@@ -105,6 +105,10 @@ public sealed class JoinManager
     /// <summary>Whether this client is in the host's world (or on its way there).</summary>
     public bool ClientPlaying => _state is ClientState.MakingCharacter or ClientState.Received or ClientState.Loading or ClientState.InWorld;
 
+    /// <summary>Whether this client is playing in the host's world now (not making its character on a copy of its
+    /// map, nor on its way in).</summary>
+    public bool ClientInWorld => _state == ClientState.InWorld;
+
     private string HostName => _session.Players.FirstOrDefault(p => p.Slot == 0)?.Name ?? "the host";
 
     public void Clear()
