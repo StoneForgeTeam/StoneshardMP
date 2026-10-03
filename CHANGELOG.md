@@ -1,5 +1,12 @@
 # StoneshardMP changes
 
+## 0.13.2
+
+- A multiplayer world's saves are named for who plays in it rather than for the host's character: the Load Game
+  screen's header for its character folder reads e.g. "FailMelon, Friend (1)" - the host, then every player whose
+  character the host keeps. A world becomes a multiplayer one the first time it's saved while hosting, and stays one;
+  its names are brought up to date with each save. (The GML version's scr_mp_slot_players_set / scr_mp_slot_title.)
+
 ## 0.13.1
 
 - A client is only in the game for the others once it plays the host's world. While it makes its character it's on

@@ -44,6 +44,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _join = new JoinManager(context, _session, () => window.PlayerName);
         // One world for everyone in it: areas built alike, what's in them shared, the host's weather.
         _world = new WorldSync(context, _session, _join);
+        // A multiplayer world's saves are named for who plays in it.
+        new SaveNames(context, _session, () => window.PlayerName);
         _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
