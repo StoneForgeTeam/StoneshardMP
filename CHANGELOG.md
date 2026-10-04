@@ -1,5 +1,72 @@
 # StoneshardMP changes
 
+## 0.19.12
+
+- The world turn run for another player's action sets one skill's alarm 10, not every skill's. All it does
+  (o_abilities' alarm 10) is set global.skill_can_cast again, the same global for every skill, and none of o_skill's
+  children does more. Setting an alarm is a slow call into the game (about 14 µs), and there are hundreds of skills: it
+  was about 2.5 ms a step.
+- The profiler splits the check that a turn can go in: the world, a cutscene, the player locked, the player's own turn.
+
+## 0.19.11
+
+- The profiler splits the world turn a game runs for another player's action into its parts: the check that it can go
+  in, the game's world turn (scr_global_turn), the skills' cooldowns, and the units' turns (alarm 4).
+
+## 0.19.10
+
+- The host's unit roster costs a client less, and no longer in one go:
+  - **Spread out:** it's applied 12 units a frame over the next frames (a newer roster starts over), and the tidying
+    up - ours out of our turns, units the host didn't send removed - once it's all done. Before, it was all at once, up
+    to 22 ms in one frame.
+  - **Twins found from a table:** a unit we haven't bound finds its twin in a table of our unbound units (object and
+    cell) made once a pass. Before, it searched every unit, reading each one's cell, for each unbound unit, on every
+    roster.
+  - **Grids found once:** moving a unit uses the controller and grids found once a pass, its position read once, and
+    skips the big-unit scripts for a unit of one cell (they do nothing for one). Whether a unit is big is read once.
+  - **Highlight on a new sprite only:** the highlight (scr_set_hl) is set again only when the unit's sprite changes,
+    which is all it reads.
+  - The profiler lists the parts: a unit applied, a unit bound, the tidying up.
+
+## 0.19.9
+
+- A client taking the host's clock writes just the seconds when that's all that differs, as before 0.19. Since 0.19.0,
+  every host tick set the whole time (Time.Set), which also works the time of day out again. Minutes passing still go
+  through Time.Advance, and a jump through Time.Set.
+- (The host's "clock" in the profiler is mostly the world turn it runs for a client's step: the game's own turn for
+  every unit, the same work its own steps cost.)
+
+## 0.19.8
+
+- Fix: the client stuttered every few frames where the host's NPCs are. Applying the host's unit roster took about 55 ms
+  each time (up to 76 ms), 11 ms a frame on average, by the profiler. For every unit it wrote all its values, ran the
+  game's highlight script, moved it through the grids, read its object again, and walked the turn list.
+  - Now only what changed since the last roster is written.
+  - The highlight runs again only then (not for a frame moving on), and the grids only when the unit's cell changed.
+  - A unit's object is read once, and the turn list is walked only when a unit is new or the list has changed.
+
+## 0.19.7
+
+- Timings go to StoneForge's profiler (Ctrl+Shift+P): each feature's frame, the network, and the loot and area units
+  received are listed under StoneshardMP. Its objects' events are timed by StoneForge itself. The mod's own Timings
+  class and its log lines are gone.
+
+## 0.19.6
+
+- Fix: the loot sync slowed both games to about 24 fps. On the host it took 17 ms a frame (about 70 ms each time it ran),
+  and on the client nearly 20 ms. Every few frames it asked the game, for every ground item, whether it's persistent and
+  whether it's static, though neither ever changes. For an off-screen item each read walks the room's deactivated
+  instances (thousands), and the client woke each static one to read it.
+  - Both are read once per item now.
+  - Checking whether known items are gone only asks the game about those not seen on the ground in the same tick.
+- Timings also split out the loot packets received and the host's units applied on the client.
+
+## 0.19.5
+
+- Timings: while in a session, every 10 seconds the log has how long each part of the mod takes per frame (`Timings
+  (host, 24 fps, per frame): loot 3.10ms (0.3/f), ...`). That covers each feature's frame, the network with what its
+  packets do, and other players' and effects' object events. It's for finding what slows a game down.
+
 ## 0.19.4
 
 - Fix: a client couldn't join a world where a dungeon's name has an apostrophe ("Bernarhof's Cenotaph"): the host's

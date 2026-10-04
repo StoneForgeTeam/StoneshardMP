@@ -79,6 +79,15 @@ public sealed class LootSync
     private readonly Dictionary<string, Instance> _pending = new();
     private readonly Dictionary<Instance, long> _sentAt = new();
     private readonly Dictionary<Instance, Mark> _marks = new();
+    // What never changes about an item, read once: whether it's persistent, whether it's static. (Each read of a culled
+    // item walks the room's deactivated instances - thousands - and a static one is woken to be read: every few frames
+    // for every item, that was most of a frame.)
+    private readonly Dictionary<Instance, bool> _persistent = new();
+    private readonly Dictionary<Instance, bool> _static = new();
+    // What was on the ground at the last look, and the frame it was in: an item in it isn't gone (no need to ask the
+    // game) until the next frame.
+    private readonly HashSet<Instance> _present = new();
+    private int _presentFrame = -1;
     private long _nextToken;
 
     public LootSync(ModContext context, Session session, Func<bool> inSharedWorld)
@@ -86,7 +95,7 @@ public sealed class LootSync
         _context = context;
         _session = session;
         _inSharedWorld = inSharedWorld;
-        session.On<LootPacket>(Receive);
+        session.On<LootPacket>((sender, packet) => Profiler.Measure(context, "loot received", () => Receive(sender, packet)));
         Scripts.scr_actionsLogItem.Before(context, call =>
         {
             if (call.Args.Length > 0 && call.Args[0].AsString == "playerDropItems")
@@ -123,6 +132,10 @@ public sealed class LootSync
         _pending.Clear();
         _sentAt.Clear();
         _marks.Clear();
+        _persistent.Clear();
+        _static.Clear();
+        _present.Clear();
+        _presentFrame = -1;
     }
 
     // Each frame.
@@ -153,16 +166,37 @@ public sealed class LootSync
             OwnerTick(here);
         else if (_following)
             FollowerTick();
+        // (What was seen holds for this tick only: packets handled before the next ask the game.)
+        _presentFrame = -1;
     }
 
     // ---- what's on the ground ----
 
     // Every ground item in the room - off screen too - but not an item in flight (a thrown item waits, hidden, where it
     // will land, and is loot once it has) nor a persistent one.
-    private static List<GroundItem> All()
+    private List<GroundItem> All()
     {
         var flying = Carried();
-        return GroundItems.All().Where(item => !flying.Contains(item.Instance) && !item.Instance.Get("persistent").AsBool).ToList();
+        var all = GroundItems.All().Where(item => !flying.Contains(item.Instance) && !Persistent(item)).ToList();
+        _present.Clear();
+        foreach (GroundItem item in all)
+            _present.Add(item.Instance);
+        _presentFrame = _frame;
+        return all;
+    }
+
+    private bool Persistent(GroundItem item)
+    {
+        if (!_persistent.TryGetValue(item.Instance, out bool persistent))
+            _persistent[item.Instance] = persistent = item.Instance.Get("persistent").AsBool;
+        return persistent;
+    }
+
+    private bool Static(GroundItem item)
+    {
+        if (!_static.TryGetValue(item.Instance, out bool isStatic))
+            _static[item.Instance] = isStatic = item.IsStatic;
+        return isStatic;
     }
 
     // The items in the air in a throw (o_physical_shell carries its item as loot_object).
@@ -187,8 +221,9 @@ public sealed class LootSync
             item.Destroy();
     }
 
-    // Whether loot really left the world (picked up, destroyed) - culled loot is still there.
-    private static bool Gone(Instance item) => item.IsGone;
+    // Whether loot really left the world (picked up, destroyed) - culled loot is still there. One seen on the ground
+    // this frame isn't; any other is asked about.
+    private bool Gone(Instance item) => !(_presentFrame == _frame && _present.Contains(item)) && item.IsGone;
 
     // Loot's matching key: what the game hashes it by (scr_locationRoomEntityLootInstanceGetHash) - a weapon's idName or
     // the object's name, and its floored position - so twins from the same save match.
@@ -201,7 +236,7 @@ public sealed class LootSync
     }
 
     // What's on the ground with its matching key, worked out when first asked.
-    private static Lazy<List<(GroundItem Item, string Key)>> Here() => new(() => All().Select(item => (item, Key(item))).ToList());
+    private Lazy<List<(GroundItem Item, string Key)>> Here() => new(() => All().Select(item => (item, Key(item))).ToList());
 
     private static JsonNode? Flight(GroundItem item) => item.Flight is { } flight ? JsonNode.Parse(flight.ToJson()) : null;
 
@@ -441,7 +476,7 @@ public sealed class LootSync
         foreach (GroundItem item in All())
         {
             Instance id = item.Instance;
-            if (_hidOf.ContainsKey(id) || item.IsStatic)
+            if (_hidOf.ContainsKey(id) || Static(item))
                 continue;
             if (!Has(id, Mark.Decided))
             {

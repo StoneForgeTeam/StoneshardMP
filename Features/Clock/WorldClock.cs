@@ -26,8 +26,11 @@ public sealed class WorldClock
     // network handler, as the host's are).
     private int _idleTurns;
 
-    public WorldClock(Session session, Func<bool> inSharedWorld)
+    private readonly ModContext _context;
+
+    public WorldClock(ModContext context, Session session, Func<bool> inSharedWorld)
     {
+        _context = context;
         _session = session;
         _inSharedWorld = inSharedWorld;
         session.On<WorldActionPacket>(RequestAction);
@@ -74,7 +77,7 @@ public sealed class WorldClock
             while (_remoteActions.Count > 0 && GameClock.TickReady())
             {
                 int source = _remoteActions.Dequeue();
-                GameClock.Tick();
+                GameClock.Tick(_context);
                 Publish(source, GameClock.Turns());
             }
             return;
@@ -90,7 +93,7 @@ public sealed class WorldClock
         {
             _idleTurns--;
             if (!InHostsArea())
-                GameClock.Tick();
+                GameClock.Tick(_context);
             _turns = GameClock.Turns();
         }
     }

@@ -19,23 +19,41 @@ internal static class UnitGrid
     // (GameMaker's div, positions being positive.)
     private static int CellOf(double position) => (int)Math.Truncate(position / Cell);
 
+    /// <summary>The game's controller and its grids - the collision grid (newgrid) and the position grid (posgrid) - for
+    /// moving units (null with no controller: not in a game). The same for the room: found once for many units.</summary>
+    public readonly record struct Grids(Instance Controller, GmValue Collisions, GmValue Positions);
+
+    public static Grids? Current()
+        => Controller() is { IsNone: false } controller ? new Grids(controller, controller.Get("newgrid"), controller.Get("posgrid")) : null;
+
     /// <summary>Moves a unit to a cell in the game's grids. Its own x / y follow only for a jump of more than two cells:
     /// for a short move it's drawn there smoothly - another player's from their state, an area unit by its own step.</summary>
     public static void Move(Instance unit, int cellX, int cellY)
     {
-        Instance controller = Controller();
-        if (!unit.Exists || controller.IsNone)
+        if (Current() is { } grids)
+            Move(unit, cellX, cellY, grids);
+    }
+
+    /// <summary>Moves a unit, with the room's grids already found, and whether it's a big unit (more than one cell:
+    /// is_poly_cell) if that's known - it never changes; null: read it.</summary>
+    public static void Move(Instance unit, int cellX, int cellY, Grids grids, bool? poly = null)
+    {
+        if (!unit.Exists)
             return;
         // (By its id: what the position grid holds, and what the game's scripts are handed.)
         unit = unit.Persist();
         double x = cellX * Cell + 13, y = cellY * Cell + 13;
-        if (unit.Get("xx").AsReal == x && unit.Get("yy").AsReal == y)
+        double oldXx = unit.Get("xx").AsReal, oldYy = unit.Get("yy").AsReal;
+        if (oldXx == x && oldYy == y)
             return;
-        var (oldX, oldY) = CellOf(unit);
-        GmValue collisions = controller.Get("newgrid"), positions = controller.Get("posgrid");
+        int oldX = CellOf(oldXx), oldY = CellOf(oldYy);
+        var (controller, collisions, positions) = grids;
+        bool isPoly = poly ?? unit.Get("is_poly_cell").AsBool;
         Game.CallScript("scr_collision_clear", controller, collisions, oldX, oldY, true);
-        Game.CallScript("scr_enemy_poly_cell_clear", unit, oldX, oldY);
-        if (unit.Get("is_poly_cell").AsBool)
+        // (A big unit's extra cells: the game's scripts do nothing for one of a single cell.)
+        if (isPoly)
+            Game.CallScript("scr_enemy_poly_cell_clear", unit, oldX, oldY);
+        if (isPoly)
         {
             Game.CallScript("scr_enemy_poly_cell_posgrid_clear", unit, oldX, oldY);
             Game.CallScript("scr_enemy_poly_cell_posgrid_fill", unit, cellX, cellY);
@@ -57,7 +75,8 @@ internal static class UnitGrid
             unit["diff_x"] = 0;
             unit["diff_y"] = 0;
         }
-        Game.CallScript("scr_enemy_poly_cell_fill", unit, cellX, cellY);
+        if (isPoly)
+            Game.CallScript("scr_enemy_poly_cell_fill", unit, cellX, cellY);
         Game.CallScript("scr_collision_add_enemy", controller, collisions, cellX, cellY);
     }
 
@@ -82,6 +101,11 @@ internal static class UnitGrid
         RemoveFromTurns(listed => listed.Equals(unit), betweenTurnsOnly: false);
         unit.Destroy(runDestroyEvent: false);
     }
+
+    /// <summary>How many units the player's list of units to run each turn holds (-1 with no player).</summary>
+    public static int TurnsCount()
+        => Instances.All(GameObjectId.o_player).FirstOrDefault() is { IsNone: false } player && player.Get("enemylist").AsDsList is { } units
+            ? units.Count : -1;
 
     /// <summary>Takes units out of the player's list of units to run each turn (o_player's enemylist) - with
     /// <paramref name="betweenTurnsOnly"/>, only between turns (its enemy_iteration 0), never while the turn walks it.</summary>

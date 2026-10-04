@@ -43,10 +43,10 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _session = new Session(context.Manifest.Version, context.Log);
         _players = new PlayerManager(context, _session, () => settings.ShowNames.Value, () => _join.InSharedWorld);
         _effects = new EffectManager(context, _session);
-        _areaUnits = new AreaUnits(_session, () => _players.ObjectIndex);
+        _areaUnits = new AreaUnits(context, _session, () => _players.ObjectIndex);
         // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
         // streamed back by AreaUnits), the host's own turn the clients' clocks.
-        _clock = new WorldClock(_session, () => _join.InSharedWorld);
+        _clock = new WorldClock(context, _session, () => _join.InSharedWorld);
         _dump = new DebugDump(context, _session, _areaUnits);
         // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile) and the
         // Players & Settings window.
@@ -87,20 +87,22 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     {
         // (Where our player is, worked out again this frame when asked.)
         OurPlayer.NewFrame();
-        _session.Poll();
+        // (Each part timed for StoneForge's profiler, Ctrl+Shift+P. The network's time includes what the packets it hands
+        // out do - an area's units applied, loot made...)
+        Profiler.Measure(_context, "network", _session.Poll);
         if (Game.Running)
         {
-            _menu.Tick();
-            _join.Tick();
-            _world.Tick();
-            _loot.Tick();
-            _quests.Tick();
-            _contracts.Tick();
-            _players.Tick();
-            _effects.Tick();
-            _areaUnits.Tick();
-            _clock.Tick();
-            _dump.Tick();
+            Profiler.Measure(_context, "menu", _menu.Tick);
+            Profiler.Measure(_context, "join", _join.Tick);
+            Profiler.Measure(_context, "world", _world.Tick);
+            Profiler.Measure(_context, "loot", _loot.Tick);
+            Profiler.Measure(_context, "quests", _quests.Tick);
+            Profiler.Measure(_context, "contracts", _contracts.Tick);
+            Profiler.Measure(_context, "players", _players.Tick);
+            Profiler.Measure(_context, "effects", _effects.Tick);
+            Profiler.Measure(_context, "area units", _areaUnits.Tick);
+            Profiler.Measure(_context, "clock", _clock.Tick);
+            Profiler.Measure(_context, "dump", _dump.Tick);
         }
     }
 
