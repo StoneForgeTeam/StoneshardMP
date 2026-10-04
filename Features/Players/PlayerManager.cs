@@ -85,9 +85,12 @@ public sealed class PlayerManager
         if (inGame)
         {
             mine = OurPlayer.State();
-            if (mine != null && _frame % 2 == 0)
-                _session.Send(new StatePacket(mine), delivery: DeliveryMethod.Sequenced);
-            if (_frame % 30 == 0)
+            // (Just in - joined, or a world (re)loaded with other gear: our look goes first, every time, so the others
+            // don't draw us where we are now in what we wore before.)
+            bool entering = !_wasInGame;
+            if (entering)
+                _sentLook = "";
+            if (entering || _frame % 30 == 0)
             {
                 string look = OurPlayer.Look();
                 if (look.Length > 0 && look != _sentLook)
@@ -101,6 +104,8 @@ public sealed class PlayerManager
                     }
                 }
             }
+            if (mine != null && (entering || _frame % 2 == 0))
+                _session.Send(new StatePacket(mine), delivery: DeliveryMethod.Sequenced);
             string profile = OurPlayer.Profile();
             if (profile.Length > 0 && (_frame % 30 == 0 || profile != _sentProfile))
             {

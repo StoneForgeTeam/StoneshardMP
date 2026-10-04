@@ -27,6 +27,19 @@ using StoneshardMP.Net.Packets;
 [assembly: HookScript(nameof(Scripts.scr_everyPlayerTurnQuestTriggers))]
 [assembly: HookScript(nameof(Scripts.scr_everyHourQuestTriggers))]
 [assembly: HookScript(nameof(Scripts.scr_instance_exists_item))]
+// Functions inside other scripts' files (StoneForge hooks them where they're defined): the vineyard thief's wine check,
+// and Gwynel's house cutscene steps.
+[assembly: HookScript(nameof(Scripts.scr_npc_lines_vineyard_thief_check_wine))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_1))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_2))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_3))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_4))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_5))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_6))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_7))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_door_1))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_door_2))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_door_3))]
 
 namespace StoneshardMP.Features.Quests;
 
@@ -40,6 +53,9 @@ namespace StoneshardMP.Features.Quests;
 //   whether *our* character has an item (the lost plane, the black tablet's key and relic), 1000 gold (the abbey
 //   contract) or the thief's wine. The player without it wound the quest back, which synced, and the holder's game
 //   moved it on again. While they run, "has it" means anyone in the world has it (QuestItemsPacket says who has what).
+// - Quest cutscene steps (Verren and Gwynel's house: scr_rewards_find_guinnel_*): a dialogue's step moves, animates or
+//   hides NPCs and opens doors, which only works where they're real - the game running the area. A client's step is
+//   also made on the host when it's there (its units are the host's: AreaUnits); its quest progress is shared anyway.
 // Only between games in the same world (the seed), a client once it plays the host's save.
 public sealed class QuestSync
 {
@@ -50,8 +66,10 @@ public sealed class QuestSync
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly JoinManager _join;
-    // Scripts whose calls are shared, by name: how a call's arguments go out (null: not this call - a read).
+    // Scripts whose calls are shared, by name: how a call's arguments go out (null: not this call - a read); and for some,
+    // whether a call from that player is made here (none: always).
     private readonly Dictionary<string, Func<GmValue[], GmValue[]?>> _shared = new();
+    private readonly Dictionary<string, Func<RemotePlayer, bool>> _madeHereIf = new();
     private bool _applying;
     // Quest triggers running (and the item check inside one, asking the game itself).
     private bool _triggers, _askingGame;
@@ -103,6 +121,17 @@ public sealed class QuestSync
         // two arguments it reads); absolute values, so a nested repeat is harmless.
         Share(Scripts.scr_globalFraction, args =>
             args.Length > 2 && !args[2].IsUndefined && CrimeFields.Contains(args[1].AsString) ? args : null);
+        // Gwynel's house cutscene steps (Verren walking there, the door, down to the lab, off to camp): made on the host,
+        // where Verren is real, when it's where the player whose dialogue it is stands. Not the ones that pay out or
+        // count searches (scr_rewards_lab_search...).
+        foreach (var step in new[]
+        {
+            Scripts.scr_rewards_find_guinnel_1, Scripts.scr_rewards_find_guinnel_2, Scripts.scr_rewards_find_guinnel_3,
+            Scripts.scr_rewards_find_guinnel_4, Scripts.scr_rewards_find_guinnel_5, Scripts.scr_rewards_find_guinnel_6,
+            Scripts.scr_rewards_find_guinnel_7, Scripts.scr_rewards_find_guinnel_door_1, Scripts.scr_rewards_find_guinnel_door_2,
+            Scripts.scr_rewards_find_guinnel_door_3,
+        })
+            Share(step, args => args, madeHereIf: RunningTheirArea);
 
         // The quest triggers, with the quest item checks shared.
         Scripts.scr_everyPlayerTurnQuestTriggers.Before(context, call =>
@@ -114,6 +143,17 @@ public sealed class QuestSync
         {
             call.Result = RunTriggers(call, perTurn: false);
             return true;
+        });
+        // The thief's wine (the per-turn triggers ask twice: to move his quest on, and to wind it back): while they run,
+        // anyone's counts. Ours is what the game finds, and the others are told it.
+        Scripts.scr_npc_lines_vineyard_thief_check_wine.After(context, call =>
+        {
+            if (!_triggers)
+                return;
+            bool mine = call.Result.AsBool;
+            Have("wine", mine);
+            if (!mine && TheyHave("wine"))
+                call.Result = true;
         });
         Scripts.scr_instance_exists_item.Before(context, call =>
         {
@@ -163,10 +203,13 @@ public sealed class QuestSync
     // ---- shared calls ----
 
     /// <summary>Shares a script's calls: each one goes to the others, made with the arguments <paramref name="outgoing"/>
-    /// gives (null: not this call), and they make it too. The mod declares it hookable ([assembly: HookScript]).</summary>
-    public void Share(Script script, Func<GmValue[], GmValue[]?> outgoing)
+    /// gives (null: not this call), and they make it too - those <paramref name="madeHereIf"/> says yes to, for the
+    /// player it's from (none: all). The mod declares it hookable ([assembly: HookScript]).</summary>
+    public void Share(Script script, Func<GmValue[], GmValue[]?> outgoing, Func<RemotePlayer, bool>? madeHereIf = null)
     {
         _shared[script.Name] = outgoing;
+        if (madeHereIf != null)
+            _madeHereIf[script.Name] = madeHereIf;
         script.Before(_context, call =>
         {
             if (!_applying && Sharing && outgoing(call.Args) is { } args)
@@ -180,6 +223,8 @@ public sealed class QuestSync
         // Only listed scripts, from and for a game in our world.
         if (!_shared.ContainsKey(packet.Script) || !Sharing || packet.Seed != SharedWorld.WorldSeed())
             return;
+        if (_madeHereIf.TryGetValue(packet.Script, out var madeHere) && !madeHere(sender))
+            return;
         // (As our player, as the game's own calls are made.)
         Instance player = Game.CallBuiltin("instance_find", (int)GameObjectId.o_player, 0).AsInstance;
         _applying = true;
@@ -192,9 +237,13 @@ public sealed class QuestSync
 
     // ---- quest items ----
 
+    // Whether we're running the area a player is in: the host, where they are. (A client runs only an area it's alone in -
+    // no one's to make their call there.)
+    private bool RunningTheirArea(RemotePlayer player)
+        => _session.Mode == Session.SessionMode.Host && player.State?.Place is { } place && place == Players.OurPlayer.Place;
+
     // The quest triggers (per turn: as our player; hourly) with the item checks shared: our 1000 gold counts as anyone's,
-    // and when another player holds the thief's wine and we don't, this turn's are left to their game (the wine check
-    // is inside another script, out of reach) - its quest changes reach us as shared calls.
+    // and so does the thief's wine (its check: the hook above).
     private GmValue RunTriggers(ScriptCall call, bool perTurn)
     {
         if (!Sharing)
@@ -205,10 +254,8 @@ public sealed class QuestSync
         {
             gold = self["gold"].AsReal;
             Have("gold1000", gold >= 1000);
-            bool wine = HasWine(self);
-            Have("wine", wine);
-            if (!wine && TheyHave("wine"))
-                return GmValue.Undefined;
+            // (Ours told before the triggers ask: the others' see it, though their thief's quest isn't at that step.)
+            Have("wine", HasWine(self));
             if (gold < 1000 && TheyHave("gold1000"))
                 self["gold"] = 1000;
         }

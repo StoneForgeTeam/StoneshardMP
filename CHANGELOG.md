@@ -1,5 +1,100 @@
 # StoneshardMP changes
 
+## 0.22.5
+
+- **No flash of old gear when a player comes in.** On joining, or after a reload, a player now sends its look before
+  its first position, every time. Before, positions went every other frame but the look only every 30 frames, and only
+  when it changed. So for up to half a second the others drew the player in what it wore before the reload: a bow it
+  had since dropped, for example.
+
+## 0.22.4
+
+- **The save top-up works when characters arrive mid-save.** The client's fresh character came in while the host's
+  save was still running, and the host had its player hidden for a few frames. So the host held the character as
+  "pending", wrote nothing, and dropped it when the save was loaded. Now a held character counts toward the top-up, the
+  host keeps it once it's back in its world, and then it rewrites the save. Before, the rewrite ran when the character
+  arrived.
+- The host's request after a save no longer needs its player visible, only save data.
+- New log lines: "Saved <slot>/<save>: asking N player(s)...", and "...character kept (held until we were back in our
+  world)".
+
+## 0.22.3
+
+- **The client's character goes to the host with where it really is.** The host's log showed the client's refreshes
+  arriving, but every one said the end of the intro (r_taverninside1floor, 481,507). Before reading its character, a
+  client now checks each character section of its save data against the game's live one (global.characterDataMap
+  and the rest: what scr_savegame writes to). Any that differ get relinked, and the client logs which.
+- Each refresh logs what was sent next to where the player really is, to compare.
+- **The black screen while the host loads says what's happening**, from the join status: "<host> is loading a save...",
+  "Receiving <host>'s world...", "Received <host>'s world - loading...".
+- A world that arrives damaged during a reload doesn't leave the client stuck on black: it goes back to the main menu.
+
+## 0.22.2
+
+- **The host's saves have every client where they really are.** Right after the host writes a save, it asks the clients
+  in its world for their characters. When they arrive (within 5 seconds), it writes that save's data again with them.
+  Before, a save only had what the last 20-second refresh had sent, so it could have a client back at an old spot.
+- **The host loading a save fades clients to black at once.** The screen stays black while the host loads, and the
+  host's world then loads in place behind it. The game's room change fades it back in. Before, clients played on in the
+  old world until the reload suddenly began.
+- The host logs where each client's character is as it keeps it, to check positions in the log.
+
+## 0.22.1
+
+- **A host loading a save no longer kicks clients to the main menu.** They stay in game. Once the save is up, the host's
+  world loads in place with each client's character as that save has it: a fade to black and back.
+  - New WorldReloadPacket (id 25) in place of HostLeftPacket for this; protocol 21.
+  - The host lets nobody in until the loaded save has been up and calm for half a second. Before, it could answer with
+    the world it was leaving.
+  - A client with no character in the loaded save goes back to the main menu to make one.
+- **The host's saves have where the clients really are.** A client in the host's world sends it its character every 20
+  seconds, outside busy moments. It runs only the game's save step (scr_savegame), with no fade and nothing written
+  here. Before, a client's character only went to the host when the client saved. A loaded save could put a client back
+  where it last saved, such as next to Verren after the new-character intro.
+- The host's Save & Exit request uses the same refresh instead of a client autosave.
+
+## 0.22.0
+
+- **Only the host loads a save.** A client's Esc menu has no Load Game: its own saves aren't the host's world.
+- **When the host loads a save, everyone comes back into it.** That's from its Esc menu's Load Game, or the main menu's.
+  - The clients go back to their main menus without saving, as when the host leaves its world, and ask again. Once the
+    save is up, the host sends each their world with their character as that save has it.
+  - Characters still coming from the world being left are dropped while it loads, along with any held for a world not
+    yet up. Otherwise a client's character from the old world would overwrite the loaded save's.
+
+## 0.21.2
+
+- **The host's Esc menu has Disconnect too**, in place of Save & Exit while it hosts in its world. It asks with the
+  game's confirmation, then runs the game's Save & Exit: it waits for everyone in its world to save, as before, and saves
+  the host's game. Back on the main menu it stops hosting, which sends every client back to their main menu.
+
+## 0.21.1
+
+- The client's Esc menu button is **Disconnect** rather than the game's Exit. It asks with the game's own confirmation,
+  sends the host our character (the game's Save & Exit, its save going to the host), goes back to the main menu, and
+  leaves the session there - rather than staying connected on the menu.
+
+## 0.21.0
+
+- **A client's Esc menu has Exit, not Save & Exit**, while it plays the host's world (or makes its character for it),
+  with StoneForge's new EscMenu: it keeps no saves of the host's world. Its Exit (the game's, with the game's
+  confirmation) still sends the host its character first: confirmed, it runs the game's Save & Exit, whose save goes to
+  the host and isn't written here. So the host has where the client got to, not just its last autosave. Back to the
+  game's menu otherwise.
+
+## 0.20.0
+
+Two quest gaps from the GML version filled, with StoneForge's hooks on functions inside another script's file:
+- **The vineyard thief's wine counts as anyone's.** The wine check (scr_npc_lines_vineyard_thief_check_wine) is hooked:
+  while the quest triggers run, it says yes if another player holds the thief's wine. So the player without it no longer
+  winds his quest back. Before, the check was out of reach: when another player had the wine and we didn't, that turn's
+  quest triggers were skipped altogether, for every quest.
+- **Gwynel's house cutscene steps are shared.** Verren walking there, the door, down to the lab and off to camp
+  (scr_rewards_find_guinnel_1-7 and _door_1-3) move, animate and hide NPCs and open doors, which only works on the game
+  running the area. A client's step is also made on the host when it's in the same place, so the host's Verren - the
+  one everyone sees - does it. Its quest progress was shared already. Not the steps that pay out or count searches.
+- Shared calls can be made only where they should be (`Share(..., madeHereIf)`).
+
 ## 0.19.13
 
 - The debug dump (Ctrl+Shift+D), with the profiler on (Ctrl+Shift+P), has its whole last second: every part of every

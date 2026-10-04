@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using StoneForge;
@@ -69,6 +70,57 @@ internal static class JoinSave
             return false;
         SaveData.ModMap(PlayersKey)[name] = character;
         return true;
+    }
+
+    // The character's sections the game keeps a live global of (what scr_savegame writes to), as list or map.
+    private static readonly (string Section, bool List)[] LiveSections =
+    {
+        ("characterDataMap", false), ("characterStatsDataMap", false), ("inventoryDataList", true),
+        ("scrollsDataList", true), ("locationsFogDataMap", false),
+    };
+
+    /// <summary>Client, before reading its character: each section of the save data that isn't the game's live one
+    /// (global.&lt;section&gt; - what the game plays with and scr_savegame writes) is pointed at the live one, so what we
+    /// send is where we are. What was relinked, for the log ("" when nothing was).</summary>
+    public static string LinkLive()
+    {
+        if (SaveData.Map is not { } save)
+            return "";
+        var fixedUp = new List<string>();
+        foreach (var (section, list) in LiveSections)
+        {
+            GmValue live = Game.Global[section];
+            if (live.Kind != GmKind.Real || live.AsReal < 0
+                || !Game.CallBuiltin("ds_exists", live, list ? 2 : 1).AsBool
+                || save.Has(section) && save[section].AsReal == live.AsReal)
+                continue;
+            fixedUp.Add($"{section} ({(save.Has(section) ? save[section].AsInt.ToString() : "none")} -> {live.AsInt})");
+            Game.CallBuiltin(list ? "ds_map_replace_list" : "ds_map_replace_map", save.Id, section, live);
+        }
+        return string.Join(", ", fixedUp);
+    }
+
+    /// <summary>Where the player really is (o_player, the room) - to set against what a character says, in the log.</summary>
+    public static string PlayerWhere()
+    {
+        Instance player = Instances.All(GameObjectId.o_player).FirstOrDefault();
+        return player.IsNone ? "no player" : $"{Rooms.CurrentName} at {player.Get("x").AsReal},{player.Get("y").AsReal}";
+    }
+
+    /// <summary>Where a character (CharacterJson) is, for the log: its room, position and world-map cell.</summary>
+    public static string Where(string character)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(character);
+            var map = doc.RootElement.GetProperty("characterDataMap");
+            string V(string key) => map.TryGetProperty(key, out var v) ? v.ToString() : "?";
+            return $"{V("checkpointLocation")} at {V("localX")},{V("localY")} (cell {V("playerGridX")}_{V("playerGridY")})";
+        }
+        catch (System.Exception e) when (e is System.Text.Json.JsonException or System.InvalidOperationException or System.Collections.Generic.KeyNotFoundException)
+        {
+            return "unreadable";
+        }
     }
 
     /// <summary>The players whose characters we keep in our world (none outside one).</summary>

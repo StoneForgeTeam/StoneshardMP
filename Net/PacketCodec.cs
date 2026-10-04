@@ -42,6 +42,7 @@ public static class PacketCodec
             JoinCharacterPacket.PacketId => JoinCharacterPacket.Read(ref reader),
             SaveRequestPacket.PacketId => SaveRequestPacket.Read(ref reader),
             HostLeftPacket.PacketId => HostLeftPacket.Read(ref reader),
+            WorldReloadPacket.PacketId => WorldReloadPacket.Read(ref reader),
             WorldDataPacket.PacketId => WorldDataPacket.Read(ref reader),
             SharedCallPacket.PacketId => SharedCallPacket.Read(ref reader),
             QuestItemsPacket.PacketId => QuestItemsPacket.Read(ref reader),
