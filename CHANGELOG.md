@@ -14,6 +14,8 @@ releases them: the release workflow titles that section with the version, sets i
 - **No more Players & Settings window.** Its settings duplicated StoneshardMP's page in the Mods window, where they all
   are (name, join address, name tags, party frames, port, player limit), and its player list is the panel above. The
   Multiplayer screens lose the button.
+- Following stops on a click on the world, now also not when the click is on a mod's UI (the party frames, the turn
+  carousel...): StoneForge's `Mouse.ClickedWorld`.
 
 ## 0.1.0
 

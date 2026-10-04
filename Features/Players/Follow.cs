@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using StoneForge;
+using StoneForge.Objects;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Net;
 
@@ -65,15 +66,15 @@ public sealed class Follow
             Set(null);
             return;
         }
+
         // (Mid room change - going through a door after them: wait.)
         if (Game.CallBuiltin("instance_exists", (int)GameObjectId.o_smoothRoomChanger).AsBool)
             return;
         if (_skipClick)
             _skipClick = false;
-        // (A click of ours on the world - not on the UI, and in our own window: a game in the background sees the clicks
-        // made in another, played on the same PC.)
-        else if (Game.CallBuiltin("window_has_focus").AsBool && Game.CallBuiltin("mouse_check_button_pressed", 1).AsBool
-            && !Game.CallBuiltin("position_meeting", Game.Global["guiMouseX"], Game.Global["guiMouseY"], Gm.AssetGetIndex("c_GUI")).AsBool)
+        // (A click of ours on the world - not on the game's UI or a mod's, and in our own window: a game in the background
+        // sees the clicks made in another, played on the same PC.)
+        else if (Mouse.ClickedWorld())
         {
             Set(null);
             return;
