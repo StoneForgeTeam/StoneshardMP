@@ -20,6 +20,7 @@ over LiteNetLib (UDP).
 - **Party frames** for the other players: health, energy, level, effects, and a compass needle to them.
 - **Saving and loading** through the host: when the host loads a save, everyone reloads into it in place, and the
   host's saves have everyone where they are. Disconnect in the Esc menu.
+- Needs StoneForge 0.5.0 or newer.
 
 ## Development history
 
