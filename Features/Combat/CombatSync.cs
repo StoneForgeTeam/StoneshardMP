@@ -9,6 +9,13 @@ using StoneshardMP.Net.Packets;
 // The game's attack: hooked to see what a client's attacks do to the host's units, and to send the host's units'
 // attacks on clients to their games.
 [assembly: HookScript(nameof(Scripts.scr_attack))]
+// A unit put on another cell (a knockback, a pull), and effects put on it: a client's own, on its copies of the host's
+// units, go to the host.
+[assembly: HookScript(nameof(Scripts.scr_change_coordinat))]
+[assembly: HookScript(nameof(Scripts.scr_effect_create))]
+[assembly: HookScript(nameof(Scripts.scr_effect_update))]
+// (A knockback - o_knockback's, from an attack or a skill: ours when its owner is our player.)
+[assembly: HookScript(nameof(Scripts.scr_knockback))]
 
 namespace StoneshardMP.Features.Combat;
 
@@ -19,14 +26,26 @@ namespace StoneshardMP.Features.Combat;
 //   the host, which deals it to the real unit as from that client's stand-in. Whether it dies is the host's to say: the
 //   client's copy is kept alive, and goes when the host's roster says so (its corpse and loot come with the host's).
 //   Every attack on one of the host's units in a client's game is the client's own: there, their AI is off.
+// - What else a client's own actions do to the host's units goes to the host too, from the game's own scripts for it:
+//   a unit put on another cell (scr_change_coordinat) inside our player's attack or a knockback our player owns is
+//   moved there on the host (UnitMovedPacket); an effect put on one (scr_effect_create - a stun, a bleed - or refreshed:
+//   scr_effect_update) inside our attack or knockback, or one our player owns (a skill's), is put on the real one, from
+//   the client's stand-in (UnitEffectPacket). Otherwise the host's unit stays where it was and acts unstunned, and the
+//   two games' units drift apart. Only ours: the game moves units and refreshes their own buffs (No Retreat...) for
+//   reasons of its own, which are the host's to have. The host's roster then carries both back (AreaUnits: its cells,
+//   and the effects on its units).
 // - The host's units' attacks on a client: its enemies go for the client's stand-in as for the player (it's in the
 //   "Player" faction list). Their attack on it isn't resolved on the host: the client's game has its copy of the unit
 //   attack the client's character, with the character's real armour, dodge and block.
-// - Kills: a unit a client hit that dies on the host is that client's kill too - their game gives them its XP, worked
-//   out from their copy of it as the game works it out (o_enemy's Destroy).
-// (Still to come: skills and spells, effects, players knocked out.)
+// - Kills: XP is shared. When a unit any player took part in dies on the host, every player in that place within 20
+//   tiles gets its XP - a client's game works it out from its copy of the unit as the game does (o_enemy's Destroy), and
+//   the host's comes from the game's own death code.
+// (Still to come: skills' and spells' damage, players knocked out.)
 public sealed class CombatSync
 {
+    // (How near a kill a player gets its share of the XP, in tiles - the game's own reach for its player.)
+    private const int KillXpReach = 20;
+
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly AreaUnits _areaUnits;
@@ -35,8 +54,15 @@ public sealed class CombatSync
     // Client: attacks under way (one may start inside another: a counterattack), each on one of the host's units with
     // its health before - or null, an attack on anything else.
     private readonly Stack<(Instance Target, long HostId, double Health)?> _attacks = new();
-    // Host: which players (slots) have hit each of our units (by sync id) - its XP is theirs too when it dies.
+    // Host: which players (slots) have hit each of our units (by sync id) - when it dies, a player took part.
     private readonly Dictionary<long, HashSet<int>> _hitBy = new();
+    // Client: inside the host's unit's attack on us (ReceiveAttack) - what it does to itself is the host's; and inside a
+    // refresh of an effect (scr_effect_update), which makes one when it must - sent as the refresh, not again as made.
+    private int _hostsAttack, _refreshing;
+    // Client: our player's own action under way - its attack, or a knockback it owns (each pushed as whether it's ours:
+    // they nest) - while what it does to the host's units is ours to send.
+    private readonly Stack<bool> _actions = new();
+    private int _ourActions;
 
     public CombatSync(ModContext context, Session session, AreaUnits areaUnits, PlayerManager players, Func<bool> inSharedWorld)
     {
@@ -50,22 +76,47 @@ public sealed class CombatSync
             if (AttackOnPlayer(call))
             {
                 _attacks.Push(null);
+                Begin(false);
                 return true;
             }
             _attacks.Push(Started(call));
+            Begin(IsOurPlayer(call.Self));
             return false;
         });
         Scripts.scr_attack.After(context, _ =>
         {
+            End();
             if (_attacks.Count > 0 && _attacks.Pop() is { } attack)
                 Finished(attack);
         });
+        // (A knockback our player owns: what it does is ours.)
+        Scripts.scr_knockback.Before(context, call =>
+        {
+            Begin(call.Self.Exists && IsOurPlayer(UnitGrid.InstanceOf(call.Self.Get("owner"))));
+            return false;
+        });
+        Scripts.scr_knockback.After(context, _ => End());
         // (A unit's death: o_enemy's Destroy, its children's too - they inherit it.)
         context.OnCode("gml_Object_o_enemy_Destroy_0", before: (self, _) =>
         {
             Destroyed(self);
             return false;
         });
+        // (A client's own actions on the host's units: where they put them, and the effects they put on them.)
+        Scripts.scr_change_coordinat.After(context, CoordinatesChanged);
+        Scripts.scr_effect_create.After(context, EffectCreated);
+        Scripts.scr_effect_update.Before(context, _ =>
+        {
+            _refreshing++;
+            return false;
+        });
+        Scripts.scr_effect_update.After(context, call =>
+        {
+            _refreshing = Math.Max(0, _refreshing - 1);
+            EffectRefreshed(call);
+        });
+        session.On<UnitMovedPacket>(ReceiveMove);
+        session.On<UnitEffectPacket>(ReceiveEffect);
         session.On<UnitHitPacket>(ReceiveHit);
         session.On<EnemyAttackPacket>(ReceiveAttack);
         session.On<UnitKilledPacket>(ReceiveKill);
@@ -75,7 +126,30 @@ public sealed class CombatSync
     {
         _attacks.Clear();
         _hitBy.Clear();
+        _hostsAttack = 0;
+        _refreshing = 0;
+        _actions.Clear();
+        _ourActions = 0;
     }
+
+    // An action starting (whether it's our player's own), and the latest ending.
+    private void Begin(bool ours)
+    {
+        bool counted = ours && _session.Mode == Session.SessionMode.Client;
+        _actions.Push(counted);
+        if (counted)
+            _ourActions++;
+    }
+
+    private void End()
+    {
+        if (_actions.Count > 0 && _actions.Pop())
+            _ourActions--;
+    }
+
+    // Whether an instance is our own player's character.
+    private static bool IsOurPlayer(Instance unit)
+        => !unit.IsNone && unit.Exists && OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist());
 
     // ---- a client's attacks ----
 
@@ -172,33 +246,153 @@ public sealed class CombatSync
         }
         GmValue forced = unit.Get("force_attack");
         unit["force_attack"] = true;
+        _hostsAttack++;
         try
         {
             Game.CallScript("scr_attack", unit, player);
         }
         finally
         {
+            _hostsAttack--;
             if (unit.Exists)
                 unit["force_attack"] = forced.IsUndefined ? false : forced;
         }
     }
 
-    // ---- kills ----
+    // ---- what else a client's actions do to the host's units ----
 
-    // Host: one of our units destroyed - killed (no health left, and a full destroy: its corpse and loot) - is a kill for
-    // every player who hit it.
-    private void Destroyed(Instance unit)
+    // Client: one of the host's units, as our action left it - ours to send, or not (null): the roster's own doing, the
+    // host's unit's own attack, or not one of the host's.
+    private (Instance Copy, long HostId)? Ours(GmValue unit) => Ours(UnitGrid.InstanceOf(unit));
+
+    private (Instance Copy, long HostId)? Ours(Instance copy)
     {
-        if (_session.Mode != Session.SessionMode.Host || _hitBy.Count == 0 || _areaUnits.SyncIdOf(unit) is not { } unitId
-            || !_hitBy.Remove(unitId, out var hitters))
-            return;
-        if (unit.Get("HP").AsReal > 0 || !unit.Get("is_full_destroy").AsBool)
-            return;
-        foreach (int slot in hitters)
-            _session.Send(new UnitKilledPacket(unitId), slot);
+        if (_session.Mode != Session.SessionMode.Client || _areaUnits.Applying || _hostsAttack > 0 || !_inSharedWorld())
+            return null;
+        copy = copy.IsNone ? copy : copy.Persist();
+        if (copy.IsNone || !copy.Exists || _areaUnits.HostIdOf(copy) is not { } hostId)
+            return null;
+        return (copy, hostId);
     }
 
-    // Client: a unit we hit was killed - its XP is ours, as the game gives it (o_enemy's Destroy): its gain_xp, less for a
+    // Client: scr_change_coordinat(x, y, unit = self...) put one of the host's units on another cell - a knockback, a
+    // pull: the host moves the real one there.
+    private void CoordinatesChanged(ScriptCall call)
+    {
+        if (_ourActions == 0)
+            return;
+        Instance unit = call.Args.Length > 2 && !call.Args[2].IsUndefined ? UnitGrid.InstanceOf(call.Args[2]) : call.Self;
+        if (Ours(unit) is not var (copy, hostId))
+            return;
+        var (x, y) = UnitGrid.CellOf(copy);
+        _areaUnits.Moved(copy, x, y);
+        _session.Send(new UnitMovedPacket(hostId, (short)x, (short)y));
+        _context.Log($"Moved the host's unit {hostId} to {x},{y}");
+    }
+
+    // Client: scr_effect_create(effect, duration, target, owner, stage...) put an effect on one of the host's units: the
+    // host puts it on the real one. (Made inside a refresh: sent as the refresh.)
+    private void EffectCreated(ScriptCall call)
+    {
+        if (_refreshing > 0 || call.Args.Length < 3 || UnitGrid.InstanceOf(call.Result).IsNone)
+            return;
+        bool ourOwn = call.Args.Length > 3 && IsOurPlayer(UnitGrid.InstanceOf(call.Args[3]));
+        if ((_ourActions == 0 && !ourOwn) || Ours(call.Args[2]) is not var (copy, hostId))
+            return;
+        string name = Gm.ObjectGetName(call.Args[0].AsInt);
+        double stage = call.Args.Length > 4 && !call.Args[4].IsUndefined ? call.Args[4].AsReal : 1;
+        SendEffect(copy, hostId, name, call.Args[1].AsReal, stage, refresh: false);
+    }
+
+    // Client: scr_effect_update(effect, target, duration, stacks) refreshed an effect on one of the host's units (or
+    // made it): the host does the same to the real one.
+    private void EffectRefreshed(ScriptCall call)
+    {
+        if (_ourActions == 0 || call.Args.Length < 3 || Ours(call.Args[1]) is not var (copy, hostId))
+            return;
+        string name = Gm.ObjectGetName(call.Args[0].AsInt);
+        double stacks = call.Args.Length > 3 && !call.Args[3].IsUndefined ? call.Args[3].AsReal : 1;
+        SendEffect(copy, hostId, name, call.Args[2].AsReal, stacks, refresh: true);
+    }
+
+    private void SendEffect(Instance copy, long hostId, string name, double duration, double stage, bool refresh)
+    {
+        _areaUnits.EffectsChanged(copy);
+        _session.Send(new UnitEffectPacket(hostId, name, (float)duration, (float)stage, refresh));
+        _context.Log($"{(refresh ? "Refreshed" : "Put")} {name} ({duration}) on the host's unit {hostId}");
+    }
+
+    // Host: a client's action moved one of our units (in their game) - it's moved there here, onto that cell if it's
+    // free (if it isn't, it stays, and our roster puts theirs back).
+    private void ReceiveMove(RemotePlayer from, UnitMovedPacket move)
+    {
+        if (_session.Mode != Session.SessionMode.Host || !Gm.InGame)
+            return;
+        Instance unit = _areaUnits.UnitOf(move.UnitId);
+        if (unit.IsNone)
+            return;
+        if (!UnitGrid.CanTake(unit, move.CellX, move.CellY))
+        {
+            _context.Log($"{from.Name} moved unit {move.UnitId} to {move.CellX},{move.CellY}, which isn't free here");
+            return;
+        }
+        UnitGrid.Move(unit, move.CellX, move.CellY);
+        _context.Log($"{from.Name} moved unit {move.UnitId} to {move.CellX},{move.CellY}");
+    }
+
+    // Host: a client's action put an effect on one of our units (in their game) - put on the real one as the game puts
+    // one (with its immunities, the target's fortitude), from their stand-in: a new one, or a refresh.
+    private void ReceiveEffect(RemotePlayer from, UnitEffectPacket effect)
+    {
+        if (_session.Mode != Session.SessionMode.Host || !Gm.InGame)
+            return;
+        Instance unit = _areaUnits.UnitOf(effect.UnitId);
+        int obj = Gm.AssetGetIndex(effect.Effect);
+        if (unit.IsNone || obj < 0)
+            return;
+        Instance standIn = _players.UnitOf(from.Slot);
+        Instance owner = standIn.IsNone ? unit : standIn;
+        if (effect.Refresh)
+            Game.CallScript("scr_effect_update", default, obj, unit, effect.Duration, effect.Stage);
+        else
+            Game.CallScript("scr_effect_create", default, obj, effect.Duration, unit, owner, effect.Stage);
+        // (A player's effect on it: their part in its death, should it die of it.)
+        if (!_hitBy.TryGetValue(effect.UnitId, out var hitters))
+            _hitBy[effect.UnitId] = hitters = new();
+        hitters.Add(from.Slot);
+        _context.Log($"{from.Name} put {effect.Effect} ({effect.Duration}) on unit {effect.UnitId}{(effect.Refresh ? " (a refresh)" : "")}");
+    }
+
+    // ---- kills ----
+
+    // Host: one of our units killed (no health left, and a full destroy: its corpse and loot). When any player took part -
+    // a client hit it, or we did as the game counts it (in its damage list, or its last attacker) - its XP is shared, as
+    // the GML version shared it: every client in our place within 20 tiles of it gets its own (UnitKilledPacket), and we
+    // get ours from the game's own death code - counted in its damage list if only clients hit it.
+    private void Destroyed(Instance unit)
+    {
+        if (_session.Mode != Session.SessionMode.Host || _areaUnits.SyncIdOf(unit) is not { } unitId)
+            return;
+        _hitBy.Remove(unitId, out var hitters);
+        if (unit.Get("HP").AsReal > 0 || !unit.Get("is_full_destroy").AsBool)
+            return;
+        Instance player = OurPlayer.Instance;
+        bool weTookPart = !player.IsNone
+            && (Game.CallScript("scr_enemy_target_damage_priority_get", unit, player, 0).AsReal > 0
+                || UnitGrid.InstanceOf(unit.Get("last_attacker")).Equals(player.Persist()));
+        if ((hitters == null || hitters.Count == 0) && !weTookPart)
+            return;
+        var cell = UnitGrid.CellOf(unit);
+        if (!weTookPart && !player.IsNone)
+            Game.CallScript("scr_enemy_target_priority_add", unit, player, 1);
+        string? here = OurPlayer.State()?.Place;
+        foreach (var other in _session.Players)
+            if (other.State is { } state && state.Place == here
+                && Math.Max(Math.Abs(state.CellX - cell.X), Math.Abs(state.CellY - cell.Y)) <= KillXpReach)
+                _session.Send(new UnitKilledPacket(unitId), other.Slot);
+    }
+
+    // Client: a unit was killed near us, with a player's part in it - its XP is ours too, as the game gives it (o_enemy's Destroy): its gain_xp, less for a
     // weaker tier than our level, through scr_get_XP; logged as the game logs a kill.
     private void ReceiveKill(RemotePlayer from, UnitKilledPacket kill)
     {
@@ -207,7 +401,7 @@ public sealed class CombatSync
         Instance unit = _areaUnits.LocalOf(kill.UnitId);
         if (unit.IsNone)
         {
-            _context.Log($"The host's unit {kill.UnitId} we hit was killed, but we've no copy of it for its XP");
+            _context.Log($"The host's unit {kill.UnitId} was killed near us, but we've no copy of it for its XP");
             return;
         }
         double level = Game.CallScript("scr_atr", default, "LVL").AsReal;

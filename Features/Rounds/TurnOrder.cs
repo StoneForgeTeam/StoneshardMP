@@ -8,7 +8,7 @@ namespace StoneshardMP.Features.Rounds;
 
 // The turn order while we're in a shared round (TurnRounds), under our status effects, centred: a carousel of portraits -
 // whose turn it is in the centre, framed; who's next to its right and who just went to its left, smaller and fading -
-// turning right as the turn moves on. The round is every player in it in slot order (the same in every game), then the
+// turning right as the turn moves on (whose turn is always the round's as it is now; only the turning is eased). The round is every player in it in slot order (the same in every game), then the
 // enemies; their portrait is the nearest enemy after us. Below, in the game's small UI font: YOUR TURN / <NAME>'S TURN
 // / ENEMIES' TURN, and why play is turn-based. On the HUD layer, under the game's windows. (Legacy: scr_mp_turnorder_draw.)
 internal sealed class TurnOrder : UIElement
@@ -20,11 +20,8 @@ internal sealed class TurnOrder : UIElement
     private readonly TurnRounds _rounds;
     private readonly Session _session;
     private readonly Func<int> _playerObject;
-    // The carousel: how many portraits; the turn it's going to and the one it shows (counted as positions from the start,
-    // round * count + index, only ever forward), since when; the turn wanted, since when; the round it's on; where it's
-    // turned to (eased).
-    private int _count, _goal, _at, _want, _round;
-    private long _atSince, _wantSince;
+    // The carousel: how many portraits, and where it's turned to (eased towards whose turn it is).
+    private int _count;
     private double _pos;
     // Assets by name, looked up once (-1: none).
     private readonly Dictionary<string, int> _assets = new();
@@ -53,9 +50,14 @@ internal sealed class TurnOrder : UIElement
                 want = i;
                 break;
             }
-        long now = Environment.TickCount64;
-        Advance(count, want, now);
-        int current = Math.Clamp(_at % count, 0, count - 1);
+        // (Whose turn it is now - shown at once: stepping through each turn for a moment fell behind fast rounds, and
+        // showed a turn that had gone.)
+        int current = want;
+        if (_count != count)
+        {
+            _count = count;
+            _pos = current;
+        }
 
         string title;
         int titleColour;
@@ -119,49 +121,6 @@ internal sealed class TurnOrder : UIElement
         if (Why() is { Length: > 0 } why)
             Text(cx, ty + 11, why, WhyColour);
         Game.CallBuiltin("draw_set_colour", Draw.White);
-    }
-
-    // The carousel steps through every turn in order, each shown for a moment, only ever forward: a new round goes on
-    // through the rest of the last one first (the enemies' turn shows even when they took it at once); within a round, a
-    // change counts once it has held for a moment.
-    private void Advance(int count, int want, long now)
-    {
-        if (_count != count)
-        {
-            _count = count;
-            _goal = _at = _want = want;
-            _atSince = _wantSince = now;
-            _round = _rounds.Round;
-            _pos = want;
-        }
-        int start = _goal / count * count;
-        if (_rounds.Round != _round)
-        {
-            _round = _rounds.Round;
-            _goal = start + count + want;
-            _want = want;
-            _wantSince = now;
-        }
-        else
-        {
-            if (want != _want)
-            {
-                _want = want;
-                _wantSince = now;
-            }
-            if (now - _wantSince >= 150 && start + want > _goal)
-                _goal = start + want;
-        }
-        // (Far behind - a hitch, many rounds at once: one round back at most.)
-        if (_goal - _at > count)
-            _at = _goal - count;
-        // (Each turn shown at least this long - the enemies' a little longer.)
-        long hold = _at % count == count - 1 ? 600 : 400;
-        if (_at < _goal && now - _atSince >= hold)
-        {
-            _at++;
-            _atSince = now;
-        }
     }
 
     // Why play is turn-based: our own reason first, else the first other player's in the round.

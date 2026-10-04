@@ -52,6 +52,8 @@ public static class PacketCodec
             UnitHitPacket.PacketId => UnitHitPacket.Read(ref reader),
             EnemyAttackPacket.PacketId => EnemyAttackPacket.Read(ref reader),
             UnitKilledPacket.PacketId => UnitKilledPacket.Read(ref reader),
+            UnitMovedPacket.PacketId => UnitMovedPacket.Read(ref reader),
+            UnitEffectPacket.PacketId => UnitEffectPacket.Read(ref reader),
             TurnStatusPacket.PacketId => TurnStatusPacket.Read(ref reader),
             RoundPacket.PacketId => RoundPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")

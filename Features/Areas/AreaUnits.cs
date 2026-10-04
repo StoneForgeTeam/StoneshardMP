@@ -12,8 +12,11 @@ namespace StoneshardMP.Features.Areas;
 
 // An area's units - NPCs, animals, enemies - are the host's where it shares a place with clients: the host sends its
 // roster every few frames (Snapshot), and a client there makes its own match it (Apply): each of the host's units bound
-// to its twin here or made, kept as the host has it (cell, health, state, animation), its own AI off, and anything the
-// host didn't send removed. (Legacy: scr_mp_area_unit_snapshot, scr_mp_area_unit_apply.)
+// to its twin here or made, kept as the host has it (cell, health, state, animation, the effects on it), its own AI off,
+// and anything the host didn't send removed. What a client's own actions do to its copies - a knockback, a stun - goes
+// to the host (CombatSync), which does it to the real ones: until the roster has caught up with it (Moved,
+// EffectsChanged - a moment), the copy isn't put back as the roster has it.
+// (Legacy: scr_mp_area_unit_snapshot, scr_mp_area_unit_apply.)
 public sealed class AreaUnits
 {
     // The variables the game picks a unit's animation from: copied, not only the sprite it's showing.
@@ -56,6 +59,15 @@ public sealed class AreaUnits
     // and cell, worked out once a pass when a unit needs its twin.
     private readonly Dictionary<Instance, bool> _poly = new();
     private Dictionary<(int Obj, int X, int Y), List<Instance>>? _unbound;
+    // Client: copies our own actions moved (the cell, and until when the roster may still have them where they were),
+    // and put effects on (until when the roster may not have them yet).
+    private const long CatchUpMs = 1500;
+    private readonly Dictionary<Instance, (int X, int Y, long Until)> _movedByUs = new();
+    private readonly Dictionary<Instance, long> _effectsByUs = new();
+    // Effects by object: whether one shows (not an invisible one - the game's own workings - and with an icon), and its
+    // name.
+    private readonly Dictionary<int, (bool Shown, string Name)> _effectKinds = new();
+    private int _invisibleEffect = -2;
 
     public AreaUnits(ModContext context, Session session, Func<int> playerObject)
     {
@@ -80,7 +92,21 @@ public sealed class AreaUnits
         _pass.Clear();
         _poly.Clear();
         _unbound = null;
+        _movedByUs.Clear();
+        _effectsByUs.Clear();
     }
+
+    /// <summary>Client: whether the host's roster is being applied to our copies (moved, set, their effects matched) -
+    /// what that does to them isn't ours to send the host.</summary>
+    public bool Applying { get; private set; }
+
+    /// <summary>Client: our own action moved one of our copies of the host's units to this cell (the host's been told):
+    /// it isn't put back where the roster has it until the roster's caught up, or a moment's passed.</summary>
+    public void Moved(Instance unit, int cellX, int cellY) => _movedByUs[unit.Persist()] = (cellX, cellY, Environment.TickCount64 + CatchUpMs);
+
+    /// <summary>Client: our own action put an effect on one of our copies (the host's been told): its effects aren't
+    /// matched to the roster's for a moment, while the host's catch up.</summary>
+    public void EffectsChanged(Instance unit) => _effectsByUs[unit.Persist()] = Environment.TickCount64 + CatchUpMs;
 
     /// <summary>Whether this unit is one of the host's, from the latest roster (for the debug dump).</summary>
     public bool IsHosts(Instance unit) => _current.Contains(unit.Persist());
@@ -172,6 +198,8 @@ public sealed class AreaUnits
         _pass.Clear();
         _poly.Clear();
         _unbound = null;
+        _movedByUs.Clear();
+        _effectsByUs.Clear();
     }
 
     // Host: every real unit in the room - NPCs, animals, enemies; not other players' - as JSON.
@@ -201,6 +229,7 @@ public sealed class AreaUnits
                 ["speed"] = unit.Get("image_speed").ToJsonNode(), ["angle"] = unit.Get("image_angle").ToJsonNode(),
                 ["alpha"] = unit.Get("image_alpha").ToJsonNode(), ["look"] = look,
                 ["npcName"] = unit.Get("name").ToJsonNode(), ["lifeAnimation"] = unit.Get("is_life").ToJsonNode(),
+                ["fx"] = EffectsOf(unit),
             });
         }
         return units.ToJsonString();
@@ -219,12 +248,17 @@ public sealed class AreaUnits
             _roster = null;
             return;
         }
-        for (int done = 0; done < UnitsPerFrame && _next < _roster.Length; done++)
-            Profiler.Measure(_context, "area units: unit", () => ApplyUnit(_roster[_next++], grids));
-        if (_next < _roster.Length)
-            return;
-        _roster = null;
-        Profiler.Measure(_context, "area units: tidy", Tidy);
+        Applying = true;
+        try
+        {
+            for (int done = 0; done < UnitsPerFrame && _next < _roster.Length; done++)
+                Profiler.Measure(_context, "area units: unit", () => ApplyUnit(_roster[_next++], grids));
+            if (_next < _roster.Length)
+                return;
+            _roster = null;
+            Profiler.Measure(_context, "area units: tidy", Tidy);
+        }
+        finally { Applying = false; }
     }
 
     private void ApplyUnit(JsonObject u, UnitGrid.Grids grids)
@@ -245,13 +279,109 @@ public sealed class AreaUnits
         _pass.Add(unit);
         JsonObject? last = _applied.GetValueOrDefault(unit);
         Set(unit, u, last);
-        if (last == null || Int(last["x"]) != x || Int(last["y"]) != y)
+        long now = Environment.TickCount64;
+        // Where the host has it - wherever ours is now, not only when the host's moved it: ours may have been moved here
+        // (a knockback that didn't happen there). Unless we moved it, and the roster's not caught up yet.
+        bool hold = false;
+        if (_movedByUs.TryGetValue(unit, out var moved))
+        {
+            if ((moved.X == x && moved.Y == y) || now >= moved.Until)
+                _movedByUs.Remove(unit);
+            else
+                hold = true;
+        }
+        if (!hold && UnitGrid.CellOf(unit) != (x, y))
         {
             if (!_poly.TryGetValue(unit, out bool poly))
                 _poly[unit] = poly = unit.Get("is_poly_cell").AsBool;
             UnitGrid.Move(unit, x, y, grids, poly);
         }
+        // Its effects as the host has them - when they've changed there, or once ours have been left alone long enough
+        // for the host to have what we did.
+        bool effectsDue = last == null || !JsonNode.DeepEquals(last["fx"], u["fx"]);
+        if (_effectsByUs.TryGetValue(unit, out long until))
+        {
+            effectsDue = now >= until;
+            if (effectsDue)
+                _effectsByUs.Remove(unit);
+        }
+        if (effectsDue && u["fx"] is JsonArray effects)
+            MatchEffects(unit, effects);
         _applied[unit] = u;
+    }
+
+    // Host: the effects on a unit that show (EffectKind), as [name, duration] pairs.
+    private JsonArray EffectsOf(Instance unit)
+    {
+        var effects = new JsonArray();
+        foreach (var (_, name, duration) in ShownEffects(unit))
+            effects.Add(new JsonArray(name, duration));
+        return effects;
+    }
+
+    // The effects on a unit that show (EffectKind): each instance, its object's name and its duration.
+    private List<(Instance Effect, string Name, double Duration)> ShownEffects(Instance unit)
+    {
+        var shown = new List<(Instance, string, double)>();
+        GmValue buffs = unit.Get("buffs");
+        if (buffs.Kind != GmKind.Real || !Game.CallBuiltin("ds_exists", buffs, 2).AsBool)
+            return shown;
+        int count = Game.CallBuiltin("ds_list_size", buffs).AsInt;
+        for (int i = 0; i < count; i++)
+        {
+            Instance effect = UnitGrid.InstanceOf(Game.CallBuiltin("ds_list_find_value", buffs, i));
+            if (effect.IsNone || !effect.Exists)
+                continue;
+            var (isShown, name) = EffectKind(effect.Get("object_index").AsInt);
+            if (isShown)
+                shown.Add((effect, name, effect.Get("duration").AsReal));
+        }
+        return shown;
+    }
+
+    // Whether an effect's object shows - not an invisible one (the game's own workings, which each game makes for its
+    // own units alike) and with an icon - and its name.
+    private (bool Shown, string Name) EffectKind(int obj)
+    {
+        if (!_effectKinds.TryGetValue(obj, out var kind))
+        {
+            if (_invisibleEffect == -2)
+                _invisibleEffect = Gm.AssetGetIndex("o_invisible_buff");
+            bool shown = !(_invisibleEffect >= 0 && Gm.ObjectIsAncestor(obj, _invisibleEffect))
+                && Game.CallBuiltin("object_get_sprite", obj).AsInt >= 0;
+            _effectKinds[obj] = kind = (shown, Gm.ObjectGetName(obj));
+        }
+        return kind;
+    }
+
+    // Client: a copy's effects made the host's - each of the host's there with its duration (made as the game makes one,
+    // from the copy itself, if it isn't), and any the host hasn't taken off.
+    private void MatchEffects(Instance unit, JsonArray hosts)
+    {
+        var ours = ShownEffects(unit);
+        foreach (JsonNode? entry in hosts)
+        {
+            if (entry is not JsonArray { Count: 2 } pair || pair[0]?.GetValue<string>() is not { } name)
+                continue;
+            double duration = Number(pair[1]);
+            int at = ours.FindIndex(e => e.Name == name);
+            if (at >= 0)
+            {
+                if (ours[at].Duration != duration)
+                    ours[at].Effect["duration"] = duration;
+                ours.RemoveAt(at);
+                continue;
+            }
+            int obj = Gm.AssetGetIndex(name);
+            if (obj < 0)
+                continue;
+            Instance made = UnitGrid.InstanceOf(Game.CallScript("scr_effect_create", default, obj, duration, unit, unit));
+            if (!made.IsNone && made.Exists)
+                made["duration"] = duration;
+        }
+        foreach (var (effect, _, _) in ours)
+            if (effect.Exists)
+                effect.Destroy();
     }
 
     // One of the host's units we have none bound to: our twin (same object, same cell, never bound) - from a table of

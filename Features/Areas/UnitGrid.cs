@@ -113,7 +113,26 @@ internal static class UnitGrid
         Game.CallScript("scr_enemy_poly_cell_posgrid_clear", unit, x, y);
         // (Even mid-turn: a destroyed unit can't stay in the list the turn walks.)
         RemoveFromTurns(listed => listed.Equals(unit), betweenTurnsOnly: false);
+        ClearEffects(unit);
         unit.Destroy(runDestroyEvent: false);
+    }
+
+    private static int _effects = -2;
+
+    /// <summary>Takes the effects on a unit (its buffs - stun, No Retreat...: c_abstract_states with it as their target)
+    /// out with it, before it's taken out without its Destroy event. Left, they point at a unit that's gone, and the
+    /// game's code reading their target (o_pass_skill_no_retreat's "target.id") crashes the game. (Legacy:
+    /// scr_mp_unit_effects_clear.)</summary>
+    public static void ClearEffects(Instance unit)
+    {
+        if (_effects == -2)
+            _effects = Gm.AssetGetIndex("c_abstract_states");
+        if (_effects < 0)
+            return;
+        unit = unit.Persist();
+        foreach (Instance effect in Instances.All(_effects, includeCulled: true))
+            if (InstanceOf(effect.Get("target")).Equals(unit))
+                effect.Destroy();
     }
 
     /// <summary>How many units the player's list of units to run each turn holds (-1 with no player).</summary>

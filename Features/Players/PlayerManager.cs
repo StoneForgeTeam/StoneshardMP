@@ -151,6 +151,8 @@ public sealed class PlayerManager
             }
             else if (!here && exists)
             {
+                // (The effects on it go with it: left, they'd read a unit that's gone.)
+                UnitGrid.ClearEffects(view.Unit);
                 Game.CallBuiltin("instance_destroy", view.Unit);
                 view.Unit = default;
             }
@@ -275,7 +277,10 @@ public sealed class PlayerManager
         if (!Game.Running)
             return;
         if (!view.Unit.IsNone && view.Unit.Exists)
+        {
+            UnitGrid.ClearEffects(view.Unit);
             Game.CallBuiltin("instance_destroy", view.Unit);
+        }
         view.Sprites?.Dispose();
     }
 

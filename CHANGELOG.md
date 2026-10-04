@@ -1,5 +1,40 @@
 # StoneshardMP changes
 
+## 0.24.2
+
+- **Only what a client's own player does to the host's units goes to the host.** 0.24.1 sent every move and effect on
+  a client's copies, whatever made it. Copies on the world map moved by the game's own code went to the host as
+  "moved unit 39 to 384,53". The enemies' own No Retreat buff, which refreshes itself every step, went as a flood of
+  "put o_b_no_retreat on unit N (a refresh)", over a hundred of them.
+  - Moves are sent only inside the client player's own attack, or a knockback whose owner is its player (o_knockback,
+    from an attack or a skill; scr_knockback is now hooked).
+  - Effects are sent only inside those, or when their owner is the client's player (a skill's).
+- **The host no longer drops everyone.** The host's quest-trigger hook (scr_everyPlayerTurnQuestTriggers) threw
+  "Instance … no longer exists" when the instance calling it had been destroyed while its own event was still running.
+  After three in a row, StoneForge paused StoneshardMP on the host, which stopped its networking, and the client timed
+  out. When the caller is already gone, the hook now leaves the game to run its own triggers, unshared, for that call.
+
+## 0.24.1
+
+- **Knockback and status effects from a client's actions happen in the host's world too.** Before, only an attack's
+  damage went to the host. A client's knockback moved its copy of the enemy, but the host's enemy stayed put; a stun
+  or bleed stayed on the copy, and the host's enemy kept acting. The two games' enemies then drifted apart. Now the
+  client watches the game's own scripts for these, whatever caused them (an attack or a skill):
+  - **A unit moved to another cell** (scr_change_coordinat: knockback, pull) goes to the host as UnitMovedPacket. The
+    host moves the real unit there if the cell is free there.
+  - **An effect created** (scr_effect_create) **or refreshed** (scr_effect_update) on one of the host's units goes to
+    the host as UnitEffectPacket. The host puts it on the real unit with the game's own scripts (its immunities and the
+    target's fortitude), from the client's stand-in. It counts as that player's part in the kill.
+- **The host's roster carries each unit's visible effects**, with their durations. A client's copies get the same
+  effects: missing ones are made, durations are set, and ones the host doesn't have are taken off. So effects from the
+  host's own attacks show on clients too.
+- **A client's copies are put back where the host has them** whenever they differ. Before, a copy was only moved when
+  the host's cell changed, so a copy that moved on its own was never corrected. After a client's own move or effect,
+  its copy is left alone for 1.5 seconds while the host catches up, so it doesn't snap back and forth.
+- New packets 32 (UnitMovedPacket) and 33 (UnitEffectPacket); protocol 24. scr_change_coordinat, scr_effect_create and
+  scr_effect_update are now hooked, so the first start after updating rebuilds the game data.
+- Still to come: skills' and spells' damage.
+
 ## 0.24.0
 
 - **Combat between players' games.** Each game resolves the fights its own character is in - it has the real stats,
@@ -12,8 +47,10 @@
     hostile to the player chase and attack it as they would the player, and turn on a client who hits them. Their
     attack isn't resolved on the host: the client's game has its copy of the enemy attack the client's character, with
     its real armour, dodge and block.
-  - **Kills give a client XP.** An enemy a client hit that dies on the host gives that client its XP, worked out as the
-    game does (less for an enemy of a lower tier than their level), with the game's kill line in the log.
+  - **Kill XP is shared**, as in the GML version: when any player took part in a kill (hit it), every player in that
+    place within 20 tiles gets its XP, each scaled by their own level against its tier as the game does, with the
+    game's kill line in the log. The host is counted in the enemy's damage list if only a client hit it, so it gets its
+    share from the game's own death code.
   - The host logs each hit ("<player> hit unit N (<object>): X damage, Y health left"); the client what it sent, and
     the XP for a kill.
   - Still to come: skills and spells, status effects, a client knocked out or killed.
@@ -28,7 +65,8 @@
   - Whoever hasn't acted in 30 s is skipped, so nobody holds a round up for good.
   - **The turn order carousel is back**, under your status effects: whose turn it is in the centre, who's next to its
     right and who just went to its left, turning as the turn moves on; the enemies' portrait is the nearest enemy after
-    you. Below: YOUR TURN / <NAME>'S TURN / ENEMIES' TURN, and why play is turn-based.
+    you. Below: YOUR TURN / <NAME>'S TURN / ENEMIES' TURN, and why play is turn-based. It always shows whose turn it is
+    now (the GML version stepped through each turn for a moment, and fell behind quick rounds).
   - The host logs each round, who's acted and who was skipped; a client each round it's in.
 - **Follow another player is back** (from the GML version): "Follow" on their character's right-click menu ("Stop
   following" while you do).
@@ -37,13 +75,17 @@
   - When they leave your place, you go out the way they did: the door, stairs or entrance nearest where you last saw
     them (through it, or walked to and through, as the game's own Exit), or across the edge of the area; then on
     following them there.
-  - It stops on a left click on the world in your own window (not on the UI), when you lose them, or when they leave
-    the game. It goes on while your game's window is in the background.
+  - It stops on a left click on the world in your own window (not on the UI), when an enemy's after you, when you lose
+    them, or when they leave the game. It goes on while your game's window is in the background.
 - **A crash when players stood next to each other is fixed.** Another player's character took their cell in the
   game's position grid even when your own character (or an area unit) was there for a moment, overwriting it; the game
   then crashed when it read that cell. It only moves onto a free cell now (or its own), as the GML version did, and
   catches up once the cell's free. And it's put on its cell at once rather than walked there: a walking unit clears the
   cell it leaves as it starts - which, after two players came through the same door onto the same cell, was yours.
+- **A crash when a player came into a place another was in is fixed.** The units the host doesn't have are taken out
+  of the other player's game without their Destroy event, and the effects on them (a stun, No Retreat...) were left
+  behind pointing at a unit that was gone; the game crashed reading their target. They go with the unit now, as in
+  the GML version - and with another player's character when it goes.
 - Enemies go after another player's character again: it was marked ignored by enemies every step, undoing the combat
   change above.
 - Needs the StoneForge release with `ContextMenus`.

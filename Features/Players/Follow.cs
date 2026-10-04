@@ -15,7 +15,8 @@ namespace StoneshardMP.Features.Players;
 //   them on (any o_transitions_door within 2.5 cells) - through it if we can reach it (its user event 0), else walked
 //   to and through (scr_delay_move_grid, as the game's own "Exit"); with none, they walked off the edge of the area:
 //   onto that border cell and across it (scr_playerTileborderTransition). Once there, following carries on.
-// It stops on a left click in our window (not on the UI), when we lose them, or when they leave the game.
+// It stops on a left click in our window (not on the UI), when an enemy's after us, when we lose them, or when they leave
+// the game.
 public sealed class Follow
 {
     private const long ResendMs = 1500, LeaveGraceMs = 400, LeaveGiveUpMs = 20000, ArriveWaitMs = 6000;
@@ -32,7 +33,7 @@ public sealed class Follow
     private (int X, int Y)? _lastSent, _seen;
     private long _sentAt, _goneAt, _arrivedAt;
     private string? _seenIn;
-    private int _transitions = -2;
+    private int _transitions = -2, _frame;
 
     public Follow(ModContext context, Session session, PlayerManager players)
     {
@@ -75,6 +76,12 @@ public sealed class Follow
             && !Game.CallBuiltin("position_meeting", Game.Global["guiMouseX"], Game.Global["guiMouseY"], Gm.AssetGetIndex("c_GUI")).AsBool)
         {
             Set(null);
+            return;
+        }
+        // (A fight's begun - an enemy's after us: interrupted, as the game's own walking is.)
+        if (++_frame % 10 == 0 && Game.CallScript("scr_getAgredMobsCount", default, true).AsReal > 0)
+        {
+            Set(null, "an enemy's after us");
             return;
         }
         RemotePlayer? them = _session.Players.FirstOrDefault(p => p.Slot == slot);

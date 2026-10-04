@@ -133,14 +133,19 @@ public sealed class QuestSync
         })
             Share(step, args => args, madeHereIf: RunningTheirArea);
 
-        // The quest triggers, with the quest item checks shared.
+        // The quest triggers, with the quest item checks shared. (Called by an instance already destroyed - its own
+        // event still running - they can't be run again from here with it: the game runs its own, unshared.)
         Scripts.scr_everyPlayerTurnQuestTriggers.Before(context, call =>
         {
+            if (!call.Self.IsNone && !call.Self.Exists)
+                return false;
             call.Result = RunTriggers(call, perTurn: true);
             return true;
         });
         Scripts.scr_everyHourQuestTriggers.Before(context, call =>
         {
+            if (!call.Self.IsNone && !call.Self.Exists)
+                return false;
             call.Result = RunTriggers(call, perTurn: false);
             return true;
         });
