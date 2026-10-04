@@ -1,0 +1,99 @@
+# Publishes a StoneshardMP release when a version tag (v0.2.0) is pushed:
+#  1. the tag's version written into the mod (build\Stamp-Version.ps1): mod.json's "version", and CHANGELOG.md's
+#     "## Unreleased" section titled with it;
+#  2. built against the StoneForge release mod.json asks for, to check it compiles (build\Get-StoneForge.ps1);
+#  3. packaged (build\Package.ps1): StoneshardMP-<version>.zip, a StoneshardMP folder to put in Stoneshard\mods;
+#  4. released on GitHub, with its CHANGELOG section as the notes (a pre-release for a version like 0.2.0-beta.1);
+#  5. the stamped version committed back to main. When main is still at the tagged commit, the tag is moved onto that
+#     commit, so it holds exactly what was released; when main has moved on, the version's stamped on top of it.
+# (Pushes made with this workflow's token start no other workflows.)
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      # (Files checked out exactly as stored, so stamping the version changes only its two lines.)
+      - name: Keep line endings as stored
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version from the tag
+        id: version
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Tag ${{ github.ref_name }} isn't a version tag (v1.2.3)." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Stamp the version
+        run: ./build/Stamp-Version.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Build against StoneForge
+        run: |
+          $sdk = ./build/Get-StoneForge.ps1
+          dotnet build StoneshardMP.csproj -c Release "-p:StoneForgeSdkDir=$sdk"
+          if ($LASTEXITCODE -ne 0) { throw "The build failed" }
+
+      - name: Package
+        run: ./build/Package.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Release notes from CHANGELOG.md
+        run: ./build/Release-Notes.ps1 -Version ${{ steps.version.outputs.version }} -Out artifacts/release-notes.md
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: StoneshardMP ${{ steps.version.outputs.version }}
+          body_path: artifacts/release-notes.md
+          files: artifacts/StoneshardMP-${{ steps.version.outputs.version }}.zip
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          fail_on_unmatched_files: true
+
+      - name: Commit the version to main
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          $tagged = git rev-parse HEAD
+          $main = git rev-parse origin/main
+          if ($tagged -eq $main) {
+              git commit -am "StoneshardMP $env:VERSION"
+              git push origin HEAD:refs/heads/main
+              if ($LASTEXITCODE -ne 0) { throw "Couldn't push the version to main (is main protected?)" }
+              git tag -f $env:TAG
+              git push -f origin "refs/tags/$env:TAG"
+          }
+          else {
+              Write-Host "main has moved on since $env:TAG: stamping the version on top of it."
+              git checkout -f -B release-stamp origin/main
+              ./build/Stamp-Version.ps1 -Version $env:VERSION
+              if (git status --porcelain) {
+                  git commit -am "StoneshardMP $env:VERSION"
+                  git push origin HEAD:refs/heads/main
+                  if ($LASTEXITCODE -ne 0) { throw "Couldn't push the version to main (is main protected?)" }
+              }
+          }

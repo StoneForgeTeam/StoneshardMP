@@ -1,0 +1,34 @@
+# Checks StoneshardMP compiles, for every push to main and pull request.
+#
+# GitHub's runners have no Stoneshard, so StoneForge.API.dll - generated from the game's data - comes from the StoneForge
+# release mod.json asks for ("stoneforge"): build\Get-StoneForge.ps1. (The game compiles the mod itself when it loads it;
+# this is the same compile, ahead of time.)
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build against StoneForge
+        run: |
+          $sdk = ./build/Get-StoneForge.ps1
+          dotnet build StoneshardMP.csproj -c Release "-p:StoneForgeSdkDir=$sdk"
+          if ($LASTEXITCODE -ne 0) { throw "The build failed" }

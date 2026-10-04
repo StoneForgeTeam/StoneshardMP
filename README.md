@@ -1,7 +1,5 @@
 # StoneshardMP
 
-Current port milestone: synchronized remote player state and sprite-only effects. The action-forwarding experiment is disabled while its receiving-side failure is isolated. Combat, shared interactions, area ownership, and shared time are still separate milestones.
-
 Co-op multiplayer for Stoneshard, as a [StoneForge](https://github.com/StoneForgeTeam) mod. The host and up to 7 other
 players share one world. Networking runs over [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP).
 
@@ -52,6 +50,25 @@ game twice.
   `Net\Packets`. `MultiplayerMod.cs` wires them together. It's all C#: the game's data, saves, world map, clock,
   ground items and characters come through StoneForge's API (no GML of its own).
 - `Net\Packets` contains one struct per packet, each with its numeric ID and span-based Read/Write contract. `PacketCodec` validates and decodes envelopes; `Session.On<T>` and `Session.Send(packet)` dispatch typed messages. Raise `Session.Protocol` whenever the wire format changes.
+
+## Releasing
+
+- Write each change under `## Unreleased` in `CHANGELOG.md` as it's made. Don't change `version` in `mod.json` by
+  hand: releases set it.
+- To release, tag the commit and push the tag: `git tag v0.2.0`, then `git push origin v0.2.0`. A tag with a suffix
+  (`v0.2.0-beta.1`) makes a pre-release. The **Release** workflow then:
+  1. sets `version` in `mod.json` and titles the `## Unreleased` section with the version (`build\Stamp-Version.ps1`);
+  2. builds the mod to check it compiles;
+  3. packages `StoneshardMP-<version>.zip`, a `StoneshardMP` folder to put in `Stoneshard\mods`
+     (`build\Package.ps1`);
+  4. publishes the GitHub release, with that CHANGELOG section as its notes;
+  5. commits the version back to `main`, and moves the tag onto that commit if `main` hadn't moved on.
+- The **Build** workflow checks every push to `main` and every pull request compiles.
+- Both build against the StoneForge release `mod.json` names (`"stoneforge"`): GitHub's runners have no Stoneshard,
+  so `build\Get-StoneForge.ps1` takes `StoneForge.API.dll` from that release's zip. Raise `"stoneforge"` when the mod
+  starts using a newer StoneForge's API, once that StoneForge is released.
+- To package locally: `build\Stamp-Version.ps1 -Version 0.2.0`, then `build\Package.ps1 -Version 0.2.0` (the zip is
+  in `artifacts\`).
 
 ## Licences
 

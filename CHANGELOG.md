@@ -1,6 +1,31 @@
 # StoneshardMP changes
 
-## 0.24.2
+Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
+releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
+
+## Unreleased
+
+The first release of StoneshardMP on StoneForge: co-op for Stoneshard, the host and up to 7 other players in one world,
+over LiteNetLib (UDP).
+
+- **Hosting and joining** from the main menu's Multiplayer screen. The host keeps everyone's save: a client joins with
+  its character from the host's world, or makes a new one on the host's world map.
+- **One shared world:** the same areas and dungeons from the world seed, what's dead, taken or opened, the host's
+  weather and clock, ground loot, quests, reputation, dialogue flags, crime records and contracts.
+- **Other players' characters** with their equipment, movement, attacks, spells and effects, name tags, and Follow from
+  their right-click menu.
+- **Combat together:** a client's attacks, knockbacks and status effects count on the host's enemies, enemies fight
+  clients, and kill XP is shared with everyone nearby.
+- **Turn-based rounds** when anyone's in combat, with the turn order carousel.
+- **Party frames** for the other players: health, energy, level, effects, and a compass needle to them.
+- **Saving and loading** through the host: when the host loads a save, everyone reloads into it in place, and the
+  host's saves have everyone where they are. Disconnect in the Esc menu.
+
+## Development history
+
+The versions before the first release, while StoneshardMP was ported from the GML version to StoneForge.
+
+### 0.24.2
 
 - **Only what a client's own player does to the host's units goes to the host.** 0.24.1 sent every move and effect on
   a client's copies, whatever made it. Copies on the world map moved by the game's own code went to the host as
@@ -14,7 +39,7 @@
   After three in a row, StoneForge paused StoneshardMP on the host, which stopped its networking, and the client timed
   out. When the caller is already gone, the hook now leaves the game to run its own triggers, unshared, for that call.
 
-## 0.24.1
+### 0.24.1
 
 - **Knockback and status effects from a client's actions happen in the host's world too.** Before, only an attack's
   damage went to the host. A client's knockback moved its copy of the enemy, but the host's enemy stayed put; a stun
@@ -35,7 +60,7 @@
   scr_effect_update are now hooked, so the first start after updating rebuilds the game data.
 - Still to come: skills' and spells' damage.
 
-## 0.24.0
+### 0.24.0
 
 - **Combat between players' games.** Each game resolves the fights its own character is in - it has the real stats,
   gear, buffs and skills - and the host's enemies are the real ones:
@@ -91,7 +116,7 @@
 - Needs the StoneForge release with `ContextMenus`.
 - Protocol 23.
 
-## 0.23.0
+### 0.23.0
 
 - **Party frames are back** (from the GML version), down the right edge of the screen: one per other player, in the
   game's own look.
@@ -119,20 +144,20 @@
     only when something changes, plus every 3 seconds and to a newcomer at once. Before, it went every half second.
     Effects go by object name, not index.
 
-## 0.22.6
+### 0.22.6
 
 - **The Mods button stays on the main menu after multiplayer.** The Multiplayer screens put the menu back with
   MainMenu.RestoreButtons, which undoes everyone's changes since startup, the loader's Mods button included. They now
   undo only their own (MainMenu.UndoChanges). StoneForge also counts its own buttons as part of the startup menu now.
 
-## 0.22.5
+### 0.22.5
 
 - **No flash of old gear when a player comes in.** On joining, or after a reload, a player now sends its look before
   its first position, every time. Before, positions went every other frame but the look only every 30 frames, and only
   when it changed. So for up to half a second the others drew the player in what it wore before the reload: a bow it
   had since dropped, for example.
 
-## 0.22.4
+### 0.22.4
 
 - **The save top-up works when characters arrive mid-save.** The client's fresh character came in while the host's
   save was still running, and the host had its player hidden for a few frames. So the host held the character as
@@ -143,7 +168,7 @@
 - New log lines: "Saved <slot>/<save>: asking N player(s)...", and "...character kept (held until we were back in our
   world)".
 
-## 0.22.3
+### 0.22.3
 
 - **The client's character goes to the host with where it really is.** The host's log showed the client's refreshes
   arriving, but every one said the end of the intro (r_taverninside1floor, 481,507). Before reading its character, a
@@ -154,7 +179,7 @@
   "Receiving <host>'s world...", "Received <host>'s world - loading...".
 - A world that arrives damaged during a reload doesn't leave the client stuck on black: it goes back to the main menu.
 
-## 0.22.2
+### 0.22.2
 
 - **The host's saves have every client where they really are.** Right after the host writes a save, it asks the clients
   in its world for their characters. When they arrive (within 5 seconds), it writes that save's data again with them.
@@ -164,7 +189,7 @@
   old world until the reload suddenly began.
 - The host logs where each client's character is as it keeps it, to check positions in the log.
 
-## 0.22.1
+### 0.22.1
 
 - **A host loading a save no longer kicks clients to the main menu.** They stay in game. Once the save is up, the host's
   world loads in place with each client's character as that save has it: a fade to black and back.
@@ -178,7 +203,7 @@
   where it last saved, such as next to Verren after the new-character intro.
 - The host's Save & Exit request uses the same refresh instead of a client autosave.
 
-## 0.22.0
+### 0.22.0
 
 - **Only the host loads a save.** A client's Esc menu has no Load Game: its own saves aren't the host's world.
 - **When the host loads a save, everyone comes back into it.** That's from its Esc menu's Load Game, or the main menu's.
@@ -187,19 +212,19 @@
   - Characters still coming from the world being left are dropped while it loads, along with any held for a world not
     yet up. Otherwise a client's character from the old world would overwrite the loaded save's.
 
-## 0.21.2
+### 0.21.2
 
 - **The host's Esc menu has Disconnect too**, in place of Save & Exit while it hosts in its world. It asks with the
   game's confirmation, then runs the game's Save & Exit: it waits for everyone in its world to save, as before, and saves
   the host's game. Back on the main menu it stops hosting, which sends every client back to their main menu.
 
-## 0.21.1
+### 0.21.1
 
 - The client's Esc menu button is **Disconnect** rather than the game's Exit. It asks with the game's own confirmation,
   sends the host our character (the game's Save & Exit, its save going to the host), goes back to the main menu, and
   leaves the session there - rather than staying connected on the menu.
 
-## 0.21.0
+### 0.21.0
 
 - **A client's Esc menu has Exit, not Save & Exit**, while it plays the host's world (or makes its character for it),
   with StoneForge's new EscMenu: it keeps no saves of the host's world. Its Exit (the game's, with the game's
@@ -207,7 +232,7 @@
   the host and isn't written here. So the host has where the client got to, not just its last autosave. Back to the
   game's menu otherwise.
 
-## 0.20.0
+### 0.20.0
 
 Two quest gaps from the GML version filled, with StoneForge's hooks on functions inside another script's file:
 - **The vineyard thief's wine counts as anyone's.** The wine check (scr_npc_lines_vineyard_thief_check_wine) is hooked:
@@ -220,12 +245,12 @@ Two quest gaps from the GML version filled, with StoneForge's hooks on functions
   one everyone sees - does it. Its quest progress was shared already. Not the steps that pay out or count searches.
 - Shared calls can be made only where they should be (`Share(..., madeHereIf)`).
 
-## 0.19.13
+### 0.19.13
 
 - The debug dump (Ctrl+Shift+D), with the profiler on (Ctrl+Shift+P), has its whole last second: every part of every
   mod, where the overlay shows ten. That's average and worst ms a frame, runs a frame, and ms a run.
 
-## 0.19.12
+### 0.19.12
 
 - The world turn run for another player's action sets one skill's alarm 10, not every skill's. All it does
   (o_abilities' alarm 10) is set global.skill_can_cast again, the same global for every skill, and none of o_skill's
@@ -233,12 +258,12 @@ Two quest gaps from the GML version filled, with StoneForge's hooks on functions
   was about 2.5 ms a step.
 - The profiler splits the check that a turn can go in: the world, a cutscene, the player locked, the player's own turn.
 
-## 0.19.11
+### 0.19.11
 
 - The profiler splits the world turn a game runs for another player's action into its parts: the check that it can go
   in, the game's world turn (scr_global_turn), the skills' cooldowns, and the units' turns (alarm 4).
 
-## 0.19.10
+### 0.19.10
 
 - The host's unit roster costs a client less, and no longer in one go:
   - **Spread out:** it's applied 12 units a frame over the next frames (a newer roster starts over), and the tidying
@@ -253,7 +278,7 @@ Two quest gaps from the GML version filled, with StoneForge's hooks on functions
     which is all it reads.
   - The profiler lists the parts: a unit applied, a unit bound, the tidying up.
 
-## 0.19.9
+### 0.19.9
 
 - A client taking the host's clock writes just the seconds when that's all that differs, as before 0.19. Since 0.19.0,
   every host tick set the whole time (Time.Set), which also works the time of day out again. Minutes passing still go
@@ -261,7 +286,7 @@ Two quest gaps from the GML version filled, with StoneForge's hooks on functions
 - (The host's "clock" in the profiler is mostly the world turn it runs for a client's step: the game's own turn for
   every unit, the same work its own steps cost.)
 
-## 0.19.8
+### 0.19.8
 
 - Fix: the client stuttered every few frames where the host's NPCs are. Applying the host's unit roster took about 55 ms
   each time (up to 76 ms), 11 ms a frame on average, by the profiler. For every unit it wrote all its values, ran the
@@ -270,13 +295,13 @@ Two quest gaps from the GML version filled, with StoneForge's hooks on functions
   - The highlight runs again only then (not for a frame moving on), and the grids only when the unit's cell changed.
   - A unit's object is read once, and the turn list is walked only when a unit is new or the list has changed.
 
-## 0.19.7
+### 0.19.7
 
 - Timings go to StoneForge's profiler (Ctrl+Shift+P): each feature's frame, the network, and the loot and area units
   received are listed under StoneshardMP. Its objects' events are timed by StoneForge itself. The mod's own Timings
   class and its log lines are gone.
 
-## 0.19.6
+### 0.19.6
 
 - Fix: the loot sync slowed both games to about 24 fps. On the host it took 17 ms a frame (about 70 ms each time it ran),
   and on the client nearly 20 ms. Every few frames it asked the game, for every ground item, whether it's persistent and
@@ -286,38 +311,38 @@ Two quest gaps from the GML version filled, with StoneForge's hooks on functions
   - Checking whether known items are gone only asks the game about those not seen on the ground in the same tick.
 - Timings also split out the loot packets received and the host's units applied on the client.
 
-## 0.19.5
+### 0.19.5
 
 - Timings: while in a session, every 10 seconds the log has how long each part of the mod takes per frame (`Timings
   (host, 24 fps, per frame): loot 3.10ms (0.3/f), ...`). That covers each feature's frame, the network with what its
   packets do, and other players' and effects' object events. It's for finding what slows a game down.
 
-## 0.19.4
+### 0.19.4
 
 - Fix: a client couldn't join a world where a dungeon's name has an apostrophe ("Bernarhof's Cenotaph"): the host's
   world arrived "damaged". The world sent to a client is written with its text as it is. System.Text.Json's default
   escaping (`'` for ', `<` for <...) made the game's json_decode give up on the world map's section, so the
   client stayed in its own copy of the map, waiting.
 
-## 0.19.3
+### 0.19.3
 
 - With a kept unreadable world (0.19.2), the debug dump also tries the game's json_decode on it: whole, without
   System.Text.Json's escaping, and section by section, to the log.
 
-## 0.19.2
+### 0.19.2
 
 - The debug dump's input line also shows StoneForge's hold on the game's input: its typing flag (hotkeys and key-bound
   clicks held off) and where its invisible mouse blocker is.
 - A host's world that arrives unreadable is kept (`%LOCALAPPDATA%\StoneShard\stoneshardmp-unreadable-world.json`), and
   the log says why it didn't read.
 
-## 0.19.1
+### 0.19.1
 
 - The debug dump (Ctrl+Shift+D) has an input line: what decides whether the player can act and the game shows its cell
   cursor and path. That's scr_is_cutscene's conditions (the cutscene controller, the UI hidden, the screen faded), a room
   change, a dialogue, the player's locks and turn alarms, and the world clock's input phase.
 
-## 0.19.0
+### 0.19.0
 
 Protocol 20. No GML left: everything the mod did through its own GML or hand-rolled helpers now uses StoneForge's API.
 Needs StoneForge 0.4.0 and its CharacterLook.
@@ -348,25 +373,25 @@ Needs StoneForge 0.4.0 and its CharacterLook.
   check.
 - Gone: `GameData.cs` (the Ds, InGame and GmJson helpers) and the `GML` folder.
 
-## 0.18.3
+### 0.18.3
 
 - Needs StoneForge 0.3.0 (off-screen instances, and hooks on undeclared scripts refused at load).
 
-## 0.18.2
+### 0.18.2
 
 - The debug dump (Ctrl+Shift+D) checks StoneForge's new off-screen instances against the loot GML they're to
   replace. Its first line counts the room's ground loot by `Instances.All(o_loot, includeCulled: true)` and by
   `MpLootAll`, how many are culled and whether their built-ins read, and which of MpLootAll's are missing from
   StoneForge's list.
 
-## 0.18.1
+### 0.18.1
 
 - The world turn and a new player object's setup are C# too, with StoneForge's new alarms (`instance.Alarm[n]`):
   the turn is held while the player's own (alarms 1 and 4) is under way, and sets the skills' alarm 10; a player
   object's alarm 2 (o_enemy's stat setup) is stopped. 27 GML functions are left: the loot sync, the area units, moving
   a player's unit through the grids, and the debug dump.
 
-## 0.18.0
+### 0.18.0
 
 - Most of the mod's GML is C# now, using StoneForge's new arrays and structs (GmArray, GmStruct): 43 of its 73 GML
   functions. Nothing changes in game, and the protocol stays 19.
@@ -384,14 +409,14 @@ Needs StoneForge 0.4.0 and its CharacterLook.
   reachable from C#: 0.18.1); the debug dump; and moving another player's unit through the game's grids, which the area units
   GML uses too.
 
-## 0.17.1
+### 0.17.1
 
 - A client's arrows and bolts no longer lose their ammo. An arrow drops it by its target, far from the shooter, and
   the loot sync only counted loot turning up next to the client as the client's own drop - so the client removed it
   as loot the host doesn't have. An arrow's landing spot now counts too, for a moment after it lands
   (MpLootShotSpot), and so does an item the client throws (marked its drop while it's in the air).
 
-## 0.17.0
+### 0.17.0
 
 Protocol 19. Contracts are shared, ported from the GML version's contract sync (ContractSync, ContractPacket).
 - The host's contracts: a client in the host's world makes none of its own (they're made at random over time in
@@ -405,7 +430,7 @@ Protocol 19. Contracts are shared, ported from the GML version's contract sync (
 - A village's contract counts (out, completed) are shared calls, and a dungeon's contract values now come with the
   dungeon (0.15.0 held them back): a contract's index is the same in every game.
 
-## 0.16.0
+### 0.16.0
 
 Protocol 18. One story for everyone in a world, ported from the GML version's quest sync (QuestSync).
 - Shared calls: every call to a script that changes the shared story goes to the others, who make the same call, so
@@ -420,7 +445,7 @@ Protocol 18. One story for everyone in a world, ported from the GML version's qu
   (QuestItemsPacket: who passes which check, sent as soon as it changes).
 - Not yet: the Gwynel house cutscene steps the GML version also shared, and contracts.
 
-## 0.15.0
+### 0.15.0
 
 Protocol 17. Dungeons are shared whole.
 - A dungeon's values on its world-map tile all go to the others now, not just its four layout values: its saved floor
@@ -432,13 +457,13 @@ Protocol 17. Dungeons are shared whole.
   with nothing to hook). The reset timer, which counts down every hour on every dungeon alike, only goes with other
   changes.
 
-## 0.14.2
+### 0.14.2
 
 - Tidied up: each feature has its own folder under `Features` (Players, Effects, Menu, Areas, Clock, Join, Saves,
   World, Loot, Debug) and namespace (`StoneshardMP.Features.<Folder>`), and the packets are grouped the same way under
   `Net\Packets`. Nothing changes in game.
 
-## 0.14.1
+### 0.14.1
 
 Protocol 16.
 - Dropped items fly for everyone. Loot goes out the moment it appears, with its throw if it's still in the air (where it
@@ -449,7 +474,7 @@ Protocol 16.
   One the host doesn't bring back within 5 seconds is removed.
 - Loot is checked every 4 frames instead of 12, so throws are caught early in their arc.
 
-## 0.14.0
+### 0.14.0
 
 Protocol 15. Live ground loot, ported from the GML version's loot sync (LootSync, LootPacket).
 - Where the host and clients are together, the host's ground loot is the real one. A client arriving gets the host's
@@ -463,14 +488,14 @@ Protocol 15. Live ground loot, ported from the GML version's loot sync (LootSync
 - A player's place now includes the world-map cell. Neighbouring areas of the world map are built in the same room,
   so players (and NPCs, and loot) in two different areas were treated as together.
 
-## 0.13.2
+### 0.13.2
 
 - A multiplayer world's saves are named for who plays in it rather than for the host's character: the Load Game
   screen's header for its character folder reads e.g. "FailMelon, Friend (1)" - the host, then every player whose
   character the host keeps. A world becomes a multiplayer one the first time it's saved while hosting, and stays one;
   its names are brought up to date with each save. (The GML version's scr_mp_slot_players_set / scr_mp_slot_title.)
 
-## 0.13.1
+### 0.13.1
 
 - A client is only in the game for the others once it plays the host's world. While it makes its character it's on
   a copy of the host's map, where the same rooms are somewhere else, so the host used to see it standing beside them
@@ -478,7 +503,7 @@ Protocol 15. Live ground loot, ported from the GML version's loot sync (LootSync
 - The same goes for the world clock: a client making its character no longer gives the host a world turn per action,
   and doesn't take the host's clock in its intro.
 
-## 0.13.0
+### 0.13.0
 
 Protocol 14. The shared world is back, ported from the GML version's world sync (WorldSync, WorldDataPacket).
 - **Same layout:** an area's layout seeds (first visit or respawn) and a dungeon's floors (layout, and which floors
@@ -493,19 +518,19 @@ Protocol 14. The shared world is back, ported from the GML version's world sync 
   state and every world-map tile, sent a few a frame.
 - **Weather:** a client in the host's world takes its weather and fog instead of rolling its own.
 
-## 0.12.4
+### 0.12.4
 
 - Ghosts are now called players. Another player on your screen is the game object `o_stoneshardmp__player`
   (was `o_stoneshardmp__ghost`), written as `Players\Player` and `Players\PlayerManager` in C#, with GML helpers
   `MpPlayerBuild`, `MpPlayerInitialize` and `MpPlayerUnitMove`. Nothing else changes, and the protocol stays 13.
 
-## 0.12.3
+### 0.12.3
 
 - A client making its character when the host leaves now goes back to the main menu too. The game refuses a room
   change mid-conversation or mid-cutscene (the new character's intro at Osbrook's tavern is both), and the return
   was tried only once. It's now retried each frame until it's under way, and no save is kept meanwhile.
 
-## 0.12.2
+### 0.12.2
 
 Protocol 13.
 - The host leaving its world sends everyone in it back to the main menu (HostLeft). There they wait, and join again
@@ -517,7 +542,7 @@ Protocol 13.
 - Characters a host receives while out of a world (made alongside its new game, or saved as it left) now replace
   what its next world has for those players, since they're newer.
 
-## 0.12.1
+### 0.12.1
 
 - A client no longer waits for the host to finish making its own character. As soon as the host's new game has its
   world seed (before its character creation), the waiting players start making theirs alongside it, on the host's
@@ -526,7 +551,7 @@ Protocol 13.
 - The host's New Game, while hosting, goes straight into the Adventure with permadeath off. The prologue is a world
   of its own, so it's left out.
 
-## 0.12.0
+### 0.12.0
 
 Protocol 12. The host keeps everyone's save, as the GML version did: a client has no save data of its own.
 
@@ -542,19 +567,19 @@ Protocol 12. The host keeps everyone's save, as the GML version did: a client ha
 - Not yet (from the GML version): the host asking everyone to save when it saves or leaves, re-joining when the host
   loads another save, and blocking a host's world from being loaded on its own.
 
-## 0.11.24
+### 0.11.24
 
 - Diagnostics: Ctrl+Shift+D writes everything within 12 cells of the player (object, cell, sprite and frame,
   visibility, depth; units' state, animation flags, AI and sync binding) with the game's role, place and clock to
   `%LOCALAPPDATA%\StoneShard\stoneshardmp-dump-<role>-<process>.txt`, one file per game, to compare the host's and a
   client's view of an area.
 
-## 0.11.23
+### 0.11.23
 
 - Fixed the host's game stopping on the first action a client sent: the world-turn readiness check (MpWorldTickReady)
   called the game's cutscene check with no instance, and that check reads `object_index`. It now runs as the player.
 
-## 0.11.22
+### 0.11.22
 
 - World turns are back on (the on-move model): a player's completed action is one world turn for everyone.
   - A client's action reaches the host, which runs one idle world turn: time, upkeep and its units' turn loop. The
@@ -565,7 +590,7 @@ Protocol 12. The host keeps everyone's save, as the GML version did: a client ha
   - A client elsewhere still gives its own area one idle turn per other player's action. Turns are queued and run
     from the mod's tick once the world is ready, never inside the network handler.
 
-## 0.11.21
+### 0.11.21
 
 - Multiplayer is a set of main menu screens again, as in the GML version, built on StoneForge's main menu layout:
   - **Multiplayer** (after Play): Host Game, Join Game, Players & Settings, Back.
@@ -578,94 +603,94 @@ Protocol 12. The host keeps everyone's save, as the GML version did: a client ha
 - **Players & Settings** (the journal-framed window, its frame put back): who's in the game; your name, the join
   address and name tags. Hosting and joining moved out of it into the menu.
 
-## 0.11.20
+### 0.11.20
 
 Protocol 11.
 - Synchronize the NPC animation-mode flag and render sprite used by scr_npc_change_animation, including work poses.
 
-## 0.11.18
+### 0.11.18
 
 - Moved player-state binary serialization into StatePacket. Gameplay models no longer depend on the span wire reader/writer; all other packet payload serializers already reside under Net/Packets.
 - Preserved protocol 9 and the existing field order.
 
-## 0.11.17
+### 0.11.17
 
 Protocol 9.
 - Migrated all packet contracts, connection data, and feature handlers to SpanReadWrite packet structs under Net/Packets.
 - Removed PacketType and anonymous serialization callbacks; added envelope validation and bounded string reads.
 - Verified round trips, Unicode, large rosters, truncated input, and trailing-data rejection.
 
-## 0.11.16
+### 0.11.16
 
 - The Multiplayer window uses the game's journal frame, laid out as the journal: the tabs in its left pane, the page and the Host / Join / Leave / Close buttons in its right. It's built from StoneForge's reworked windows (any frame sprite).
 
-## 0.11.15
+### 0.11.15
 
 - Disabled the on-move action-forwarding experiment after its receiving WorldTick handler closed the client; added full handler error logging for the next isolated diagnosis.
 
-## 0.11.14
+### 0.11.14
 
 Protocol 7.
 - Replaced the disabled 600 ms experiment with legacy-style on-move world turns: each player's completed action advances the other players by one safe idle turn through the host.
 
-## 0.11.13
+### 0.11.13
 
 - Temporarily disabled the fixed-world-clock experiment after it caused a freeze. Ghost/effect/state networking remains enabled.
 
-## 0.11.12
+### 0.11.12
 
 - Matched the legacy tick gate's input-phase behavior: queued clicks and context actions remain responsive while waiting for a world tick.
 
-## 0.11.11
+### 0.11.11
 
 Protocol 6.
 - Added the first host-authoritative, fixed out-of-combat world clock: safe idle turns and time are now driven by the host every 600 ms.
 
-## 0.11.10
+### 0.11.10
 
 Protocol 5.
 
 - Inspection now uses the other player's actual resistance values, instead of the Caravan Dummy template. Ghosts are
   labelled as players in that panel.
 
-## 0.11.9
+### 0.11.9
 
 Protocol 4.
 
 - Inspection now shows another player's live health and energy percentages. The ghost remains locally invulnerable
   until combat synchronization is implemented, so those values cannot be changed by unsynchronized local damage.
 
-## 0.11.8
+### 0.11.8
 
 - Ghosts now start from the game's complete Caravan Dummy parameter record, allowing the normal inspection panel to
   read their type, stats, resistances, and other expected unit fields safely.
 
-## 0.11.7
+### 0.11.7
 
 - Passive ghosts now have a remote-player name and description for inspection, and bypass the inherited enemy
   loot/corpse cleanup path when removed.
 
-## 0.11.6
+### 0.11.6
 
 - Removed the training-dummy marker from ghosts as well. They are ordinary passive enemy-unit proxies, with no
   dummy-specific context actions.
 
-## 0.11.5
+### 0.11.5
 
 - Ghosts now inherit directly from the enemy unit rather than the training dummy. This removes the dummy-only
   **Change protection class** right-click action while retaining passive unit collision and targeting behavior.
 
-## 0.11.4
+### 0.11.4
 
 - Fixed passive ghosts inheriting the dummy unit's delayed stat-calculation alarm. Ghosts do not have (or need)
   combat stat templates until combat synchronization is implemented.
 
-## 0.11.3
+### 0.11.3
 
 - Ghosts are now passive dummy units in their remote player's occupied cell. They use normal unit collision and
   targeting data, but stay neutral, invulnerable, and invisible to enemy AI until combat forwarding is added.
 
-## 0.11.2
+### 0.11.2
 
 Protocol 3.
 
@@ -673,7 +698,7 @@ Protocol 3.
   burning or stun are drawn on the other games. They are sprite-only echoes, so they cannot deal damage, create
   further effects, or otherwise run game logic remotely.
 
-## 0.11.1
+### 0.11.1
 
 Protocol 2.
 
@@ -689,7 +714,7 @@ Protocol 2.
 - The mod has GML functions (`GML\`): reading the player's state and look and building a ghost's sprites need GML
   arrays, which StoneForge's C# can't hold yet.
 
-## 0.11.0
+### 0.11.0
 
 The StoneForge port begins: StoneshardMP is now a C# mod on StoneForge, networked with LiteNetLib (UDP) in place of
 GameMaker's TCP sockets. It's protocol 1, so it can't play with the GML versions (0.10.x).

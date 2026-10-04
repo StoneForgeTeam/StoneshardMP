@@ -3,3 +3,6 @@ obj/
 .vs/
 # The mod ships LiteNetLib (a trusted mod's own DLL).
 !lib/*.dll
+# Made by build\ (the release zip; StoneForge.API from its release, for building without the game).
+artifacts/
+.stoneforge/
