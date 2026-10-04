@@ -51,7 +51,20 @@ if ($Version -eq "main" -or -not (Test-Path $api)) {
     $tag = if ($Version -eq "main") { "main-latest" } else { "v$Version" }
     $url = "https://github.com/$repo/releases/download/$tag/StoneForge-$Version.zip"
     Write-Host "Downloading StoneForge $Version ($url)"
-    Invoke-WebRequest $url -OutFile $zip
+    # (main's zip may still be uploading - the release, and its tag, can be up a moment before it: tried again until
+    # the wait's up.)
+    $until = (Get-Date).AddMinutes($(if ($Version -eq "main") { $WaitMinutes } else { 0 }))
+    while ($true) {
+        try {
+            Invoke-WebRequest $url -OutFile $zip
+            break
+        }
+        catch {
+            if ((Get-Date) -ge $until) { throw "Couldn't download $url : $($_.Exception.Message)" }
+            Write-Host "Not there yet ($($_.Exception.Message)) - trying again..."
+            Start-Sleep -Seconds 20
+        }
+    }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($zip)
     try {
