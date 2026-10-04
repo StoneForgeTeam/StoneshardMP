@@ -8,6 +8,7 @@ using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
 using StoneshardMP.Features.Menu;
+using StoneshardMP.Features.Party;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Features.Quests;
 using StoneshardMP.Features.Saves;
@@ -25,6 +26,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private ModContext _context = null!;
     private Session _session = null!;
     private PlayerManager _players = null!;
+    private PartyFrames _party = null!;
     private EffectManager _effects = null!;
     private AreaUnits _areaUnits = null!;
     private MultiplayerMenu _menu = null!;
@@ -42,6 +44,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         var settings = new MpSettings(context.Settings);
         _session = new Session(context.Manifest.Version, context.Log);
         _players = new PlayerManager(context, _session, () => settings.ShowNames.Value, () => _join.InSharedWorld);
+        // A frame for each of the others: health, energy, level, effects, which way they are.
+        _party = new PartyFrames(context, _session, settings, () => _join.InSharedWorld);
         _effects = new EffectManager(context, _session);
         _areaUnits = new AreaUnits(context, _session, () => _players.ObjectIndex);
         // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
@@ -73,6 +77,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     {
         _session.Stop("");
         _players.Clear();
+        _party.Clear();
         _effects.Clear();
         _areaUnits.Clear();
         _clock.Clear();
@@ -99,6 +104,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "quests", _quests.Tick);
             Profiler.Measure(_context, "contracts", _contracts.Tick);
             Profiler.Measure(_context, "players", _players.Tick);
+            Profiler.Measure(_context, "party", _party.Tick);
             Profiler.Measure(_context, "effects", _effects.Tick);
             Profiler.Measure(_context, "area units", _areaUnits.Tick);
             Profiler.Measure(_context, "clock", _clock.Tick);

@@ -26,4 +26,6 @@ public sealed class RemotePlayer
     public int LookVersion { get; set; }
     // Values that describe the player in the standard inspection card (null until their first Profile packet).
     public PlayerProfile? Profile { get; set; }
+    // What their party frame shows beyond their state (null until their first Party packet).
+    public PartyInfo? Party { get; set; }
 }

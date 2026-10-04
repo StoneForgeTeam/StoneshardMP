@@ -31,6 +31,7 @@ public static class PacketCodec
             EffectPacket.PacketId => EffectPacket.Read(ref reader),
             EffectEndPacket.PacketId => EffectEndPacket.Read(ref reader),
             ProfilePacket.PacketId => ProfilePacket.Read(ref reader),
+            PartyPacket.PacketId => PartyPacket.Read(ref reader),
             WorldTickPacket.PacketId => WorldTickPacket.Read(ref reader),
             WorldActionPacket.PacketId => WorldActionPacket.Read(ref reader),
             AreaUnitsPacket.PacketId => AreaUnitsPacket.Read(ref reader),

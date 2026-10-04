@@ -1,5 +1,33 @@
 # StoneshardMP changes
 
+## 0.23.0
+
+- **Party frames are back** (from the GML version), down the right edge of the screen: one per other player, in the
+  game's own look.
+  - Each frame has the game's tooltip frame, the HUD's health and energy bars and digits (to the thresholds' caps), and
+    the player's head as the portrait.
+  - It shows their name, their level ("Unconscious" when they're out cold) and their status effects, harmful first, as
+    half-size icons to the left of the frame.
+  - A compass needle points at them, with a label:
+    - In the same place, the label is how many moves away they are.
+    - In another world-map area, the needle points that way and the label is how many areas away ("3a").
+    - In another room or dungeon floor of the same area, there's no needle: the label is "in", or their floor ("F2").
+  - A gold tab at the screen edge slides the frames away and back, and remembers it. There's a "Party frames" setting
+    to turn them off.
+  - The frames are StoneForge UI elements on its new HUD layer (ModUI.Hud). They sit under the game's windows
+    (inventory, map, dialogue), as before. A click on a game window over them goes to the window, and they hide with
+    the HUD and in cutscenes.
+- **Changes from the old frames:**
+  - The distance is in moves (diagonals count as one, as the game moves), not straight-line tiles.
+  - A frame pulses red while that player's health is under 30%.
+  - Players whose state has stopped coming for 5 seconds show greyed out with "no word", rather than frozen as they
+    were.
+  - Another floor shows which one it is ("F2"), not just "in".
+  - Hovering a frame shows the player's level, whether they're fighting, and their ping.
+  - What the frames need goes as a PartyPacket (id 26, protocol 22): level, head, the caps, combat, effects. It's sent
+    only when something changes, plus every 3 seconds and to a newcomer at once. Before, it went every half second.
+    Effects go by object name, not index.
+
 ## 0.22.6
 
 - **The Mods button stays on the main menu after multiplayer.** The Multiplayer screens put the menu back with

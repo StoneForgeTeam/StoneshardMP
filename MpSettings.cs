@@ -11,6 +11,9 @@ public sealed class MpSettings
     public SliderSetting Port { get; }
     public SliderSetting MaxPlayers { get; }
     public ToggleSetting ShowNames { get; }
+    public ToggleSetting PartyFrames { get; }
+    // (The party frames slid away - their tab; not on the settings page.)
+    public ToggleSetting PartyHidden { get; }
 
     public MpSettings(ModSettings settings)
     {
@@ -21,5 +24,8 @@ public sealed class MpSettings
         MaxPlayers = settings.Slider("maxPlayers", "Max players", 4, min: 2, max: Net.Session.MaxPlayers, step: 1, tooltip: "Hosting: how many players, you included, can be in your game.");
         MaxPlayers.Format = value => $"{value:0}";
         ShowNames = settings.Toggle("showNames", "Name tags", true, "Other players' names over their characters.");
+        PartyFrames = settings.Toggle("partyFrames", "Party frames", true, "A frame for each other player at the right of the screen: health, energy, level, status effects and which way they are.");
+        PartyHidden = settings.Toggle("partyHidden", "Party frames hidden", false);
+        PartyHidden.Visible = false;
     }
 }
