@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.1.0
 
 The first release of StoneshardMP on StoneForge: co-op for Stoneshard, the host and up to 7 other players in one world,
 over LiteNetLib (UDP).
