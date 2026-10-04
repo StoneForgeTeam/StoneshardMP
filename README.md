@@ -63,10 +63,12 @@ game twice.
      (`build\Package.ps1`);
   4. publishes the GitHub release, with that CHANGELOG section as its notes;
   5. commits the version back to `main`, and moves the tag onto that commit if `main` hadn't moved on.
-- The **Build** workflow checks every push to `main` and every pull request compiles.
-- Both build against the StoneForge release `mod.json` names (`"stoneforge"`): GitHub's runners have no Stoneshard,
-  so `build\Get-StoneForge.ps1` takes `StoneForge.API.dll` from that release's zip. Raise `"stoneforge"` when the mod
-  starts using a newer StoneForge's API, once that StoneForge is released.
+- The **Build** workflow checks every push to `main` and every pull request compiles, against StoneForge's `main` as
+  it is now. GitHub's runners have no Stoneshard, so `build\Get-StoneForge.ps1 -Version nightly` takes
+  `StoneForge.API.dll` from StoneForge's rolling `nightly` pre-release, which StoneForge's Nightly workflow packages
+  from its `main` after every push.
+- A release builds against the StoneForge release `mod.json` names (`"stoneforge"`), the one players install. Raise
+  `"stoneforge"` when the mod starts using a newer StoneForge's API, once that StoneForge is released.
 - To package locally: `build\Stamp-Version.ps1 -Version 0.2.0`, then `build\Package.ps1 -Version 0.2.0` (the zip is
   in `artifacts\`).
 

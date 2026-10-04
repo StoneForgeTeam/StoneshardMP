@@ -1,7 +1,9 @@
-# StoneForge.API.dll for building StoneshardMP without Stoneshard installed (CI): taken from the StoneForge release
-# mod.json asks for ("stoneforge"), or -Version. StoneForge.API is generated from the game's own data, so it can't be
-# built on GitHub's runners - but every StoneForge release zip carries the one generated for it.
-# Writes the folder holding it (for -p:StoneForgeSdkDir=...); downloaded once into .stoneforge\<version>.
+# StoneForge.API.dll for building StoneshardMP without Stoneshard installed (CI). StoneForge.API is generated from the
+# game's own data, so it can't be built on GitHub's runners - but every StoneForge release zip carries the one generated
+# for it. Which: -Version, or the release mod.json asks for ("stoneforge"); "nightly" is StoneForge's main as it is now
+# (its Nightly workflow's rolling pre-release, StoneForge-nightly.zip).
+# Writes the folder holding it (for -p:StoneForgeSdkDir=...); downloaded once into .stoneforge\<version> (nightly: each
+# time, it changes).
 param(
     [string]$Version,
     [string]$Destination = (Join-Path (Split-Path $PSScriptRoot) ".stoneforge")
@@ -13,10 +15,11 @@ if (-not $Version) {
 }
 $dir = Join-Path $Destination $Version
 $api = Join-Path $dir "StoneForge.API.dll"
-if (-not (Test-Path $api)) {
+if ($Version -eq "nightly" -or -not (Test-Path $api)) {
     New-Item -ItemType Directory -Force $dir | Out-Null
     $zip = Join-Path $dir "StoneForge-$Version.zip"
-    $url = "https://github.com/StoneForgeTeam/StoneForge/releases/download/v$Version/StoneForge-$Version.zip"
+    $tag = if ($Version -eq "nightly") { "nightly" } else { "v$Version" }
+    $url = "https://github.com/StoneForgeTeam/StoneForge/releases/download/$tag/StoneForge-$Version.zip"
     Write-Host "Downloading StoneForge $Version ($url)"
     Invoke-WebRequest $url -OutFile $zip
     Add-Type -AssemblyName System.IO.Compression.FileSystem
