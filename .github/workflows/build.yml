@@ -1,10 +1,11 @@
-# Checks StoneshardMP compiles, for every push to main and pull request - against StoneForge's main as it is now, which
-# the mod is developed against.
+# Checks StoneshardMP compiles, for every push to main and pull request - against StoneForge's main as it is now (its
+# head), which the mod is developed against. (Releases are the Release workflow's: against the StoneForge release
+# mod.json names, the one players install.)
 #
 # GitHub's runners have no Stoneshard, so StoneForge.API.dll - generated from the game's data - comes from StoneForge's
-# rolling "nightly" pre-release (its Nightly workflow packages main after every push): build\Get-StoneForge.ps1. (The
-# game compiles the mod itself when it loads it; this is the same compile, ahead of time.) A release (Release workflow)
-# builds against the StoneForge release mod.json names instead - the one players install.
+# rolling "main-latest" pre-release, which its Main build workflow packages from main after every push:
+# build\Get-StoneForge.ps1 waits until that's been made from main's head. (The game compiles the mod itself when it
+# loads it; this is the same compile, ahead of time.)
 name: Build
 
 on:
@@ -30,7 +31,9 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Build against StoneForge's main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          $sdk = ./build/Get-StoneForge.ps1 -Version nightly
+          $sdk = ./build/Get-StoneForge.ps1 -Version main
           dotnet build StoneshardMP.csproj -c Release "-p:StoneForgeSdkDir=$sdk"
           if ($LASTEXITCODE -ne 0) { throw "The build failed" }
