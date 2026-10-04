@@ -64,21 +64,21 @@ internal sealed class PartyFrame : UIElement
         // Portrait: their head, in a dark inset.
         Draw.Rectangle(x + 4, y + 4, x + 35, y + Height - 5, Dark);
         if (party is { Head.Length: > 0 } && Asset(party.Head + "_normal") is >= 0 and int head)
-            Game.CallBuiltin("draw_sprite_ext", head, 0, x + 20, y + 38, 1, 1, 0, dead || coma || !inWorld || quiet ? Dimmed : Draw.White, 1);
+            Draw.SpriteExt(head, 0, x + 20, y + 38, colour: dead || coma || !inWorld || quiet ? Dimmed : Draw.White);
 
         // Name and level (or out cold).
         string name = Player.Name.Length > 14 ? Player.Name[..13] + "." : Player.Name;
-        Text(x + 40, y + 5, name, party?.InCombat == true && inWorld ? CombatRed : Gold, Draw.AlignLeft, Draw.AlignTop, "f_dmg");
+        Text(x + 40, y + 5, name, party?.InCombat == true && inWorld ? CombatRed : Gold, Draw.AlignLeft, Draw.AlignTop, GameFont.Default);
         if (coma)
-            Text(x + Width - 30, y + 5, "Unconscious", Coma, Draw.AlignRight, Draw.AlignTop, "f_dmg");
+            Text(x + Width - 30, y + 5, "Unconscious", Coma, Draw.AlignRight, Draw.AlignTop, GameFont.Default);
         else if (party is { Level: > 0 })
-            Text(x + Width - 30, y + 5, "Lv " + party.Level, Grey, Draw.AlignRight, Draw.AlignTop, "f_dmg");
+            Text(x + Width - 30, y + 5, "Lv " + party.Level, Grey, Draw.AlignRight, Draw.AlignTop, GameFont.Default);
 
         // Their status effects: the game's icons, half size, in rows of 6 to the left of the frame.
         if (inWorld && party != null)
             for (int i = 0; i < party.Effects.Length; i++)
                 if (EffectIcon(party.Effects[i]) is >= 0 and int icon)
-                    Game.CallBuiltin("draw_sprite_ext", icon, 0, x - 9 - i % 6 * 15, y + 12 + i / 6 * 15, 0.5, 0.5, 0, Draw.White, 1);
+                    Draw.SpriteExt(icon, 0, x - 9 - i % 6 * 15, y + 12 + i / 6 * 15, 0.5, 0.5);
 
         double barWidth = Width - 40 - 30;
         if (inWorld)
@@ -87,22 +87,19 @@ internal sealed class PartyFrame : UIElement
             Bar(x + 40, y + 18, barWidth, healthPart, "s_holdbar", "s_healthbar", $"{Math.Round(state.Health)}/{maxHealth}");
             Bar(x + 40, y + 29, barWidth, state.Energy / maxEnergy, "s_holdbar_mana", "s_hp_n", $"{Math.Round(state.Energy)}/{maxEnergy}");
             if (quiet)
-                Text(x + 40 + barWidth / 2, y + 26, "no word", Grey, Draw.AlignCenter, Draw.AlignMiddle, "f_dmg");
+                Text(x + 40 + barWidth / 2, y + 26, "no word", Grey, Draw.AlignCenter, Draw.AlignMiddle, GameFont.Default);
         }
         else
-            Text(x + 40, y + 22, "not in the world yet", Grey, Draw.AlignLeft, Draw.AlignTop, "f_dmg");
+            Text(x + 40, y + 22, "not in the world yet", Grey, Draw.AlignLeft, Draw.AlignTop, GameFont.Default);
 
         DrawCompass(x + Width - 15, y + 25, y + Height - 3, inWorld && !quiet ? state : null, OurPlayer.State());
-        Game.CallBuiltin("draw_set_colour", Draw.White);
     }
 
     // The needle and its label: which way they are, and how far (see PartyFrames).
     private static void DrawCompass(double cx, double cy, double labelY, PlayerState? theirs, PlayerState? mine)
     {
-        Game.CallBuiltin("draw_set_colour", Dark);
-        Game.CallBuiltin("draw_circle", cx, cy, 10, false);
-        Game.CallBuiltin("draw_set_colour", Grey);
-        Game.CallBuiltin("draw_circle", cx, cy, 10, true);
+        Draw.Circle(cx, cy, 10, Dark);
+        Draw.Circle(cx, cy, 10, Grey, outline: true);
         if (theirs == null || mine == null)
             return;
         var (myInside, myArea) = Split(mine.Place);
@@ -135,17 +132,12 @@ internal sealed class PartyFrame : UIElement
             var left = At(4, angle + 140);
             var right = At(4, angle - 140);
             var tail = At(5, angle + 180);
-            Game.CallBuiltin("draw_set_colour", Gold);
-            Game.CallBuiltin("draw_triangle", tip.X, tip.Y, left.X, left.Y, right.X, right.Y, false);
-            Game.CallBuiltin("draw_set_colour", NeedleBack);
-            Game.CallBuiltin("draw_triangle", tail.X, tail.Y, left.X, left.Y, right.X, right.Y, false);
+            Draw.Triangle(tip.X, tip.Y, left.X, left.Y, right.X, right.Y, Gold);
+            Draw.Triangle(tail.X, tail.Y, left.X, left.Y, right.X, right.Y, NeedleBack);
         }
         else
-        {
-            Game.CallBuiltin("draw_set_colour", Gold);
-            Game.CallBuiltin("draw_circle", cx, cy, 2, false);
-        }
-        Text(cx, labelY, label, Grey, Draw.AlignCenter, Draw.AlignBottom, "f_digits");
+            Draw.Circle(cx, cy, 2, Gold);
+        Text(cx, labelY, label, Grey, Draw.AlignCenter, Draw.AlignBottom, GameFont.Digits);
     }
 
     // GameMaker's point_direction for a step (dx, dy): degrees, anticlockwise from right, y down.
@@ -181,22 +173,18 @@ internal sealed class PartyFrame : UIElement
         double filled = Math.Clamp(Math.Round(fillWidth * Math.Clamp(part, 0, 1)), 0, fillWidth);
         if (filled > 0)
             Draw.SpritePart(fillSprite, 0, 0, 0, filled, height, x, y, width / fillWidth);
-        Text(x + width / 2, y + height / 2, text, Draw.White, Draw.AlignCenter, Draw.AlignMiddle, "f_digits");
+        Text(x + width / 2, y + height / 2, text, Draw.White, Draw.AlignCenter, Draw.AlignMiddle, GameFont.Digits);
     }
 
     // The game's text in one of its fonts (a global's name), at its usual half size, with its shadow.
-    private static void Text(double x, double y, string text, int colour, int halign, int valign, string font)
-        => Game.CallScript("scr_drawText", default, x, y, text, colour, halign, valign, Game.Global[font]);
+    private static void Text(double x, double y, string text, int colour, int halign, int valign, GameFont font)
+        => Draw.Text(x, y, text, colour, halign, valign, font);
 
     private static int EffectIcon(string effect)
     {
         string key = "icon:" + effect;
         if (!Assets.TryGetValue(key, out int icon))
-        {
-            int obj = Gm.AssetGetIndex(effect);
-            icon = obj >= 0 ? Game.CallBuiltin("object_get_sprite", obj).AsInt : -1;
-            Assets[key] = icon;
-        }
+            Assets[key] = icon = UnitEffects.IconOf(effect);
         return icon;
     }
 

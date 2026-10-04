@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using StoneForge;
 using StoneshardMP.Features.Players;
 
@@ -18,7 +19,7 @@ internal static class TurnReasons
         Instance player = OurPlayer.Instance;
         if (player.IsNone)
             return TurnReason.None;
-        if (Game.CallScript("scr_getAgredMobsCount", default, true).AsReal > 0)
+        if (StoneForge.Player.InCombat)
             return TurnReason.Combat;
         var effects = Effects(player);
         if (BleedingOut(player, effects))
@@ -45,16 +46,7 @@ internal static class TurnReasons
             _bleedParent = Gm.AssetGetIndex("o_db_bleed_parent");
             _fire = Gm.AssetGetIndex("o_db_fire");
         }
-        var effects = new List<(Instance, int)>();
-        if (player.Get("buffs").AsDsList is not { } buffs)
-            return effects;
-        for (int i = 0; i < buffs.Count; i++)
-        {
-            Instance effect = UnitInstance(buffs[i]);
-            if (!effect.IsNone && effect.Exists)
-                effects.Add((effect, effect.Get("object_index").AsInt));
-        }
-        return effects;
+        return UnitEffects.On(player).Select(effect => (effect.Instance, effect.Object)).ToList();
     }
 
     // Whether the bleeds, played out turn by turn (each its damage a turn - its Pure_Damage_Self - for the turns it has
@@ -97,5 +89,4 @@ internal static class TurnReasons
         return false;
     }
 
-    private static Instance UnitInstance(GmValue value) => Areas.UnitGrid.InstanceOf(value);
 }

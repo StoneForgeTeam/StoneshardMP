@@ -231,7 +231,7 @@ public sealed class QuestSync
         if (_madeHereIf.TryGetValue(packet.Script, out var madeHere) && !madeHere(sender))
             return;
         // (As our player, as the game's own calls are made.)
-        Instance player = Game.CallBuiltin("instance_find", (int)GameObjectId.o_player, 0).AsInstance;
+        Instance player = StoneForge.Player.Instance;
         _applying = true;
         try { Game.CallScript(packet.Script, player, packet.Args); }
         catch (Exception e) { _context.Log($"{packet.Script} from {sender.Name} failed: {e.Message}"); }

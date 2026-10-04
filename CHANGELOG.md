@@ -5,6 +5,17 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **The game's code comes through StoneForge's API now, not the mod's own calls into it.** About 80 distinct direct calls
+  to the game's scripts and functions were replaced by StoneForge's `Units`, `UnitEffects`, `Player`, `Combat`,
+  `Factions`, `Draw`, `Blackout`, `GameDialogs`, `Journal`, `Contracts`, `Doors`, `Turns`, `Steam`, `SaveData`,
+  `Locations` and `WorldTile`. The mod's own `UnitGrid` is gone; its code is StoneForge's `Units` now.
+  - What's left is meant to be: a test of the game's JSON decoder in the debug dump, loading the host's save from
+    memory, a unit's highlight refresh, the thief's wine check, and one check that a data structure still exists.
+  - The Disconnect confirmation is StoneForge's `GameDialogs.Confirm`, so it no longer hooks the Esc menu's Exit
+    button. Its Yes runs `Rooms.ToMainMenu(save: true)`, the game's own Save & Exit, which the host's wait for
+    everyone's saves still holds.
+- Needs StoneForge's next release (these APIs aren't in 0.5.0).
+
 - **Who's in the game is on the main menu.** While you're hosting or in a game, the middle of its left edge lists everyone: you first,
   then the others, with the host marked and each player's ping. Alone as the host, it says players can join on the UDP
   port.

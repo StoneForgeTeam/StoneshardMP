@@ -152,8 +152,8 @@ public sealed class PlayerManager
             else if (!here && exists)
             {
                 // (The effects on it go with it: left, they'd read a unit that's gone.)
-                UnitGrid.ClearEffects(view.Unit);
-                Game.CallBuiltin("instance_destroy", view.Unit);
+                UnitEffects.RemoveAll(view.Unit);
+                view.Unit.Destroy();
                 view.Unit = default;
             }
         }
@@ -180,8 +180,8 @@ public sealed class PlayerManager
         // its own): our player, or an area unit, may be there for a moment - taking it would overwrite that unit in the
         // position grid, and the game crashes on it. It catches up once the cell's free. Snapped there, never walked: a
         // walking unit clears the cell it leaves as it starts, whoever's come onto it since (it's drawn from VisX / VisY).
-        if (UnitGrid.CanTake(self, state.CellX, state.CellY))
-            UnitGrid.Move(self, state.CellX, state.CellY, snap: true);
+        if (Units.CanTake(self, state.CellX, state.CellY))
+            Units.Move(self, state.CellX, state.CellY, snap: true);
         self["name"] = view.Player.Name;
         self["type"] = "Player";
         self["desc"] = "Another player.";
@@ -223,27 +223,17 @@ public sealed class PlayerManager
             return;
         // (The row their game draws them from: o_player's pick of its five.)
         int sprite = sprites.All[Math.Clamp((int)state.Row, 0, sprites.All.Count - 1)];
-        if (!SpriteExists(sprite))
+        if (!StoneForge.Draw.SpriteExists(sprite))
             sprite = sprites.Normal;
-        if (!SpriteExists(sprite))
+        if (!StoneForge.Draw.SpriteExists(sprite))
             return;
-        if (state.ShadowAlpha > 0 && SpriteExists(state.ShadowSprite))
-            Game.CallBuiltin("draw_sprite_ext", state.ShadowSprite, 0, view.VisX + (state.ShadowX - state.X), view.VisY + (state.ShadowY - state.Y),
+        if (state.ShadowAlpha > 0 && StoneForge.Draw.SpriteExists(state.ShadowSprite))
+            StoneForge.Draw.SpriteExt(state.ShadowSprite, 0, view.VisX + (state.ShadowX - state.X), view.VisY + (state.ShadowY - state.Y),
                 state.ShadowScaleX, state.ShadowScaleY, 0, Black, state.ShadowAlpha);
-        Game.CallBuiltin("draw_sprite_ext", sprite, state.Frame, view.VisX, view.VisY, state.ScaleX, state.ScaleY, state.Angle, White, state.Alpha);
-        if (!_showNames())
-            return;
-        int halign = Game.CallBuiltin("draw_get_halign").AsInt, valign = Game.CallBuiltin("draw_get_valign").AsInt;
-        int colour = Game.CallBuiltin("draw_get_colour").AsInt;
-        Game.CallBuiltin("draw_set_halign", 1);
-        Game.CallBuiltin("draw_set_valign", 2);
-        Game.CallBuiltin("draw_set_colour", Black);
-        Game.CallBuiltin("draw_text", view.VisX + 1, view.VisY - 35, view.Player.Name);
-        Game.CallBuiltin("draw_set_colour", Aqua);
-        Game.CallBuiltin("draw_text", view.VisX, view.VisY - 36, view.Player.Name);
-        Game.CallBuiltin("draw_set_colour", colour);
-        Game.CallBuiltin("draw_set_halign", halign);
-        Game.CallBuiltin("draw_set_valign", valign);
+        StoneForge.Draw.SpriteExt(sprite, state.Frame, view.VisX, view.VisY, state.ScaleX, state.ScaleY, state.Angle, White, state.Alpha);
+        // Their name over them, in the world's font, with a shadow.
+        if (_showNames())
+            StoneForge.Draw.PlainText(view.VisX, view.VisY - 36, view.Player.Name, Aqua, StoneForge.Draw.AlignCenter, StoneForge.Draw.AlignBottom);
     }
 
     // Everything gone (the mod switched off): the players and their sprites.
@@ -278,8 +268,8 @@ public sealed class PlayerManager
             return;
         if (!view.Unit.IsNone && view.Unit.Exists)
         {
-            UnitGrid.ClearEffects(view.Unit);
-            Game.CallBuiltin("instance_destroy", view.Unit);
+            UnitEffects.RemoveAll(view.Unit);
+            view.Unit.Destroy();
         }
         view.Sprites?.Dispose();
     }
@@ -293,8 +283,6 @@ public sealed class PlayerManager
         int slot = self["mp_slot"].AsInt;
         return self["mp_slot"].IsUndefined ? null : _views.GetValueOrDefault(slot);
     }
-
-    private static bool SpriteExists(int sprite) => sprite >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool;
 
     private static double ProxyVital(float current, float maximum)
     {

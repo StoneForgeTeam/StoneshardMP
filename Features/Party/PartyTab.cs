@@ -23,12 +23,10 @@ internal sealed class PartyTab : UIElement
         if (IsHovered)
             Draw.Rectangle(x + 2, y + 2, x + Width - 3, y + Height - 3, Draw.White, 0.12);
         double cx = x + Width / 2, cy = y + Height / 2;
-        Game.CallBuiltin("draw_set_colour", PartyFrame.Gold);
         if (_frames.Hidden)
-            Game.CallBuiltin("draw_triangle", cx - 3, cy, cx + 2, cy - 4, cx + 2, cy + 4, false);
+            Draw.Triangle(cx - 3, cy, cx + 2, cy - 4, cx + 2, cy + 4, PartyFrame.Gold);
         else
-            Game.CallBuiltin("draw_triangle", cx + 3, cy, cx - 2, cy - 4, cx - 2, cy + 4, false);
-        Game.CallBuiltin("draw_set_colour", Draw.White);
+            Draw.Triangle(cx + 3, cy, cx - 2, cy - 4, cx - 2, cy + 4, PartyFrame.Gold);
     }
 
     protected override void OnClick() => _frames.Toggle();

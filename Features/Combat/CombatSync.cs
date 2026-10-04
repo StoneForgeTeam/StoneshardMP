@@ -92,7 +92,7 @@ public sealed class CombatSync
         // (A knockback our player owns: what it does is ours.)
         Scripts.scr_knockback.Before(context, call =>
         {
-            Begin(call.Self.Exists && IsOurPlayer(UnitGrid.InstanceOf(call.Self.Get("owner"))));
+            Begin(call.Self.Exists && IsOurPlayer(Instance.Of(call.Self.Get("owner"))));
             return false;
         });
         Scripts.scr_knockback.After(context, _ => End());
@@ -158,7 +158,7 @@ public sealed class CombatSync
     {
         if (_session.Mode != Session.SessionMode.Client || !_inSharedWorld() || call.Args.Length < 1)
             return null;
-        Instance target = UnitGrid.InstanceOf(call.Args[0]);
+        Instance target = Instance.Of(call.Args[0]);
         if (target.IsNone || !target.Exists || _areaUnits.HostIdOf(target) is not { } hostId)
             return null;
         return (target.Persist(), hostId, target.Get("HP").AsReal);
@@ -199,7 +199,7 @@ public sealed class CombatSync
         Instance attacker = _players.UnitOf(from.Slot);
         if (!attacker.IsNone)
             unit["last_attacker"] = attacker;
-        Game.CallScript("scr_simple_damage", attacker, unit, hit.Damage, 200);
+        StoneForge.Combat.Hit(unit, hit.Damage, attacker);
         // (Their copy had no health left: neither has ours - the two may have differed by a rounding.)
         if (hit.Killed && unit.Exists && unit.Get("HP").AsReal > 0)
             unit["HP"] = 0;
@@ -215,7 +215,7 @@ public sealed class CombatSync
     {
         if (_session.Mode != Session.SessionMode.Host || call.Args.Length < 1)
             return false;
-        Instance target = UnitGrid.InstanceOf(call.Args[0]);
+        Instance target = Instance.Of(call.Args[0]);
         if (target.IsNone || !target.Exists || target.Get("object_index").AsInt != _players.ObjectIndex)
             return false;
         Instance attacker = call.Self;
@@ -223,7 +223,7 @@ public sealed class CombatSync
         attacker["attack_result"] = "";
         attacker["is_deal_damage"] = false;
         if (!attacker.Get("force_attack").AsBool)
-            Game.CallScript("scr_unitTurnNext", attacker, attacker.Get("visible").AsBool ? Game.Global["TurnDelay"] : 3);
+            Units.EndTurn(attacker);
         call.Result = 0;
         GmValue slot = target.Get("mp_slot");
         if (slot.IsUndefined || _areaUnits.SyncIdOf(attacker) is not { } unitId)
@@ -244,26 +244,16 @@ public sealed class CombatSync
             _context.Log($"The host's unit {attack.UnitId} attacked us, but {(unit.IsNone ? "we've no copy of it" : "we've no character")}");
             return;
         }
-        GmValue forced = unit.Get("force_attack");
-        unit["force_attack"] = true;
         _hostsAttack++;
-        try
-        {
-            Game.CallScript("scr_attack", unit, player);
-        }
-        finally
-        {
-            _hostsAttack--;
-            if (unit.Exists)
-                unit["force_attack"] = forced.IsUndefined ? false : forced;
-        }
+        try { StoneForge.Combat.Attack(unit, player, forced: true); }
+        finally { _hostsAttack--; }
     }
 
     // ---- what else a client's actions do to the host's units ----
 
     // Client: one of the host's units, as our action left it - ours to send, or not (null): the roster's own doing, the
     // host's unit's own attack, or not one of the host's.
-    private (Instance Copy, long HostId)? Ours(GmValue unit) => Ours(UnitGrid.InstanceOf(unit));
+    private (Instance Copy, long HostId)? Ours(GmValue unit) => Ours(Instance.Of(unit));
 
     private (Instance Copy, long HostId)? Ours(Instance copy)
     {
@@ -281,10 +271,10 @@ public sealed class CombatSync
     {
         if (_ourActions == 0)
             return;
-        Instance unit = call.Args.Length > 2 && !call.Args[2].IsUndefined ? UnitGrid.InstanceOf(call.Args[2]) : call.Self;
+        Instance unit = call.Args.Length > 2 && !call.Args[2].IsUndefined ? Instance.Of(call.Args[2]) : call.Self;
         if (Ours(unit) is not var (copy, hostId))
             return;
-        var (x, y) = UnitGrid.CellOf(copy);
+        var (x, y) = Units.CellOf(copy);
         _areaUnits.Moved(copy, x, y);
         _session.Send(new UnitMovedPacket(hostId, (short)x, (short)y));
         _context.Log($"Moved the host's unit {hostId} to {x},{y}");
@@ -294,9 +284,9 @@ public sealed class CombatSync
     // host puts it on the real one. (Made inside a refresh: sent as the refresh.)
     private void EffectCreated(ScriptCall call)
     {
-        if (_refreshing > 0 || call.Args.Length < 3 || UnitGrid.InstanceOf(call.Result).IsNone)
+        if (_refreshing > 0 || call.Args.Length < 3 || Instance.Of(call.Result).IsNone)
             return;
-        bool ourOwn = call.Args.Length > 3 && IsOurPlayer(UnitGrid.InstanceOf(call.Args[3]));
+        bool ourOwn = call.Args.Length > 3 && IsOurPlayer(Instance.Of(call.Args[3]));
         if ((_ourActions == 0 && !ourOwn) || Ours(call.Args[2]) is not var (copy, hostId))
             return;
         string name = Gm.ObjectGetName(call.Args[0].AsInt);
@@ -331,12 +321,12 @@ public sealed class CombatSync
         Instance unit = _areaUnits.UnitOf(move.UnitId);
         if (unit.IsNone)
             return;
-        if (!UnitGrid.CanTake(unit, move.CellX, move.CellY))
+        if (!Units.CanTake(unit, move.CellX, move.CellY))
         {
             _context.Log($"{from.Name} moved unit {move.UnitId} to {move.CellX},{move.CellY}, which isn't free here");
             return;
         }
-        UnitGrid.Move(unit, move.CellX, move.CellY);
+        Units.Move(unit, move.CellX, move.CellY);
         _context.Log($"{from.Name} moved unit {move.UnitId} to {move.CellX},{move.CellY}");
     }
 
@@ -347,15 +337,12 @@ public sealed class CombatSync
         if (_session.Mode != Session.SessionMode.Host || !Gm.InGame)
             return;
         Instance unit = _areaUnits.UnitOf(effect.UnitId);
-        int obj = Gm.AssetGetIndex(effect.Effect);
-        if (unit.IsNone || obj < 0)
+        if (unit.IsNone)
             return;
-        Instance standIn = _players.UnitOf(from.Slot);
-        Instance owner = standIn.IsNone ? unit : standIn;
         if (effect.Refresh)
-            Game.CallScript("scr_effect_update", default, obj, unit, effect.Duration, effect.Stage);
+            UnitEffects.Refresh(effect.Effect, unit, effect.Duration, (int)effect.Stage);
         else
-            Game.CallScript("scr_effect_create", default, obj, effect.Duration, unit, owner, effect.Stage);
+            UnitEffects.Create(effect.Effect, unit, effect.Duration, _players.UnitOf(from.Slot), effect.Stage);
         // (A player's effect on it: their part in its death, should it die of it.)
         if (!_hitBy.TryGetValue(effect.UnitId, out var hitters))
             _hitBy[effect.UnitId] = hitters = new();
@@ -378,13 +365,13 @@ public sealed class CombatSync
             return;
         Instance player = OurPlayer.Instance;
         bool weTookPart = !player.IsNone
-            && (Game.CallScript("scr_enemy_target_damage_priority_get", unit, player, 0).AsReal > 0
-                || UnitGrid.InstanceOf(unit.Get("last_attacker")).Equals(player.Persist()));
+            && (StoneForge.Combat.DamageShare(unit, player) > 0
+                || Instance.Of(unit.Get("last_attacker")).Equals(player.Persist()));
         if ((hitters == null || hitters.Count == 0) && !weTookPart)
             return;
-        var cell = UnitGrid.CellOf(unit);
+        var cell = Units.CellOf(unit);
         if (!weTookPart && !player.IsNone)
-            Game.CallScript("scr_enemy_target_priority_add", unit, player, 1);
+            StoneForge.Combat.AddDamageShare(unit, player);
         string? here = OurPlayer.State()?.Place;
         foreach (var other in _session.Players)
             if (other.State is { } state && state.Place == here
@@ -404,14 +391,7 @@ public sealed class CombatSync
             _context.Log($"The host's unit {kill.UnitId} was killed near us, but we've no copy of it for its XP");
             return;
         }
-        double level = Game.CallScript("scr_atr", default, "LVL").AsReal;
-        double xp = unit.Get("gain_xp").AsReal * Math.Min(1 - 0.15 * (level / 5 - unit.Get("Tier").AsReal), 1);
-        double gained = Game.CallScript("scr_get_XP", default, xp).AsReal;
-        if (gained > 0)
-        {
-            using var name = GmArray.From(new[] { Game.CallScript("scr_actionsLogGetName", default, unit) });
-            Game.CallScript("scr_actionsLogXP", default, "death", name, gained);
-        }
+        double gained = StoneForge.Player.GiveXp(StoneForge.Player.KillXp(unit), killed: unit);
         _context.Log($"Killed the host's unit {kill.UnitId}: {gained} XP");
     }
 }

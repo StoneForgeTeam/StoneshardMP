@@ -63,18 +63,18 @@ internal static class GameClock
         if (!Profiler.Measure(context, "clock: turn ready?", () => TickReady(context)))
             return false;
         Instance player = Player();
-        Profiler.Measure(context, "clock: world turn (scr_global_turn)", () => Game.CallScript("scr_global_turn", player));
+        Profiler.Measure(context, "clock: world turn (scr_global_turn)", StoneForge.Turns.PassWorld);
         // (Skills can be cast again: o_abilities' alarm 10 sets global.skill_can_cast - every skill the same global, and
         // none of o_skill's children does more - so one skill's alarm does what every skill's did. Each alarm set is a
         // slow call into the game, and there are hundreds of skills.)
         Profiler.Measure(context, "clock: skills' cooldowns", () =>
         {
-            Instance skill = Game.CallBuiltin("instance_find", (int)GameObjectId.o_skill, 0).AsInstance;
+            Instance skill = Instances.All(GameObjectId.o_skill).FirstOrDefault();
             if (!skill.IsNone)
                 skill.Alarm[10] = 1;
         });
         // (GameMaker's ev_alarm, alarm 4.)
-        Profiler.Measure(context, "clock: units' turns (alarm 4)", () => Game.CallBuiltinAs("event_perform", player, player, 2, 4));
+        Profiler.Measure(context, "clock: units' turns (alarm 4)", StoneForge.Turns.RunUnits);
         return true;
     }
 

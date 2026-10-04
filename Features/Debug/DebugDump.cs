@@ -70,10 +70,10 @@ public sealed class DebugDump
         return Instances.All(-3).Select(instance =>
         {
             double x = instance.Get("x").AsReal, y = instance.Get("y").AsReal;
-            if (Math.Sqrt(Math.Pow(x - px, 2) + Math.Pow(y - py, 2)) > Radius * UnitGrid.Cell)
+            if (Math.Sqrt(Math.Pow(x - px, 2) + Math.Pow(y - py, 2)) > Radius * Units.CellSize)
                 return null;
             int obj = instance.Get("object_index").AsInt;
-            string line = $"{Gm.ObjectGetName(obj)} @{(int)(x / UnitGrid.Cell)},{(int)(y / UnitGrid.Cell)} spr={SpriteName(instance.Get("sprite_index"))}"
+            string line = $"{Gm.ObjectGetName(obj)} @{(int)(x / Units.CellSize)},{(int)(y / Units.CellSize)} spr={SpriteName(instance.Get("sprite_index"))}"
                 + $"#{Math.Floor(instance.Get("image_index").AsReal)} vis={instance.Get("visible").AsBool} depth={instance.Get("depth")}";
             if (Gm.ObjectIsAncestor(obj, unit))
                 line += $" state={Text(instance.Get("state"))} is_life={Text(instance.Get("is_life"))} spr_render={SpriteName(instance.Get("spr"))}"
@@ -156,6 +156,5 @@ public sealed class DebugDump
     private static string Text(GmValue value) => value.IsUndefined ? "-" : value.AsString;
 
     private static string SpriteName(GmValue sprite)
-        => sprite.Kind == GmKind.Real && sprite.AsInt >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool
-            ? Game.CallBuiltin("sprite_get_name", sprite).AsString : "-";
+        => sprite.Kind == GmKind.Real && Draw.SpriteName(sprite.AsInt) is { Length: > 0 } name ? name : "-";
 }

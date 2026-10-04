@@ -211,7 +211,7 @@ public sealed class LootSync
 
     // The item a throw carries (none if it carries none that's still there).
     private static Instance Carrying(Instance shell)
-        => UnitGrid.InstanceOf(shell.Get("loot_object")) is { IsNone: false, Exists: true } item ? item : default;
+        => Instance.Of(shell.Get("loot_object")) is { IsNone: false, Exists: true } item ? item : default;
 
     // Loot removed from the world, culled or not (Instance.Destroy takes a culled one out of the culling controller's
     // list first). Never an item in flight: the throw reads it when it lands (removing it first crashed the game).
@@ -253,7 +253,7 @@ public sealed class LootSync
     private bool Has(Instance item, Mark mark) => _marks.TryGetValue(item, out Mark marks) && (marks & mark) != 0;
     private void Set(Instance item, Mark mark) => _marks[item] = _marks.GetValueOrDefault(item) | mark;
 
-    private static bool IsPlayer(GmValue unit) => !unit.IsUndefined && Game.CallScript("is_player", default, unit).AsBool;
+    private static bool IsPlayer(GmValue unit) => Units.IsPlayer(unit);
 
 
     // ---- owner ----

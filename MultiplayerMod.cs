@@ -132,14 +132,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     // The player's Steam name ("Player" without Steam).
     private static string SteamName()
     {
-        try
-        {
-            string name = Game.CallBuiltinUnrestricted("steam_get_persona_name", default, default).AsString;
-            return name.Length > 0 ? name : "Player";
-        }
-        catch (Exception)
-        {
-            return "Player";
-        }
+        string name = Steam.PersonaName;
+        return name.Length > 0 ? name : "Player";
     }
 }

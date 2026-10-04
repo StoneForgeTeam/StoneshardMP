@@ -23,7 +23,7 @@ public sealed class Player : GameObject
         // A direct o_enemy child has the unit machinery but no mob parameter record. Give it the game's harmless
         // Caravan Dummy record first: that supplies every field the normal inspection UI expects (type, stats,
         // resistances, icons, mobIndex, etc.) without inheriting the dummy object's context actions.
-        Game.CallScript("scr_param", self, "Caravan Dummy");
+        Units.SetRecord(self, "Caravan Dummy");
         // o_enemy supplies the normal unit fields, collision and target shape. Keep this proxy passive - no AI, no
         // saves, no dialogue - and with enough local HP that nothing here can destroy it: its player's own game resolves
         // what's done to them (CombatSync).
@@ -31,9 +31,9 @@ public sealed class Player : GameObject
         self["is_neutral"] = true;
         // Enemies hostile to the player go for it as they would the player: it's in the game's "Player" faction list
         // (the AI table's Player column), out of the dummy record's. An attack on it goes to its player's game.
-        Game.CallScript("scr_faction_map_remove", self, self);
+        Factions.Leave(self);
         self["subfaction_key"] = "Player";
-        Game.CallScript("scr_faction_map_add", self, self);
+        Factions.Join(self);
         self["is_ignored_by_enemies"] = false;
         self["can_speak"] = false;
         self["roomEntityIsSavable"] = false;

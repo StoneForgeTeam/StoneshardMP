@@ -40,8 +40,8 @@ internal static class SharedWorld
             case "presetSeed":
             {
                 double seed = tile.Seeds[name];
-                string location = Game.CallScript("scr_locationGenerateTag", default, tile.X, tile.Y).AsString;
-                if (Game.CallScript("scr_locationExists", default, location).AsBool && seed == -1)
+                string location = Locations.TagAt(tile.X, tile.Y);
+                if (Locations.Exists(location) && seed == -1)
                 {
                     tile[name] = Generated();
                     return (tile.X, tile.Y);
@@ -73,7 +73,7 @@ internal static class SharedWorld
         int kind = key switch { "growSeed" => 2, "mobsSeed" => 3, "presetSeed" => 4, _ => 1 };
         double salt = respawn ? Day : 0;
         double mix = WorldSeed() + tile.X * 73856093.0 + tile.Y * 19349663.0 + kind * 83492791.0 + salt * 2654435761;
-        return Game.WithSeed((long)(Math.Abs(mix) % 2147483647), () => Game.CallBuiltin("irandom_range", 1, 2000000000).AsReal);
+        return Game.WithSeed((long)(Math.Abs(mix) % 2147483647), () => (double)Gm.IrandomRange(1, 2000000000));
     }
 
     /// <summary>A seed for the dungeon at the player's world-map cell - kind 1: the layout of a floor, 2: which floors
@@ -96,7 +96,7 @@ internal static class SharedWorld
     /// count alike and still build the same floor.</summary>
     public static void DungeonRetry()
     {
-        string key = RetryKey(Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt);
+        string key = RetryKey(WorldMap.DungeonFloor);
         DungeonRetries[key] = DungeonRetries.GetValueOrDefault(key) + 1;
     }
 
@@ -192,15 +192,15 @@ internal static class SharedWorld
             if (value is JsonObject { } nested && nested["m"] is { } m)
             {
                 if (DsMap.FromJson(m.GetValue<string>()) is { } map)
-                    Game.CallScript("scr_globaltile_dungeon_set_map", default, key, map, x, y);
+                    new WorldTile(x, y).SetDungeonMap(key, map);
             }
             else if (value is JsonObject { } listed && listed["l"] is { } l)
             {
                 if (DsList.FromJson(l.GetValue<string>()) is { } list)
-                    Game.CallScript("scr_globaltile_dungeon_set_list", default, key, list, x, y);
+                    new WorldTile(x, y).SetDungeonList(key, list);
             }
             else
-                Game.CallScript("scr_globaltile_dungeon_set", default, key, GmValue.FromJsonNode(value), x, y);
+                new WorldTile(x, y).SetDungeonValue(key, GmValue.FromJsonNode(value));
         }
     }
 

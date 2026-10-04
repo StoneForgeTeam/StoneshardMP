@@ -82,13 +82,13 @@ public sealed class JoinManager
     private bool _askOnMenu;
     // Client: when our character next goes to the host (Refresh); the black screen held while the host loads.
     private DateTime _nextRefresh;
-    private Instance _blackout;
+    private bool _blackedOut;
     // Host: a save just written - the players in our world asked for their characters now, and that save written again
     // with them once they're in (or TopUpWait is up), so it has where everyone is, not where they were last sent.
     private readonly HashSet<int> _topUpWaiting = new();
     private DateTime _topUpDeadline;
     private bool _topUpGot;
-    private string _topUpSlot = "", _topUpSave = "";
+    private SaveFile? _topUpOf;
     private static readonly TimeSpan TopUpWait = TimeSpan.FromSeconds(5);
     private bool _disconnecting;
 
@@ -124,18 +124,6 @@ public sealed class JoinManager
         Scripts.scr_slotUpdate.Before(context, call => ClientSave());
         // The host's saves: topped up with everyone's characters as they are now.
         Scripts.scr_slotUpdate.After(context, call => HostSaved());
-        // Disconnect, confirmed (the game's confirmation calls back an Esc menu button's user event 2 - Exit's): the game's
-        // Save & Exit, and the session left on the main menu (Tick). A client's save sends the host its character
-        // (ClientSave: nothing written here), so the host has where it got to; the host's is its own save, after waiting
-        // for everyone in its world to save (HoldExit).
-        context.OnCode("gml_Object_o_ingame_menu_button_Other_12", before: (_, _) =>
-        {
-            if (_esc == EscRole.Game || !Gm.InstanceExists(GameObjectId.o_exit_confirm_panel))
-                return false;
-            _disconnecting = true;
-            Game.CallScript("scr_smoothSaveExit", default);
-            return true;
-        });
         // A new game's save data is being made (its seed just rolled, in scr_gameDataMapInit): a client's new character
         // takes the host's world map; a host's new world lets the waiting players start theirs.
         Scripts.scr_characterMapInit.Before(context, call =>
@@ -357,7 +345,7 @@ public sealed class JoinManager
     {
         // (Not HostInWorld: mid-save the game may have the player hidden. Saving means there's a world.)
         if (_session.Mode != Session.SessionMode.Host || _hostLoading || !StoneForge.SaveData.Available
-            || Game.Global["slotsMap"].AsDsMap is not { } slots)
+            || SaveSlots.CurrentSave is not { } saved)
             return;
         _topUpWaiting.Clear();
         foreach (var player in _session.Players)
@@ -365,12 +353,11 @@ public sealed class JoinManager
                 _topUpWaiting.Add(player.Slot);
         if (_topUpWaiting.Count == 0)
             return;
-        _topUpSlot = slots["lastCharacter"].AsString;
-        _topUpSave = slots["lastSave"].AsString;
+        _topUpOf = saved;
         _topUpGot = false;
         _topUpDeadline = DateTime.UtcNow + TopUpWait;
         _session.Send(new SaveRequestPacket());
-        _context.Log($"Saved {_topUpSlot}/{_topUpSave}: asking {_topUpWaiting.Count} player(s) for their characters to top it up");
+        _context.Log($"Saved {saved.Slot.Name}/{saved.Name}: asking {_topUpWaiting.Count} player(s) for their characters to top it up");
     }
 
     // The save just written (HostSaved), written again with the characters that came in since - the save data only
@@ -378,12 +365,11 @@ public sealed class JoinManager
     // saved somewhere else since.
     private void TopUpSave()
     {
-        if (!_topUpGot || !JoinSave.HostInWorld() || Game.Global["slotsMap"].AsDsMap is not { } slots
-            || slots["lastCharacter"].AsString != _topUpSlot || slots["lastSave"].AsString != _topUpSave)
+        if (!_topUpGot || !JoinSave.HostInWorld() || _topUpOf is not { } save || SaveSlots.CurrentSave != save)
             return;
         _topUpGot = false;
-        Game.CallScript("scr_slotSaveDataMapSave", default, _topUpSlot, _topUpSave, Game.Global["saveDataMap"]);
-        _context.Log($"Save {_topUpSlot}/{_topUpSave} topped up with everyone's characters as they are now");
+        StoneForge.SaveData.WriteTo(save);
+        _context.Log($"Save {save.Slot.Name}/{save.Name} topped up with everyone's characters as they are now");
     }
 
     // The Esc menu: Disconnect in place of Save & Exit for a client playing the host's world (it keeps no saves of the
@@ -421,21 +407,20 @@ public sealed class JoinManager
         _context.Log("Loading a save: everyone reloads into it, as it has them");
     }
 
-    // Disconnect clicked: the game's own confirmation, as its Exit asks (o_exit_confirm_panel, the game's question) - a yes
-    // calls back an Esc menu button's user event 2, which the Disconnect hook takes.
+    // Disconnect clicked: the game's own confirmation, asking its Exit's question (GameDialogs). Yes: the game's Save &
+    // Exit, and the session left on the main menu (Tick). A client's save sends the host its character (ClientSave:
+    // nothing written here), so the host has where it got to; the host's is its own save, after waiting for everyone in
+    // its world to save (HoldExit, on scr_smoothSaveExit - which Rooms.ToMainMenu(save) runs).
     private void ConfirmDisconnect()
     {
-        if (Gm.InstanceExists(GameObjectId.o_exit_confirm_panel)
-            || Instances.All(GameObjectId.o_ingame_menu_button).FirstOrDefault() is not { IsNone: false } owner)
+        if (Gm.InstanceExists(GameObjectId.o_exit_confirm_panel))
             return;
-        Instance panel = Game.CallScript("scr_guiCreateContainer", default, Game.Global["guiBaseContainerVisible"],
-            (int)GameObjectId.o_exit_confirm_panel).AsInstance;
-        if (panel.IsNone)
-            return;
-        panel["owner"] = owner;
-        panel["event"] = 2;
-        if (Game.Global["button_hover"].AsDsList is { } texts)
-            panel["text"] = texts[46];
+        string question = Game.Global["button_hover"].AsDsList is { } texts ? texts[46].AsString : "Disconnect?";
+        GameDialogs.Confirm(_context, question, () =>
+        {
+            _disconnecting = true;
+            Rooms.ToMainMenu(save: true);
+        });
     }
 
     // scr_smoothSaveExit, on the host: with players in our world, ask them to save and hold the exit until they have
@@ -465,7 +450,7 @@ public sealed class JoinManager
         if (!Gm.InGame)
             return;
         _exitGo = true;
-        Game.CallScript("scr_smoothSaveExit", default);
+        Rooms.ToMainMenu(save: true);
     }
 
     // ---- client ----
@@ -566,18 +551,16 @@ public sealed class JoinManager
     // change that loads the host's world fades it out with its own on the new room's start).
     private void Blackout()
     {
-        if (_blackout.Exists)
-            return;
-        _blackout = Game.CallScript("scr_guiCreateSimple", default, Game.Global["guiBaseContainerVisible"],
-            (int)GameObjectId.o_black_overlay).AsInstance.Persist();
+        _blackedOut = true;
+        StoneForge.Blackout.Show(Status);
     }
 
-    // The reload's off: the black fades out (the overlay destroys itself once clear).
+    // The reload's off: the black fades out.
     private void Unblack()
     {
-        if (!_blackout.IsNone && _blackout.Exists)
-            _blackout["maxAlpha"] = 0;
-        _blackout = default;
+        if (_blackedOut)
+            StoneForge.Blackout.Hide();
+        _blackedOut = false;
     }
 
     private void OnWorld(RemotePlayer sender, JoinWorldPacket packet)
@@ -613,12 +596,8 @@ public sealed class JoinManager
             JoinSave.StartNew();
         }
         // (Behind the black screen: what's going on, in the middle of it - the overlay draws its text while it's up.)
-        if (!_blackout.IsNone && Status is { } status && _blackout.Exists && _blackout["text"].AsString != status)
-        {
-            _blackout["drawText"] = true;
-            _blackout["text"] = status;
-            _blackout["textAlpha"] = 1;
-        }
+        if (_blackedOut && Status is { } status && StoneForge.Blackout.IsShown)
+            StoneForge.Blackout.Text = status;
         // The host is saving to leave: our character, now.
         if (_saveNow)
         {
@@ -644,7 +623,8 @@ public sealed class JoinManager
                 {
                     _state = ClientState.InWorld;
                     _reloading = false;
-                    _blackout = default;
+                    // (Its black went with the room change that loaded the host's world.)
+                    _blackedOut = false;
                     _nextRefresh = DateTime.UtcNow + RefreshEvery;
                     Status = $"In {HostName}'s world";
                 }
@@ -659,7 +639,7 @@ public sealed class JoinManager
         _nextRefresh = DateTime.UtcNow + RefreshEvery;
         if (_state != ClientState.InWorld || !Gm.InstanceExists(GameObjectId.o_player))
             return;
-        Game.CallScript("scr_savegame", default, Rooms.CurrentName, 1);
+        StoneForge.SaveData.Save(SaveKind.Auto);
     }
 
     // scr_slotUpdate (every save): a client making its character, or in the host's world, sends its character to

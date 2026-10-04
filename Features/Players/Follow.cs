@@ -21,7 +21,7 @@ namespace StoneshardMP.Features.Players;
 public sealed class Follow
 {
     private const long ResendMs = 1500, LeaveGraceMs = 400, LeaveGiveUpMs = 20000, ArriveWaitMs = 6000;
-    private const double ExitReach = 2.5 * UnitGrid.Cell;
+    private const double ExitReach = 2.5 * Units.CellSize;
 
     private readonly ModContext _context;
     private readonly Session _session;
@@ -34,7 +34,7 @@ public sealed class Follow
     private (int X, int Y)? _lastSent, _seen;
     private long _sentAt, _goneAt, _arrivedAt;
     private string? _seenIn;
-    private int _transitions = -2, _frame;
+    private int _frame;
 
     public Follow(ModContext context, Session session, PlayerManager players)
     {
@@ -68,7 +68,7 @@ public sealed class Follow
         }
 
         // (Mid room change - going through a door after them: wait.)
-        if (Game.CallBuiltin("instance_exists", (int)GameObjectId.o_smoothRoomChanger).AsBool)
+        if (Rooms.IsChanging)
             return;
         if (_skipClick)
             _skipClick = false;
@@ -80,7 +80,7 @@ public sealed class Follow
             return;
         }
         // (A fight's begun - an enemy's after us: interrupted, as the game's own walking is.)
-        if (++_frame % 10 == 0 && Game.CallScript("scr_getAgredMobsCount", default, true).AsReal > 0)
+        if (++_frame % 10 == 0 && StoneForge.Player.InCombat)
         {
             Set(null, "an enemy's after us");
             return;
@@ -101,7 +101,7 @@ public sealed class Follow
         _goneAt = _arrivedAt = 0;
         _seen = (state.CellX, state.CellY);
         _seenIn = here;
-        var (px, py) = UnitGrid.CellOf(me);
+        var (px, py) = Units.CellOf(me);
         int tx = state.CellX, ty = state.CellY;
         if (Math.Max(Math.Abs(tx - px), Math.Abs(ty - py)) <= 1 || !Idle(me))
             return;
@@ -140,39 +140,30 @@ public sealed class Follow
         if (now - _sentAt < ResendMs || !Idle(me))
             return;
         _sentAt = now;
-        double ex = seen.X * UnitGrid.Cell + 13, ey = seen.Y * UnitGrid.Cell + 13;
-        if (_transitions == -2)
-            _transitions = Gm.AssetGetIndex("o_transitions_door");
-        Instance door = _transitions < 0 ? default : UnitGrid.InstanceOf(Game.CallBuiltin("instance_nearest", ex, ey, _transitions));
+        double ex = seen.X * Units.CellSize + 13, ey = seen.Y * Units.CellSize + 13;
+        Instance door = Doors.Nearest(ex, ey);
         if (!door.IsNone && door.Exists
             && Math.Sqrt(Math.Pow(door.Get("x").AsReal - ex, 2) + Math.Pow(door.Get("y").AsReal - ey, 2)) <= ExitReach)
         {
             _context.Log($"Following {them.Name} out by {Gm.ObjectGetName(door.Get("object_index").AsInt)}");
-            if (Game.CallScript("scr_can_interract_posgrid", door, door, door.Get("in_grid")).AsBool)
-                Game.CallBuiltinAs("event_user", door, door, 0);
-            else
-                Game.CallScript("scr_delay_move_grid", door);
+            Doors.Use(door);
             return;
         }
         // No way out there: they walked off the edge of the area - onto that border cell, and across.
-        if (UnitGrid.CellOf(me) != seen)
+        if (Units.CellOf(me) != seen)
         {
-            Game.CallScript("scr_player_move", me, seen.X * UnitGrid.Cell, seen.Y * UnitGrid.Cell);
+            StoneForge.Player.WalkTo(seen.X * Units.CellSize, seen.Y * Units.CellSize);
             return;
         }
         _context.Log($"Following {them.Name} off the edge of the area");
-        Game.CallScript("scr_playerTileborderTransition", me);
+        StoneForge.Player.CrossAreaEdge();
     }
 
-    // A walk to the free cell nearest one (the game's scr_mpgridFindNearestFreeCell, along the line from us), as a click.
+    // A walk to the free cell nearest one (the game's, along the line from us), as a click.
     private static void Walk(Instance me, int x, int y)
     {
-        if (UnitGrid.Current() is not { } grids)
-            return;
-        using GmArray? free = Game.CallScript("scr_mpgridFindNearestFreeCell", me, grids.Collisions, x, y).AsArray;
-        if (free == null || free.Length < 2 || free[0].AsReal == -4 || free[1].AsReal == -4)
-            return;
-        Game.CallScript("scr_player_move", me, free[0].AsReal * UnitGrid.Cell, free[1].AsReal * UnitGrid.Cell);
+        if (Units.NearestFreeCell(me, x, y) is var (freeX, freeY))
+            StoneForge.Player.WalkTo(freeX * Units.CellSize, freeY * Units.CellSize);
     }
 
     // Standing still: no path, not moving, on its cell, free to move.

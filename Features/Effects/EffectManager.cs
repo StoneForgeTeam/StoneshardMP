@@ -54,11 +54,11 @@ public sealed class EffectManager
             int root = Gm.AssetGetIndex(rootName);
             if (root < 0)
                 continue;
-            int count = Game.CallBuiltin("instance_number", root).AsInt;
-            for (int i = 0; i < count && current.Count < MaxEffects; i++)
+            foreach (Instance source in Instances.All(root))
             {
-                Instance source = Game.CallBuiltin("instance_find", root, i).AsInstance.Persist();
-                if (source.IsNone || !source.Exists || !VisibleSprite(source))
+                if (current.Count >= MaxEffects)
+                    break;
+                if (!source.Exists || !VisibleSprite(source))
                     continue;
                 // On-unit effects belonging to another player's object already have their own locally received visual.
                 if (rootName == "o_onUnitEffectSprite" && !source["ownerIsPlayer"].AsBool)
@@ -79,7 +79,7 @@ public sealed class EffectManager
         int life = self["mp_life"].AsInt - 1;
         self["mp_life"] = life;
         if (life <= 0)
-            Game.CallBuiltin("instance_destroy", self);
+            self.Destroy();
     }
 
     public void Clear()
@@ -87,14 +87,14 @@ public sealed class EffectManager
         _sent.Clear();
         foreach (var echo in _remote.Values)
             if (echo.Exists)
-                Game.CallBuiltin("instance_destroy", echo);
+                echo.Destroy();
         _remote.Clear();
     }
 
     private static bool VisibleSprite(Instance source)
     {
         int sprite = source["sprite_index"].AsInt;
-        return source["visible"].AsBool && sprite >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool;
+        return source["visible"].AsBool && Draw.SpriteExists(sprite);
     }
 
     private void Send(Instance source)
@@ -121,10 +121,10 @@ public sealed class EffectManager
         if (mine == null || from.State?.Place != mine.Place)
         {
             if (_remote.Remove(key, out var elsewhere) && elsewhere.Exists)
-                Game.CallBuiltin("instance_destroy", elsewhere);
+                elsewhere.Destroy();
             return;
         }
-        if (!Game.CallBuiltin("sprite_exists", sprite).AsBool)
+        if (!Draw.SpriteExists(sprite))
             return;
         if (!_remote.TryGetValue(key, out var echo) || !echo.Exists)
         {
@@ -145,13 +145,13 @@ public sealed class EffectManager
     {
         var key = (from.Slot, r.InstanceId);
         if (_remote.Remove(key, out var echo) && echo.Exists)
-            Game.CallBuiltin("instance_destroy", echo);
+            echo.Destroy();
     }
 
     private void Forget(int slot)
     {
         foreach (var key in _remote.Keys.Where(key => key.Slot == slot).ToArray())
             if (_remote.Remove(key, out var echo) && echo.Exists)
-                Game.CallBuiltin("instance_destroy", echo);
+                echo.Destroy();
     }
 }

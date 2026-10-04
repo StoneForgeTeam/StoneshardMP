@@ -71,27 +71,27 @@ internal static class ContractData
     // the village, the dungeon) came with the host's own calls.
     private static void Journal(int index, DsMap contract, bool wasTaken)
     {
-        if (Game.Global["journalDataMap"].AsDsMap is not { } journal || journal.GetList("contractsList") is not { } tasks)
+        if (StoneForge.Journal.Contracts is not { } tasks)
             return;
         bool taken = IsTrue(contract["isTaken"]) && IsTrue(contract["isActive"]);
         if (!taken)
         {
-            Game.CallScript("scr_journalTaskDelete", default, tasks, index);
-            if (wasTaken && contract["isComplete"].AsReal == -1 && journal.GetList("tasksFailedList") is { } failed
-                && Game.CallBuiltin("ds_list_find_index", failed, index).AsInt < 0)
+            StoneForge.Journal.RemoveTask(tasks, index);
+            if (wasTaken && contract["isComplete"].AsReal == -1 && StoneForge.Journal.Failed is { } failed
+                && !StoneForge.Journal.Lists(failed, index))
             {
-                Game.CallScript("scr_journalTaskAdd", default, failed, index);
-                Game.CallScript("scr_characterStatsUpdateAdd", default, "contractsFailed", 1);
-                Game.CallScript("scr_psy_change", default, "MoraleSituational", -10, "contract_fail");
-                Game.CallScript("scr_contract_quest_items_delete", default, contract, false, false);
+                StoneForge.Journal.AddTask(failed, index);
+                StoneForge.Player.AddStat("contractsFailed");
+                StoneForge.Player.ChangePsyche("MoraleSituational", -10, "contract_fail");
+                StoneForge.Contracts.DeleteQuestItems(contract);
             }
             return;
         }
-        Game.CallScript("scr_journalTaskAdd", default, tasks, index);
+        StoneForge.Journal.AddTask(tasks, index);
         if (!wasTaken)
-            Game.CallScript("scr_journalDiaryUpdate", default, contract, false, true);
-        else if (Instances.All(GameObjectId.o_diary).Exists(diary => diary.Get("map").AsReal == contract.Id))
-            Game.CallScript("scr_journalDiaryUpdate", default, contract);
+            StoneForge.Journal.ShowInDiary(contract, asNew: true);
+        else if (StoneForge.Journal.DiaryShows(contract))
+            StoneForge.Journal.ShowInDiary(contract);
     }
 
     /// <summary>The host's hourly contract clock, in place of the game's (o_time_controller user event 3) while playing
@@ -127,8 +127,7 @@ internal static class ContractData
             if (left <= 0)
             {
                 line += " FAILED";
-                Instance clock = Instances.All(GameObjectId.o_time_controller).FirstOrDefault();
-                Game.CallScript("scr_contract_delete", clock, contract, false);
+                StoneForge.Contracts.Delete(contract);
             }
         }
         return line;

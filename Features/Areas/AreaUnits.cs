@@ -64,10 +64,6 @@ public sealed class AreaUnits
     private const long CatchUpMs = 1500;
     private readonly Dictionary<Instance, (int X, int Y, long Until)> _movedByUs = new();
     private readonly Dictionary<Instance, long> _effectsByUs = new();
-    // Effects by object: whether one shows (not an invisible one - the game's own workings - and with an icon), and its
-    // name.
-    private readonly Dictionary<int, (bool Shown, string Name)> _effectKinds = new();
-    private int _invisibleEffect = -2;
 
     public AreaUnits(ModContext context, Session session, Func<int> playerObject)
     {
@@ -217,7 +213,7 @@ public sealed class AreaUnits
                 // (A sprite made at run time has an id of this game's alone: not copied.)
                 if (unit.Get(key) is { Kind: GmKind.Real } value && (value.AsReal < 0 || IsAssetSprite(value.AsInt)))
                     look[key] = value.AsReal;
-            var (x, y) = UnitGrid.CellOf(unit);
+            var (x, y) = Units.CellOf(unit);
             if (!_syncIds.TryGetValue(unit, out long syncId))
                 _syncIds[unit] = syncId = ++_nextSyncId;
             units.Add(new JsonObject
@@ -243,7 +239,7 @@ public sealed class AreaUnits
     {
         if (_roster == null)
             return;
-        if (!Gm.InstanceExists(GameObjectId.o_player) || UnitGrid.Current() is not { } grids)
+        if (!Gm.InstanceExists(GameObjectId.o_player) || Units.Current() is not { } grids)
         {
             _roster = null;
             return;
@@ -261,7 +257,7 @@ public sealed class AreaUnits
         finally { Applying = false; }
     }
 
-    private void ApplyUnit(JsonObject u, UnitGrid.Grids grids)
+    private void ApplyUnit(JsonObject u, Units.Grids grids)
     {
         long hostId = (long)Number(u["id"]);
         int obj = Int(u["obj"]), x = Int(u["x"]), y = Int(u["y"]);
@@ -290,11 +286,11 @@ public sealed class AreaUnits
             else
                 hold = true;
         }
-        if (!hold && UnitGrid.CellOf(unit) != (x, y))
+        if (!hold && Units.CellOf(unit) != (x, y))
         {
             if (!_poly.TryGetValue(unit, out bool poly))
                 _poly[unit] = poly = unit.Get("is_poly_cell").AsBool;
-            UnitGrid.Move(unit, x, y, grids, poly);
+            Units.Move(unit, x, y, grids, poly);
         }
         // Its effects as the host has them - when they've changed there, or once ours have been left alone long enough
         // for the host to have what we did.
@@ -314,45 +310,13 @@ public sealed class AreaUnits
     private JsonArray EffectsOf(Instance unit)
     {
         var effects = new JsonArray();
-        foreach (var (_, name, duration) in ShownEffects(unit))
-            effects.Add(new JsonArray(name, duration));
+        foreach (var effect in ShownEffects(unit))
+            effects.Add(new JsonArray(effect.Name, effect.Duration));
         return effects;
     }
 
-    // The effects on a unit that show (EffectKind): each instance, its object's name and its duration.
-    private List<(Instance Effect, string Name, double Duration)> ShownEffects(Instance unit)
-    {
-        var shown = new List<(Instance, string, double)>();
-        GmValue buffs = unit.Get("buffs");
-        if (buffs.Kind != GmKind.Real || !Game.CallBuiltin("ds_exists", buffs, 2).AsBool)
-            return shown;
-        int count = Game.CallBuiltin("ds_list_size", buffs).AsInt;
-        for (int i = 0; i < count; i++)
-        {
-            Instance effect = UnitGrid.InstanceOf(Game.CallBuiltin("ds_list_find_value", buffs, i));
-            if (effect.IsNone || !effect.Exists)
-                continue;
-            var (isShown, name) = EffectKind(effect.Get("object_index").AsInt);
-            if (isShown)
-                shown.Add((effect, name, effect.Get("duration").AsReal));
-        }
-        return shown;
-    }
-
-    // Whether an effect's object shows - not an invisible one (the game's own workings, which each game makes for its
-    // own units alike) and with an icon - and its name.
-    private (bool Shown, string Name) EffectKind(int obj)
-    {
-        if (!_effectKinds.TryGetValue(obj, out var kind))
-        {
-            if (_invisibleEffect == -2)
-                _invisibleEffect = Gm.AssetGetIndex("o_invisible_buff");
-            bool shown = !(_invisibleEffect >= 0 && Gm.ObjectIsAncestor(obj, _invisibleEffect))
-                && Game.CallBuiltin("object_get_sprite", obj).AsInt >= 0;
-            _effectKinds[obj] = kind = (shown, Gm.ObjectGetName(obj));
-        }
-        return kind;
-    }
+    // The effects on a unit that show - not the game's invisible workings, which each game makes for its own units alike.
+    private static List<GameEffect> ShownEffects(Instance unit) => UnitEffects.On(unit).Where(effect => effect.Shown).ToList();
 
     // Client: a copy's effects made the host's - each of the host's there with its duration (made as the game makes one,
     // from the copy itself, if it isn't), and any the host hasn't taken off.
@@ -368,20 +332,20 @@ public sealed class AreaUnits
             if (at >= 0)
             {
                 if (ours[at].Duration != duration)
-                    ours[at].Effect["duration"] = duration;
+                {
+                    Instance effect = ours[at].Instance;
+                    effect["duration"] = duration;
+                }
                 ours.RemoveAt(at);
                 continue;
             }
-            int obj = Gm.AssetGetIndex(name);
-            if (obj < 0)
-                continue;
-            Instance made = UnitGrid.InstanceOf(Game.CallScript("scr_effect_create", default, obj, duration, unit, unit));
+            Instance made = UnitEffects.Create(name, unit, duration);
             if (!made.IsNone && made.Exists)
                 made["duration"] = duration;
         }
-        foreach (var (effect, _, _) in ours)
-            if (effect.Exists)
-                effect.Destroy();
+        foreach (var effect in ours)
+            if (effect.Instance.Exists)
+                effect.Instance.Destroy();
     }
 
     // One of the host's units we have none bound to: our twin (same object, same cell, never bound) - from a table of
@@ -396,7 +360,7 @@ public sealed class AreaUnits
             {
                 if (_everBound.Contains(local) || ObjectOf(local) == playerObject)
                     continue;
-                var (cx, cy) = UnitGrid.CellOf(local);
+                var (cx, cy) = Units.CellOf(local);
                 var key = (ObjectOf(local), cx, cy);
                 if (!_unbound.TryGetValue(key, out var list))
                     _unbound[key] = list = new();
@@ -411,7 +375,7 @@ public sealed class AreaUnits
                 if (!_everBound.Contains(twin) && twin.Exists)
                     return twin;
             }
-        return UnitGrid.InstanceOf(Game.CallScript("scr_enemy_create", default, x * UnitGrid.Cell + 13, y * UnitGrid.Cell + 13, obj, false, false));
+        return Units.Create(obj, x, y);
     }
 
     // A whole roster done: ours out of our turns - between turns only, the turn may be walking the list; only when a
@@ -420,16 +384,16 @@ public sealed class AreaUnits
     {
         _current.Clear();
         _current.UnionWith(_pass);
-        int turns = UnitGrid.TurnsCount();
+        int turns = Units.TurnsCount();
         if (_passBound || turns != _turnsSize)
         {
-            UnitGrid.RemoveFromTurns(_current.Contains);
-            _turnsSize = UnitGrid.TurnsCount();
+            Units.RemoveFromTurns(_current.Contains);
+            _turnsSize = Units.TurnsCount();
         }
         int playerObject = _playerObject();
         foreach (Instance gone in Instances.All(GameObjectId.o_enemy).Where(unit => !_current.Contains(unit) && ObjectOf(unit) != playerObject))
         {
-            UnitGrid.Remove(gone);
+            Units.Remove(gone);
             _applied.Remove(gone);
             _objectOf.Remove(gone);
             _poly.Remove(gone);
@@ -497,8 +461,7 @@ public sealed class AreaUnits
         if (sprite < 0)
             return false;
         if (!_assetSprites.TryGetValue(sprite, out bool asset))
-            _assetSprites[sprite] = asset = Game.CallBuiltin("sprite_exists", sprite).AsBool
-                && Gm.AssetGetIndex(Game.CallBuiltin("sprite_get_name", sprite).AsString) == sprite;
+            _assetSprites[sprite] = asset = Draw.SpriteExists(sprite) && Gm.AssetGetIndex(Draw.SpriteName(sprite)) == sprite;
         return asset;
     }
 

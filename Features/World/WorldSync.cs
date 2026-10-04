@@ -96,7 +96,7 @@ public sealed class WorldSync
         // A floor's layout seed, and which floors are special: the vanilla rolls, drawn from the world seed's (then the
         // game's random carries on, as it would have).
         Scripts.scr_dungeonFloorSeedGenerate.Before(context, call =>
-            Seeded(call, Scripts.scr_dungeonFloorSeedGenerate, SharedWorld.DungeonSeed(1, Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt)));
+            Seeded(call, Scripts.scr_dungeonFloorSeedGenerate, SharedWorld.DungeonSeed(1, WorldMap.DungeonFloor)));
         Scripts.scr_dungeonSpecialRoomInit.Before(context, call =>
             Seeded(call, Scripts.scr_dungeonSpecialRoomInit, SharedWorld.DungeonSeed(2, 0)));
         // A floor rejected: counted, for its next seed.

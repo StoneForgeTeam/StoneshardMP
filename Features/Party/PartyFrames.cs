@@ -82,9 +82,7 @@ public sealed class PartyFrames
     internal void Toggle()
     {
         _settings.PartyHidden.Value = !_settings.PartyHidden.Value;
-        int sound = Gm.AssetGetIndex("snd_checkbox_on");
-        if (sound >= 0)
-            Game.CallBuiltin("audio_play_sound", sound, 4, false);
+        Gm.AudioPlaySound(Sound.snd_checkbox_on, 4);
     }
 
     // A frame for each of the others (in slot order), slid as far as the tab says; none while they're not shown.
@@ -141,12 +139,9 @@ public sealed class PartyFrames
             return null;
         try
         {
-            int level = (int)Game.CallScript("scr_atr", default, "LVL").AsReal;
-            GmValue head = Game.CallScript("scr_atr", default, "Head");
-            float Cap(string name) => player.Get(name) is { Kind: GmKind.Real } cap ? (float)cap.AsReal : 100;
-            bool combat = Game.CallScript("scr_getAgredMobsCount", default, true).AsReal > 0;
-            return new PartyInfo(level, head.Kind == GmKind.String ? head.AsString : "", Cap("Health_Threshold"),
-                Cap("Max_Energy_Threshold"), combat, Effects(player));
+            GmValue head = StoneForge.Player.Attribute("Head");
+            return new PartyInfo(StoneForge.Player.Level, head.Kind == GmKind.String ? head.AsString : "", (float)StoneForge.Player.HealthCap,
+                (float)StoneForge.Player.EnergyCap, StoneForge.Player.InCombat, Effects(player));
         }
         catch (Exception e)
         {
@@ -157,24 +152,6 @@ public sealed class PartyFrames
 
     // The status effects we're under that show an icon, by object name: harmful ones first, at most MaxEffects.
     private static string[] Effects(Instance player)
-    {
-        GmValue buffs = player.Get("buffs");
-        if (buffs.Kind != GmKind.Real || !Game.CallBuiltin("ds_exists", buffs, 2).AsBool)
-            return Array.Empty<string>();
-        int invisible = Gm.AssetGetIndex("o_invisible_buff"), debuff = Gm.AssetGetIndex("o_debuff");
-        var bad = new List<string>();
-        var good = new List<string>();
-        int count = Game.CallBuiltin("ds_list_size", buffs).AsInt;
-        for (int i = 0; i < count; i++)
-        {
-            GmValue effect = Game.CallBuiltin("ds_list_find_value", buffs, i);
-            if (!Game.CallBuiltin("instance_exists", effect).AsBool)
-                continue;
-            int obj = Game.CallBuiltin("variable_instance_get", effect, "object_index").AsInt;
-            if ((invisible >= 0 && Gm.ObjectIsAncestor(obj, invisible)) || Game.CallBuiltin("object_get_sprite", obj).AsInt < 0)
-                continue;
-            (debuff >= 0 && Gm.ObjectIsAncestor(obj, debuff) ? bad : good).Add(Gm.ObjectGetName(obj));
-        }
-        return bad.Concat(good).Take(MaxEffects).ToArray();
-    }
+        => UnitEffects.On(player).Where(effect => effect.Shown).OrderBy(effect => !effect.Harmful)
+            .Select(effect => effect.Name).Take(MaxEffects).ToArray();
 }

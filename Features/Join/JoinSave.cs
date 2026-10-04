@@ -194,7 +194,7 @@ internal static class JoinSave
         if (Rooms.IsChanging)
             return false;
         if (fromMenu)
-            Game.CallBuiltin("audio_play_sound", Gm.AssetGetIndex("snd_ui_menu_start_game_st"), 4, 0);
+            Gm.AudioPlaySound(Sound.snd_ui_menu_start_game_st, 4);
         using GmArray events = GmArray.From(fromMenu ? new GmValue[] { 2 } : new GmValue[] { 14, 2 });
         GmValue changer = Game.CallScript("scr_smoothRoomChange", default, -4, events);
         if (changer.Kind == GmKind.Real && changer.AsReal == -4)

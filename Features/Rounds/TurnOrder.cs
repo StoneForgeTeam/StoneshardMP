@@ -95,32 +95,29 @@ internal sealed class TurnOrder : UIElement
                 double scale = Math.Max(0.55, 1 - 0.22 * ad), alpha = Math.Clamp(1 - 0.35 * ad, 0.25, 1);
                 double w = Math.Round(BoxWidth * scale), h = Math.Round(BoxHeight * scale);
                 double bx = Math.Round(cx + off * Gap - w / 2), by = Math.Round(midY - h / 2);
-                Game.CallBuiltin("draw_set_alpha", alpha);
-                Game.CallScript("scr_hoversDrawBoard", default, bx, by, w, h, 1);
-                Game.CallBuiltin("draw_sprite_ext", Asset("s_point"), 0, bx + 3, by + 3, w - 6, h - 6, 0, Dark, alpha);
+                Draw.Frame(bx, by, w, h, alpha);
+                Draw.Rectangle(bx + 3, by + 3, bx + w - 4, by + h - 4, Dark, alpha);
                 int sprite = i == enemies ? enemyIcon : Head(seats[i].Slot);
-                if (i == enemies && !SpriteExists(sprite))
+                if (i == enemies && !Draw.SpriteExists(sprite))
                     sprite = Asset("s_loot_skull");
-                if (SpriteExists(sprite))
+                if (Draw.SpriteExists(sprite))
                 {
                     // (Fitted into the inset, centred on its drawn box.)
                     double sw = Draw.SpriteWidth(sprite), sh = Draw.SpriteHeight(sprite);
                     double fit = Math.Min((w - 8) / Math.Max(1, sw), (h - 8) / Math.Max(1, sh));
                     if (i != enemies)
                         fit = Math.Min(fit, scale);
-                    double ox = (Game.CallBuiltin("sprite_get_xoffset", sprite).AsReal - sw / 2) * fit;
-                    double oy = (Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal - sh / 2) * fit;
-                    Game.CallBuiltin("draw_sprite_ext", sprite, 0, bx + w / 2 + ox, by + h / 2 + oy, fit, fit, 0, i == current ? Draw.White : Gray, alpha);
+                    var origin = Draw.SpriteOrigin(sprite);
+                    double ox = (origin.X - sw / 2) * fit, oy = (origin.Y - sh / 2) * fit;
+                    Draw.SpriteExt(sprite, 0, bx + w / 2 + ox, by + h / 2 + oy, fit, fit, 0, i == current ? Draw.White : Gray, alpha);
                 }
-                Game.CallBuiltin("draw_set_alpha", 1);
             }
         // A marker over the centre one; whose turn, and why.
-        Game.CallBuiltin("draw_sprite_ext", Asset("s_point"), 0, cx - BoxWidth / 2, top - 3, BoxWidth, 2, 0, titleColour, 1);
+        Draw.Rectangle(cx - BoxWidth / 2, top - 3, cx + BoxWidth / 2 - 1, top - 2, titleColour);
         double ty = top + BoxHeight + 4;
         Text(cx, ty, title, titleColour);
         if (Why() is { Length: > 0 } why)
             Text(cx, ty + 11, why, WhyColour);
-        Game.CallBuiltin("draw_set_colour", Draw.White);
     }
 
     // Why play is turn-based: our own reason first, else the first other player's in the round.
@@ -138,7 +135,7 @@ internal sealed class TurnOrder : UIElement
     private double Top()
     {
         double top = 40;
-        Instance origin = Areas.UnitGrid.InstanceOf(Game.Global["guiBaseContainerVisible"]);
+        Instance origin = Instance.Of(Game.Global["guiBaseContainerVisible"]);
         Instance player = OurPlayer.Instance;
         int states = Asset("c_abstract_states");
         if (origin.IsNone || player.IsNone || states < 0)
@@ -149,10 +146,10 @@ internal sealed class TurnOrder : UIElement
             if (!state.Get("visible").AsBool || !UnitIs(state.Get("target"), player))
                 continue;
             int sprite = state.Get("sprite_index").AsInt;
-            if (!SpriteExists(sprite))
+            if (!Draw.SpriteExists(sprite))
                 continue;
             double y0 = state.Get("y").AsReal - originY;
-            double bottom = y0 - Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal * state.Get("image_yscale").AsReal
+            double bottom = y0 - Draw.SpriteOrigin(sprite).Y * state.Get("image_yscale").AsReal
                 + Draw.SpriteHeight(sprite) * state.Get("image_yscale").AsReal;
             if (y0 < limit && bottom + 8 > top)
                 top = bottom + 8;
@@ -171,14 +168,14 @@ internal sealed class TurnOrder : UIElement
         foreach (Instance unit in Instances.All(GameObjectId.o_enemy))
         {
             if (unit.Get("object_index").AsInt == playerObject || !unit.Get("visible").AsBool
-                || !Game.CallScript("scr_isMobAgred", default, unit).AsBool)
+                || !StoneForge.Player.IsHuntedBy(unit))
                 continue;
             double distance = Math.Sqrt(Math.Pow(unit.Get("x").AsReal - px, 2) + Math.Pow(unit.Get("y").AsReal - py, 2));
             if (distance >= best)
                 continue;
             int avatar = unit.Get("avatar") is { Kind: GmKind.Real } a ? a.AsInt : -1;
-            int sprite = SpriteExists(avatar) ? avatar : unit.Get("sprite_index").AsInt;
-            if (SpriteExists(sprite))
+            int sprite = Draw.SpriteExists(avatar) ? avatar : unit.Get("sprite_index").AsInt;
+            if (Draw.SpriteExists(sprite))
             {
                 best = distance;
                 icon = sprite;
@@ -192,7 +189,7 @@ internal sealed class TurnOrder : UIElement
     {
         string head = "";
         if (slot == _session.Slot)
-            head = Game.CallScript("scr_atr", default, "Head") is { Kind: GmKind.String } h ? h.AsString : "";
+            head = StoneForge.Player.Attribute("Head") is { Kind: GmKind.String } h ? h.AsString : "";
         else
             foreach (var player in _session.Players)
                 if (player.Slot == slot)
@@ -200,13 +197,11 @@ internal sealed class TurnOrder : UIElement
         return head.Length > 0 ? Asset(head + "_normal") : -1;
     }
 
-    private static bool UnitIs(GmValue value, Instance unit) => Areas.UnitGrid.InstanceOf(value) is var other && !other.IsNone
+    private static bool UnitIs(GmValue value, Instance unit) => Instance.Of(value) is var other && !other.IsNone
         && other.Persist().Equals(unit.Persist());
 
-    private static bool SpriteExists(int sprite) => sprite >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool;
-
     private static void Text(double x, double y, string text, int colour)
-        => Game.CallScript("scr_drawText", default, x, y, text, colour, Draw.AlignCenter, Draw.AlignTop, Game.Global["f_dmg"]);
+        => Draw.Text(x, y, text, colour, Draw.AlignCenter, Draw.AlignTop, GameFont.Default);
 
     private int Asset(string name)
     {
