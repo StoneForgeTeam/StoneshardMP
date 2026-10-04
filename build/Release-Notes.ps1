@@ -1,7 +1,9 @@
-# A release's notes: its section of CHANGELOG.md ("## <version>", up to the next "## "), written to -Out.
+# A release's notes: its section of CHANGELOG.md ("## <version>", up to the next "## "), written to -Out - and, with
+# -StoneForge, the StoneForge it needs.
 param(
     [Parameter(Mandatory)][string]$Version,
-    [Parameter(Mandatory)][string]$Out
+    [Parameter(Mandatory)][string]$Out,
+    [string]$StoneForge
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot
@@ -17,4 +19,6 @@ foreach ($line in Get-Content (Join-Path $root "CHANGELOG.md") -Encoding UTF8) {
 }
 if (-not $found) { throw "CHANGELOG.md has no '## $Version' section." }
 New-Item -ItemType Directory -Force (Split-Path $Out) | Out-Null
-[IO.File]::WriteAllText($Out, ($notes -join "`n").Trim() + "`n", (New-Object System.Text.UTF8Encoding $false))
+$text = ($notes -join "`n").Trim()
+if ($StoneForge) { $text += "`n`nNeeds StoneForge $StoneForge or newer." }
+[IO.File]::WriteAllText($Out, $text + "`n", (New-Object System.Text.UTF8Encoding $false))

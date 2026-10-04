@@ -68,8 +68,10 @@ game twice.
   it is now (its head). GitHub's runners have no Stoneshard, so `build\Get-StoneForge.ps1 -Version main` takes
   `StoneForge.API.dll` from StoneForge's rolling `main-latest` pre-release, which its Main build workflow packages
   from its `main` after every push (the script waits until that's been made from `main`'s head).
-- A release builds against the StoneForge release `mod.json` names (`"stoneforge"`), the one players install. Raise
-  `"stoneforge"` when the mod starts using a newer StoneForge's API, once that StoneForge is released.
+- `mod.json`'s `"stoneforge"` stays `"latest"` while the mod's in development: any StoneForge loads it. A release
+  builds against StoneForge's newest release and names that one in the released `mod.json` and notes. If the mod
+  uses StoneForge API that isn't released yet, the release fails and says so: release StoneForge first. (A real
+  version there instead pins it: the release builds against that one.)
 - To package locally: `build\Stamp-Version.ps1 -Version 0.2.0`, then `build\Package.ps1 -Version 0.2.0` (the zip is
   in `artifacts\`).
 

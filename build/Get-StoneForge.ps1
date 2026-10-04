@@ -1,12 +1,15 @@
 # StoneForge.API.dll for building StoneshardMP without Stoneshard installed (CI). StoneForge.API is generated from the
 # game's own data, so it can't be built on GitHub's runners - but every StoneForge release zip carries the one generated
-# for it. Which: -Version, or the release mod.json asks for ("stoneforge"); "main" is StoneForge's main as it is now -
-# its Main build workflow's rolling "main-latest" pre-release (StoneForge-main.zip), waited for (up to -WaitMinutes)
-# until it's been made from main's head, so a StoneForge change pushed just before is in it.
+# for it. Which: -Version, or the release mod.json asks for ("stoneforge"); "latest" (a mod in development) is
+# StoneForge's newest release; "main" is StoneForge's main as it is now - its Main build workflow's rolling
+# "main-latest" pre-release (StoneForge-main.zip), waited for (up to -WaitMinutes) until it's been made from main's
+# head, so a StoneForge change pushed just before is in it.
+# -Resolve: just the version that is ("latest" made the newest release's number), written instead of the folder.
 # Writes the folder holding it (for -p:StoneForgeSdkDir=...); a release is downloaded once into .stoneforge\<version>,
 # main each time. GITHUB_TOKEN, when set, is used for GitHub's API (its limits are far higher with it).
 param(
     [string]$Version,
+    [switch]$Resolve,
     [string]$Destination = (Join-Path (Split-Path $PSScriptRoot) ".stoneforge"),
     [int]$WaitMinutes = 15
 )
@@ -22,6 +25,15 @@ function Get-GitHub([string]$path) {
     $headers = @{ "Accept" = "application/vnd.github+json"; "User-Agent" = "StoneshardMP-build" }
     if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
     Invoke-RestMethod "https://api.github.com/repos/$repo/$path" -Headers $headers
+}
+
+# ("latest": the newest release's number.)
+if ($Version -eq "latest") {
+    $Version = (Get-GitHub "releases/latest").tag_name -replace '^v', ''
+    Write-Host "StoneForge's newest release: $Version"
+}
+if ($Resolve) {
+    return $Version
 }
 
 if ($Version -eq "main") {

@@ -1,9 +1,12 @@
 # Publishes a StoneshardMP release when a version tag (v0.2.0) is pushed:
 #  1. the tag's version written into the mod (build\Stamp-Version.ps1): mod.json's "version", and CHANGELOG.md's
 #     "## Unreleased" section titled with it;
-#  2. built against the StoneForge release mod.json asks for, to check it compiles (build\Get-StoneForge.ps1);
-#  3. packaged (build\Package.ps1): StoneshardMP-<version>.zip, a StoneshardMP folder to put in Stoneshard\mods;
-#  4. released on GitHub, with its CHANGELOG section as the notes (a pre-release for a version like 0.2.0-beta.1);
+#  2. built against the StoneForge release mod.json asks for, to check it compiles (build\Get-StoneForge.ps1) - for
+#     "stoneforge": "latest" (the mod in development), StoneForge's newest release, and the release names that one;
+#  3. packaged (build\Package.ps1): StoneshardMP-<version>.zip, a StoneshardMP folder to put in Stoneshard\mods, its
+#     mod.json naming the StoneForge it was built against;
+#  4. released on GitHub, with its CHANGELOG section as the notes and the StoneForge it needs (a pre-release for a
+#     version like 0.2.0-beta.1);
 #  5. the stamped version committed back to main. When main is still at the tagged commit, the tag is moved onto that
 #     commit, so it holds exactly what was released; when main has moved on, the version's stamped on top of it.
 # (Pushes made with this workflow's token start no other workflows.)
@@ -49,17 +52,35 @@ jobs:
       - name: Stamp the version
         run: ./build/Stamp-Version.ps1 -Version ${{ steps.version.outputs.version }}
 
-      - name: Build against StoneForge
+      # (The StoneForge mod.json names - its newest release, for "latest".)
+      - name: StoneForge to build against
+        id: stoneforge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          $sdk = ./build/Get-StoneForge.ps1
+          $named = (Get-Content mod.json -Raw | ConvertFrom-Json).stoneforge
+          $version = ./build/Get-StoneForge.ps1 -Resolve | Select-Object -Last 1
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "latest=$(if ($named -eq 'latest') { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+
+      - name: Build against StoneForge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $sdk = ./build/Get-StoneForge.ps1 -Version ${{ steps.stoneforge.outputs.version }} | Select-Object -Last 1
           dotnet build StoneshardMP.csproj -c Release "-p:StoneForgeSdkDir=$sdk"
-          if ($LASTEXITCODE -ne 0) { throw "The build failed" }
+          if ($LASTEXITCODE -ne 0) {
+              if ("${{ steps.stoneforge.outputs.latest }}" -eq "true") {
+                  throw "StoneshardMP doesn't build against StoneForge's newest release (${{ steps.stoneforge.outputs.version }}): it needs StoneForge's API that isn't released yet. Release StoneForge first."
+              }
+              throw "The build failed"
+          }
 
       - name: Package
-        run: ./build/Package.ps1 -Version ${{ steps.version.outputs.version }}
+        run: ./build/Package.ps1 -Version ${{ steps.version.outputs.version }} -StoneForge ${{ steps.stoneforge.outputs.version }}
 
       - name: Release notes from CHANGELOG.md
-        run: ./build/Release-Notes.ps1 -Version ${{ steps.version.outputs.version }} -Out artifacts/release-notes.md
+        run: ./build/Release-Notes.ps1 -Version ${{ steps.version.outputs.version }} -Out artifacts/release-notes.md -StoneForge ${{ steps.stoneforge.outputs.version }}
 
       - name: Publish
         uses: softprops/action-gh-release@v2

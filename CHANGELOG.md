@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- `mod.json`'s `"stoneforge"` is `"latest"` while in development: any StoneForge loads it. A release names
+  StoneForge's newest release, which it was built against, in its `mod.json` and notes. It fails if the mod needs
+  StoneForge API that isn't released yet.
 - **The game's code comes through StoneForge's API now, not the mod's own calls into it.** About 80 distinct direct calls
   to the game's scripts and functions were replaced by StoneForge's `Units`, `UnitEffects`, `Player`, `Combat`,
   `Factions`, `Draw`, `Blackout`, `GameDialogs`, `Journal`, `Contracts`, `Doors`, `Turns`, `Steam`, `SaveData`,
