@@ -36,6 +36,8 @@ public sealed class Session : INetEventListener
     private readonly Dictionary<Type, Action<RemotePlayer, IPacket>> _handlers = new();
     private string _name = "";
     private int _limit = MaxPlayers;
+    // Host: clients we've kicked, till their connection's gone (to say so).
+    private readonly HashSet<int> _kicked = new();
 
     public Session(string version, Action<string> log)
     {
@@ -91,6 +93,19 @@ public sealed class Session : INetEventListener
         _net.Connect(address, port, hello);
     }
 
+    /// <summary>Host: removes a client from the game - their connection closed, with why (they're told it: "The host
+    /// removed you from the game"); the others are told they've left. False if there's no such client.</summary>
+    public bool Kick(int slot)
+    {
+        if (Mode != SessionMode.Host || !_peers.TryGetValue(slot, out var peer))
+            return false;
+        _kicked.Add(slot);
+        var reason = new NetDataWriter();
+        reason.Put(PacketCodec.Encode(new RejectedPacket("The host removed you from the game")));
+        peer.Disconnect(reason);
+        return true;
+    }
+
     // Out of the session (status: why, if there's anything to say).
     public void Stop(string why)
     {
@@ -105,6 +120,7 @@ public sealed class Session : INetEventListener
         var gone = _players.Values.ToList();
         _players.Clear();
         _peers.Clear();
+        _kicked.Clear();
         Mode = SessionMode.Idle;
         Slot = -1;
         foreach (var player in gone)
@@ -229,7 +245,7 @@ public sealed class Session : INetEventListener
                 return;
             Send(new LeftPacket((byte)slot));
             PlayerLeft?.Invoke(player);
-            SetStatus($"{player.Name} left ({_players.Count + 1}/{_limit} players)");
+            SetStatus($"{player.Name} {(_kicked.Remove(slot) ? "was removed" : "left")} ({_players.Count + 1}/{_limit} players)");
             return;
         }
         if (Mode != SessionMode.Client)
@@ -238,6 +254,8 @@ public sealed class Session : INetEventListener
         {
             DisconnectReason.ConnectionRejected when info.AdditionalData.AvailableBytes > 0 => ((RejectedPacket)PacketCodec.Decode(info.AdditionalData.GetRemainingBytes(), out _, out _)).Reason,
             DisconnectReason.ConnectionRejected => "The host turned us away",
+            // (Closed with why: kicked.)
+            DisconnectReason.RemoteConnectionClose when info.AdditionalData.AvailableBytes > 0 => ((RejectedPacket)PacketCodec.Decode(info.AdditionalData.GetRemainingBytes(), out _, out _)).Reason,
             DisconnectReason.ConnectionFailed => "No host answered",
             DisconnectReason.Timeout => "Lost the connection to the host",
             DisconnectReason.RemoteConnectionClose => "The host closed the game",

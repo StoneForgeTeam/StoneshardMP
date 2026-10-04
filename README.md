@@ -17,8 +17,7 @@ CHANGELOG.md for what works so far.
 
 ## Playing
 
-- **Multiplayer** (on the main menu, after Play) opens the Multiplayer screen: **Host Game**, **Join Game**,
-  **Players & Settings**, **Back**.
+- **Multiplayer** (on the main menu, after Play) opens the Multiplayer screen: **Host Game**, **Join Game**, **Back**.
 - **Host Game** listens on the port (UDP 7777 by default) and shows the game's Continue / New Game / Load Game, to
   start playing, and **Stop Hosting**. To be reached over the internet, the host forwards that port on their router.
 - **Join Game** asks for the host's address. Once in, you join the host's world when the host is in it (Continue,
@@ -33,8 +32,10 @@ CHANGELOG.md for what works so far.
   and a quest item counts as long as anyone has it.
 - **Contracts:** the host's contracts are everyone's: taken, progressed and handed in for all, with deadlines on the
   host's clock.
-- **Players & Settings** lists who's in the game and has your name, the join address and name tags. The port and
-  player limit are on StoneshardMP's page in the Mods window.
+- **Players:** while you're hosting or in a game, the left of the main menu lists who's in it, with the host marked and
+  each player's ping. The host can remove a player with **Kick**, then **Sure?**.
+- **Settings** (your name, the join address, name tags, party frames, the port and player limit) are on StoneshardMP's
+  page in the Mods window.
 
 To test with two games on one PC, add `steam_appid.txt` (containing `625960`) to the game folder, then start the
 game twice.

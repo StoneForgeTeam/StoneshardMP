@@ -7,11 +7,12 @@ namespace StoneshardMP.Features.Menu;
 
 // The Multiplayer screens of the main menu, made of its own buttons (StoneForge's MainMenu), as the game's Play screen
 // is - one for each state of the session, switched as it changes (the host leaving, a connection lost...):
-// - Multiplayer (after Play): Host Game, Join Game (its dialog: JoinDialog), Players & Settings (MultiplayerWindow), Back.
+// - Multiplayer (after Play): Host Game, Join Game (its dialog: JoinDialog), Back.
 // - Hosting: the game's Continue and Load Game, New Game (straight into the Adventure), and Stop Hosting.
-// - Joined: Players & Settings and Leave Game only - a client plays the host's world, launched into it (or into making
-//   a character for it) when the host is in it (JoinManager).
-// The session's status shows under the menu meanwhile.
+// - Joined: Leave Game only - a client plays the host's world, launched into it (or into making a character for it)
+//   when the host is in it (JoinManager).
+// The session's status shows under the menu meanwhile, and who's in the game at its left (PlayersPanel - the host
+// can kick from it). The multiplayer settings are on StoneshardMP's page in the Mods window.
 public sealed class MultiplayerMenu
 {
     private enum Screen { None, Multiplayer, Hosting, Joined }
@@ -21,13 +22,13 @@ public sealed class MultiplayerMenu
     private readonly MpSettings _settings;
     private readonly Func<string> _playerName;
     private readonly JoinDialog _join;
-    private readonly MultiplayerWindow _window;
+    private readonly PlayersPanel _players;
     private readonly UILabel _status;
     private readonly Func<string?> _joinStatus;
     private Screen _shown;
 
     public MultiplayerMenu(ModContext context, Session session, MpSettings settings, Func<string> playerName,
-        JoinDialog join, MultiplayerWindow window, Func<string?> joinStatus)
+        JoinDialog join, Func<string?> joinStatus)
     {
         _joinStatus = joinStatus;
         _context = context;
@@ -35,7 +36,7 @@ public sealed class MultiplayerMenu
         _settings = settings;
         _playerName = playerName;
         _join = join;
-        _window = window;
+        _players = context.UI.MainMenu.Add(new PlayersPanel(session, settings, playerName));
         // (Under the menu: the session's status, while the Multiplayer screens show or a session's on.)
         _status = context.UI.MainMenu.Add(new UILabel("", 0, 14) { Anchor = UIAnchor.Bottom, Width = 400, Align = Draw.AlignCenter, Visible = false });
         MainMenu.AddAfter(context, VanillaButton.Play, "Multiplayer", () => Show(ScreenFor(_session.Mode)));
@@ -48,6 +49,7 @@ public sealed class MultiplayerMenu
         _status.Visible = _shown != Screen.None || _session.Mode != Session.SessionMode.Idle;
         _status.Text = (_session.Mode == Session.SessionMode.Client ? _joinStatus() : null) ?? _session.Status;
         _status.Colour = _session.Connected ? Draw.Rgb(120, 200, 120) : Draw.Muted;
+        _players.Visible = _session.Connected;
     }
 
     // The session changed: the screen showing follows it (hosting started or stopped, joined, dropped).
@@ -81,7 +83,6 @@ public sealed class MultiplayerMenu
             case Screen.Multiplayer:
                 MainMenu.AddButton(_context, "Host Game", Host);
                 MainMenu.AddButton(_context, "Join Game", _join.Open);
-                MainMenu.AddButton(_context, "Players & Settings", _window.Open);
                 MainMenu.AddButton(_context, "Back", Close);
                 break;
             case Screen.Hosting:
@@ -90,11 +91,9 @@ public sealed class MultiplayerMenu
                 // players waiting make their characters alongside: JoinManager.)
                 MainMenu.AddButton(_context, "New Game", JoinSave.StartNew);
                 MainMenu.AddButton(_context, VanillaButton.LoadGame);
-                MainMenu.AddButton(_context, "Players & Settings", _window.Open);
                 MainMenu.AddButton(_context, "Stop Hosting", () => _session.Stop("Stopped hosting"));
                 break;
             case Screen.Joined:
-                MainMenu.AddButton(_context, "Players & Settings", _window.Open);
                 MainMenu.AddButton(_context, "Leave Game", () => _session.Stop("Left the game"));
                 break;
         }

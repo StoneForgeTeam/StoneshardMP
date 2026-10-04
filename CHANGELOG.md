@@ -3,6 +3,18 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Who's in the game is on the main menu.** While you're hosting or in a game, the middle of its left edge lists everyone: you first,
+  then the others, with the host marked and each player's ping. Alone as the host, it says players can join on the UDP
+  port.
+- **The host can kick a player** from that list: **Kick**, then **Sure?** within 3 seconds. The player's game closes
+  the connection with "The host removed you from the game", the others see them leave, and the host's status says they
+  were removed. (They can join again.)
+- **No more Players & Settings window.** Its settings duplicated StoneshardMP's page in the Mods window, where they all
+  are (name, join address, name tags, party frames, port, player limit), and its player list is the panel above. The
+  Multiplayer screens lose the button.
+
 ## 0.1.0
 
 The first release of StoneshardMP on StoneForge: co-op for Stoneshard, the host and up to 7 other players in one world,

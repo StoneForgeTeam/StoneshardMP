@@ -65,23 +65,23 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         context.UI.Hud.Add(new TurnOrder(_rounds, _session, () => _players.ObjectIndex));
         _clock = new WorldClock(context, _session, () => _join.InSharedWorld, _ => _rounds.Active);
         _dump = new DebugDump(context, _session, _areaUnits);
-        // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile) and the
-        // Players & Settings window.
-        var window = context.UI.MainMenu.Add(new MultiplayerWindow(_session, settings, SteamName));
-        var join = context.UI.MainMenu.Add(new JoinDialog(_session, settings, () => window.PlayerName));
+        // Our name to the others: the setting, or the Steam name.
+        string PlayerName() => settings.Name.Value.Trim() is { Length: > 0 } name ? name : SteamName();
+        // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile, who's in).
+        var join = context.UI.MainMenu.Add(new JoinDialog(_session, settings, PlayerName));
         // The host keeps everyone's save: a client joins the host's world, or makes a character for it.
-        _join = new JoinManager(context, _session, () => window.PlayerName);
+        _join = new JoinManager(context, _session, PlayerName);
         // One world for everyone in it: areas built alike, what's in them shared, the host's weather.
         _world = new WorldSync(context, _session, _join);
         // A multiplayer world's saves are named for who plays in it.
-        new SaveNames(context, _session, () => window.PlayerName);
+        new SaveNames(context, _session, PlayerName);
         // Live ground loot where players are together: the host's is the real one.
         _loot = new LootSync(context, _session, () => _join.InSharedWorld);
         // One story: quest steps, reputation, dialogue and location flags, crime records; quest items held by anyone.
         _quests = new QuestSync(context, _session, _join);
         // One set of contracts: the host's, kept alike, with deadlines on the host's clock.
         _contracts = new ContractSync(context, _session, _join, _quests);
-        _menu = new MultiplayerMenu(context, _session, settings, () => window.PlayerName, join, window, () => _join.Status);
+        _menu = new MultiplayerMenu(context, _session, settings, PlayerName, join, () => _join.Status);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
 
