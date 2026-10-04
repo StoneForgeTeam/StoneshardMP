@@ -43,11 +43,11 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _session = new Session(context.Manifest.Version, context.Log);
         _players = new PlayerManager(context, _session, () => settings.ShowNames.Value, () => _join.InSharedWorld);
         _effects = new EffectManager(context, _session);
-        _areaUnits = new AreaUnits(_session);
+        _areaUnits = new AreaUnits(_session, () => _players.ObjectIndex);
         // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
         // streamed back by AreaUnits), the host's own turn the clients' clocks.
         _clock = new WorldClock(_session, () => _join.InSharedWorld);
-        _dump = new DebugDump(context, _session);
+        _dump = new DebugDump(context, _session, _areaUnits);
         // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile) and the
         // Players & Settings window.
         var window = context.UI.MainMenu.Add(new MultiplayerWindow(_session, settings, SteamName));

@@ -19,9 +19,6 @@
       <HintPath>$(StoneForgeSdkDir)\StoneForge.API.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- Its GML functions (GML folder) as C#: the generator makes StoneshardMP.Gml from them, as the game does. -->
-    <Analyzer Include="$(StoneForgeSdkDir)\StoneForge.GmlGenerator.dll" />
-    <AdditionalFiles Include="GML\**\*.gml" />
     <Reference Include="LiteNetLib">
       <HintPath>lib\LiteNetLib.dll</HintPath>
       <Private>false</Private>

@@ -2,24 +2,30 @@ using System;
 using System.IO;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Debug;
 
-// Diagnostics: Ctrl+Shift+D writes what's around the player (MpDebugNearby) with this game's role, place and clock to
+// Diagnostics: Ctrl+Shift+D writes what's around the player (Nearby) with this game's role, place and clock to
 // %LOCALAPPDATA%\StoneShard\stoneshardmp-dump-<role>-<process>.txt - one file per game, so two games on one PC can be
 // compared side by side.
 public sealed class DebugDump
 {
+    // (Every instance within this many cells of the player.)
+    private const int Radius = 12;
+
     private readonly ModContext _context;
     private readonly Session _session;
+    private readonly AreaUnits _areaUnits;
 
-    public DebugDump(ModContext context, Session session)
+    public DebugDump(ModContext context, Session session, AreaUnits areaUnits)
     {
         _context = context;
         _session = session;
+        _areaUnits = areaUnits;
     }
 
     public void Tick()
@@ -35,13 +41,15 @@ public sealed class DebugDump
                 _ => "solo",
             };
             var state = OurPlayer.State();
-            var lines = Gml.MpDebugNearby(12).Split('\n', StringSplitOptions.RemoveEmptyEntries).OrderBy(l => l, StringComparer.Ordinal);
+            var items = GroundItems.All();
             string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StoneShard");
             Directory.CreateDirectory(folder);
             string file = Path.Combine(folder, $"stoneshardmp-dump-{role}-{Environment.ProcessId}.txt");
-            File.WriteAllText(file, $"{DateTime.Now:HH:mm:ss} {role} place={state?.Place} cell={state?.CellX},{state?.CellY} clock={GameClock.Snapshot()}\n"
-                + CullingCheck() + "\n" + string.Join("\n", lines) + "\n");
+            File.WriteAllText(file, $"{DateTime.Now:HH:mm:ss} {role} place={state?.Place} cell={state?.CellX},{state?.CellY} clock={GameClock.Snapshot()}"
+                + $" busy={Game.IsBusy}\n{Input()}\nground items: {items.Count} ({items.Count(i => i.Instance.IsCulled)} off screen)\n"
+                + string.Join("\n", Nearby().OrderBy(line => line, StringComparer.Ordinal)) + "\n");
             _context.Log("Dump written: " + file);
+            DecodeCheck(folder);
         }
         catch (Exception e)
         {
@@ -49,28 +57,93 @@ public sealed class DebugDump
         }
     }
 
-    // StoneForge's off-screen instances against the GML they're to replace: the room's ground loot by
-    // Instances.All(o_loot, includeCulled) - culled ones read through their pointer - and by MpLootAll (which also
-    // leaves out loot in flight and persistent loot). Every MpLootAll id should be in StoneForge's list.
-    private static string CullingCheck()
+    // Every instance within Radius cells of the player - object, cell, sprite and frame, visible, depth, and for units
+    // their state and animation flags, and whether they're the host's (AreaUnits) - one line each.
+    private string[] Nearby()
     {
-        try
+        if (OurPlayer.Instance is not { IsNone: false } player)
+            return Array.Empty<string>();
+        double px = player.Get("x").AsReal, py = player.Get("y").AsReal;
+        int unit = Gm.AssetGetIndex("o_unit");
+        // (-3: GameMaker's all.)
+        return Instances.All(-3).Select(instance =>
         {
-            var all = Instances.All(GameObjectId.o_loot, includeCulled: true);
-            var ids = all.Select(i => i.Get("id").AsInstance).ToHashSet();
-            int culled = all.Count(i => i.IsCulled);
-            int readable = all.Count(i => i.IsCulled && i.Get("object_index").AsInt > 0);
-            var gml = Gml.MpLootAll().AsArray;
-            int gmlCount = gml?.Length ?? -1;
-            int missing = 0;
-            for (int i = 0; i < gmlCount; i++)
-                if (!ids.Contains(gml![i].AsInstance))
-                    missing++;
-            return $"culling check: StoneForge {all.Count} loot ({culled} culled, {readable} of them read) | GML {gmlCount} | GML ids missing from StoneForge's: {missing}";
-        }
-        catch (Exception e)
-        {
-            return "culling check failed: " + e;
-        }
+            double x = instance.Get("x").AsReal, y = instance.Get("y").AsReal;
+            if (Math.Sqrt(Math.Pow(x - px, 2) + Math.Pow(y - py, 2)) > Radius * UnitGrid.Cell)
+                return null;
+            int obj = instance.Get("object_index").AsInt;
+            string line = $"{Gm.ObjectGetName(obj)} @{(int)(x / UnitGrid.Cell)},{(int)(y / UnitGrid.Cell)} spr={SpriteName(instance.Get("sprite_index"))}"
+                + $"#{Math.Floor(instance.Get("image_index").AsReal)} vis={instance.Get("visible").AsBool} depth={instance.Get("depth")}";
+            if (Gm.ObjectIsAncestor(obj, unit))
+                line += $" state={Text(instance.Get("state"))} is_life={Text(instance.Get("is_life"))} spr_render={SpriteName(instance.Get("spr"))}"
+                    + $" ai={Text(instance.Get("ai_is_on"))} hosts={_areaUnits.IsHosts(instance)}";
+            return line;
+        }).OfType<string>().ToArray();
     }
+
+    // A host's world that didn't read here (JoinManager kept it): the game's json_decode tried on it whole, without
+    // System.Text.Json's escaping, and section by section - which part the game can't read, to the log.
+    private void DecodeCheck(string folder)
+    {
+        string file = Path.Combine(folder, "stoneshardmp-unreadable-world.json");
+        if (!File.Exists(file))
+            return;
+        string json = File.ReadAllText(file);
+        string Try(string text)
+        {
+            GmValue made = Game.CallBuiltin("json_decode", text);
+            if (made.AsDsMap is { } map)
+            {
+                int count = map.Count;
+                map.Destroy();
+                return $"a map of {count}";
+            }
+            return $"not a map ({made.Kind} {made})";
+        }
+        _context.Log($"Decode check of the kept world ({json.Length} characters): whole - {Try(json)}");
+        if (System.Text.Json.Nodes.JsonNode.Parse(json) is not System.Text.Json.Nodes.JsonObject world)
+            return;
+        var relaxed = new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+        _context.Log($"Decode check: unescaped - {Try(world.ToJsonString(relaxed))}");
+        foreach (var (name, section) in world)
+            _context.Log($"Decode check: {name} - {Try(new System.Text.Json.Nodes.JsonObject { [name] = section?.DeepClone() }.ToJsonString())}");
+    }
+
+    // What decides whether the player can act and the game shows its cursor and path: scr_is_cutscene's three
+    // conditions (the cutscene controller, the UI hidden, the screen faded), a room change, a dialogue, the player's own
+    // locks, and the world clock's input phase.
+    private static string Input()
+    {
+        string Of(GameObjectId obj, string variable)
+        {
+            var all = Instances.All(obj);
+            return all.Count == 0 ? "none" : string.Join(",", all.Select(i => $"{variable}={Text(i.Get(variable))}"));
+        }
+        Instance player = OurPlayer.Instance;
+        return $"input: cutscene={Game.IsCutscene} cutscene_controller[{Of(GameObjectId.o_cutscene_controller, "cutscene_on")}]"
+            + $" gui_no_click[{Of(GameObjectId.o_gui_no_click, "show_ui")}] black_overlay={Instances.All(GameObjectId.o_black_overlay).Count}"
+            + $" room_changer={Rooms.IsChanging} dialogue={Gm.InstanceExists(GameObjectId.o_dialogue)}"
+            + $" lock_movement={Text(player.Get("lock_movement"))} is_moving={Text(player.Get("is_moving"))}"
+            + $" alarm1={player.Alarm[1]} alarm4={player.Alarm[4]} input_phase={Text(Game.Global["mp_world_input_phase"])}"
+            // (StoneForge's hold on the game's input: its typing flag - hotkeys and key-bound clicks off - and the
+            // invisible blocker it puts over mod UI under the mouse.)
+            + $" stonemod_typing={Text(Game.Global["stonemod_typing"])} blocker[{Blocker()}]"
+            + $" mouse_gui={Text(Game.Global["guiMouseX"])},{Text(Game.Global["guiMouseY"])}";
+    }
+
+    private static string Blocker()
+    {
+        int obj = Gm.AssetGetIndex("o_stonemod_blocker");
+        if (obj < 0)
+            return "no object";
+        var all = Instances.All(obj);
+        return all.Count == 0 ? "none" : string.Join(",", all.Select(b =>
+            $"{Text(b.Get("x"))},{Text(b.Get("y"))} x{Text(b.Get("image_xscale"))} y{Text(b.Get("image_yscale"))}"));
+    }
+
+    private static string Text(GmValue value) => value.IsUndefined ? "-" : value.AsString;
+
+    private static string SpriteName(GmValue sprite)
+        => sprite.Kind == GmKind.Real && sprite.AsInt >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool
+            ? Game.CallBuiltin("sprite_get_name", sprite).AsString : "-";
 }

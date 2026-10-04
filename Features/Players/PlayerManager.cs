@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using LiteNetLib;
 using StoneshardMP.Net.Packets;
 using StoneForge;
+using StoneshardMP.Features.Areas;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Players;
@@ -19,7 +19,8 @@ public sealed class PlayerManager
     {
         public required RemotePlayer Player;
         public Instance Unit;
-        public int[] Sprites = { -4, -4, -4, -4, -4 };
+        // (Built from their look: CharacterLook.)
+        public CharacterSprites? Sprites;
         public int BuiltVersion = -1;
         public float VisX, VisY;
         public bool Placed;
@@ -68,6 +69,9 @@ public sealed class PlayerManager
         session.PlayerJoined += _ => { _sentLook = ""; _sentProfile = ""; };
         session.PlayerLeft += player => Forget(player.Slot);
     }
+
+    /// <summary>The object other players' units are (o_stoneshardmp__player; -1 before the game has it).</summary>
+    public int ObjectIndex => _object.Index;
 
     // Every frame (the mod's Tick).
     public void Tick()
@@ -166,7 +170,7 @@ public sealed class PlayerManager
         }
         // Keep the real unit in the occupancy grids too. That lets the game recognize a player as a character,
         // while Draw deliberately uses the remote player's smoother visual position instead.
-        Gml.MpPlayerUnitMove(self, state.CellX, state.CellY);
+        UnitGrid.Move(self, state.CellX, state.CellY);
         self["name"] = view.Player.Name;
         self["type"] = "Player";
         self["desc"] = "Another player.";
@@ -190,26 +194,25 @@ public sealed class PlayerManager
         if (ViewOf(self) is not { } view || view.BuiltVersion == view.Player.LookVersion || view.Player.Look.Length == 0)
             return;
         view.BuiltVersion = view.Player.LookVersion;
-        var s = view.Sprites;
-        string built = OurPlayer.Build(view.Player.Look, s);
-        var parts = built.Split(',');
-        if (parts.Length != 5)
+        // (By the game's own compositor, as our player's are; the old ones go once the new ones are made.)
+        if (CharacterLook.FromJson(view.Player.Look)?.Build() is not { } built)
         {
             _context.Log($"Couldn't build {view.Player.Name}'s look");
             return;
         }
-        for (int i = 0; i < 5; i++)
-            s[i] = int.TryParse(parts[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out int sprite) ? sprite : -4;
+        view.Sprites?.Dispose();
+        view.Sprites = built;
     }
 
     // A player's Draw: their shadow, their look, a name tag.
     internal void Draw(Instance self)
     {
-        if (ViewOf(self) is not { Player.State: { } state } view || !state.Visible)
+        if (ViewOf(self) is not { Player.State: { } state, Sprites: { IsDisposed: false } sprites } view || !state.Visible)
             return;
-        int sprite = view.Sprites[Math.Clamp((int)state.Row, 0, 4)];
+        // (The row their game draws them from: o_player's pick of its five.)
+        int sprite = sprites.All[Math.Clamp((int)state.Row, 0, sprites.All.Count - 1)];
         if (!SpriteExists(sprite))
-            sprite = view.Sprites[0];
+            sprite = sprites.Normal;
         if (!SpriteExists(sprite))
             return;
         if (state.ShadowAlpha > 0 && SpriteExists(state.ShadowSprite))
@@ -263,9 +266,7 @@ public sealed class PlayerManager
             return;
         if (!view.Unit.IsNone && view.Unit.Exists)
             Game.CallBuiltin("instance_destroy", view.Unit);
-        foreach (int sprite in view.Sprites)
-            if (SpriteExists(sprite))
-                Game.CallBuiltin("sprite_delete", sprite);
+        view.Sprites?.Dispose();
     }
 
     private View? ViewOf(Instance self)

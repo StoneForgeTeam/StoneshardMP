@@ -1,5 +1,61 @@
 # StoneshardMP changes
 
+## 0.19.4
+
+- Fix: a client couldn't join a world where a dungeon's name has an apostrophe ("Bernarhof's Cenotaph"): the host's
+  world arrived "damaged". The world sent to a client is written with its text as it is. System.Text.Json's default
+  escaping (`'` for ', `<` for <...) made the game's json_decode give up on the world map's section, so the
+  client stayed in its own copy of the map, waiting.
+
+## 0.19.3
+
+- With a kept unreadable world (0.19.2), the debug dump also tries the game's json_decode on it: whole, without
+  System.Text.Json's escaping, and section by section, to the log.
+
+## 0.19.2
+
+- The debug dump's input line also shows StoneForge's hold on the game's input: its typing flag (hotkeys and key-bound
+  clicks held off) and where its invisible mouse blocker is.
+- A host's world that arrives unreadable is kept (`%LOCALAPPDATA%\StoneShard\stoneshardmp-unreadable-world.json`), and
+  the log says why it didn't read.
+
+## 0.19.1
+
+- The debug dump (Ctrl+Shift+D) has an input line: what decides whether the player can act and the game shows its cell
+  cursor and path. That's scr_is_cutscene's conditions (the cutscene controller, the UI hidden, the screen faded), a room
+  change, a dialogue, the player's locks and turn alarms, and the world clock's input phase.
+
+## 0.19.0
+
+Protocol 20. No GML left: everything the mod did through its own GML or hand-rolled helpers now uses StoneForge's API.
+Needs StoneForge 0.4.0 and its CharacterLook.
+- **Ground loot** (`Features/Loot/LootSync.cs`): the 19 GML loot functions are C#, using `GroundItems`. That covers
+  culled items, an item's saved state, and making one from it, and a throw's flight replayed. The loot tables (sync ids,
+  bindings, drop tokens, marks) are C# dictionaries instead of GML globals. Matching the owner's loot against a
+  follower's goes through the ground once per snapshot or diff, not once per item.
+- **Area units** (`Features/Areas/AreaUnits.cs`): the roster snapshot and its apply are C#. Moving a unit through the
+  game's grids, and removing one quietly, are in `UnitGrid` (also used for other players' units). The host's units go
+  by sync ids of their own on the wire, and the bindings start over in a new place.
+- **Other players' looks**: `CharacterLook` reads ours and builds theirs with the game's compositor (it replaces
+  `OurPlayer.Look` / `Build`). The look's JSON is StoneForge's, hence the new protocol.
+- **Where we are**: `WorldMap.Place`, the same string as before.
+- **The shared world** (`SharedWorld`): tiles through `WorldMap`, locations through `Locations` (export, store, the
+  copy list), the save data through `SaveData`.
+  - Seeds are drawn with `Game.WithSeed`: tile seeds have the same values as before. A dungeon's floor seed and special
+    floors are rolled under it too. Before, the special floors put the generator back to the floor seed's start,
+    replaying its numbers. A dungeon's lists now go whole as JSON.
+- **Joining** (`JoinSave`): `SaveData` (the character's sections, the players' characters as a mod map), `Game.IsBusy`
+  for the calm moment, and `Rooms` for a new character and for going back to the menu.
+- **Save names** (`SaveNames`): `SaveSlots.OnInfoSaving` and `SaveSlots.SetTitle`. StoneForge hooks scr_slotMapSave
+  itself.
+- **The clock** (`GameClock`): `Time` - a small gap passes with `Time.Advance` (as the player), then the clock is set to
+  the host's exactly. The turn check uses `Game.IsCutscene`.
+- **Contracts** (`ContractData`): `DsList` / `DsMap`, and a contract is copied in place with `DsMap.AssignFrom`, at any
+  depth. Before, a nested map was copied shallowly, and a slot that changed kind kept its old mark.
+- The debug dump lists what's around in C#, and counts the ground items (off screen too) in place of the old culling
+  check.
+- Gone: `GameData.cs` (the Ds, InGame and GmJson helpers) and the `GML` folder.
+
 ## 0.18.3
 
 - Needs StoneForge 0.3.0 (off-screen instances, and hooks on undeclared scripts refused at load).

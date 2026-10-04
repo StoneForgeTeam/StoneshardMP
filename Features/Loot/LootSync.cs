@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using StoneForge;
+using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
@@ -15,34 +16,43 @@ namespace StoneshardMP.Features.Loot;
 // Live ground loot where players are together (legacy StoneshardMP's loot sync). The host owns a place it shares
 // with clients - its loot is the real one - and they follow:
 // - The owner sends a snapshot of all its loot when a follower arrives (or asks), then every few frames what changed:
-//   new loot once it has landed, loot that left (picked up by anyone).
+//   new loot at once (in the air or not), loot that left (picked up by anyone).
 // - A follower takes it: twins from the same save are bound, the rest made from the owner's data, anything else
 //   removed. Its own pickups go to the owner, which removes them too. Its own drops go to the owner, which makes
 //   them; they come back in its changes, and the follower's own copy becomes the one synced item. Its own drops are
 //   what it drops by itself, the ammo its arrows leave by their target, and the items it throws.
 // - Throws are shared: loot goes out the moment it appears, with its throw if it's in the air, and the other game flies
-//   its copy along the same arc to the same tile (MpLootFlight / MpLootFly).
+//   its copy along the same arc to the same tile (GroundItem.Flight / Fly).
+// Ground items come from StoneForge's GroundItems, off-screen (culled) ones too; the tables are by instance id.
 // Loot sync shares no state with a place nobody else is in: there, WorldSync shares it as the location's save.
 public sealed class LootSync
 {
     // (Every this many frames - often, so a throw is caught early in its arc; a follower asks again for a snapshot
     // after this many checks without one; the first milliseconds after one, loot still turning up is the area loading;
     // a drop window after the "dropped" line; a follower's drop the owner hasn't brought back by then is removed; at
-    // most this many of a follower's drops a second - against a runaway loop.)
+    // most this many of a follower's drops a second - against a runaway loop; loot this close to where we dropped it
+    // is ours.)
     private const int Interval = 4;
     private const int SnapshotWait = 15;
     private const long SettleMs = 3000;
     private const long DropWindowMs = 1500;
-    private const int DropPendingMs = 5000;
+    private const long DropPendingMs = 5000;
     private const int DropsPerSecond = 10;
+    private const double DropReach = 80;
+
+    // A follower's flags on loot: came from the other game (never a drop of ours), a drop or not is decided, it is our
+    // drop, sent to the owner and waiting for its copy.
+    [Flags]
+    private enum Mark { FromOwner = 1, Decided = 2, OurDrop = 4, Sent = 8 }
 
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly Func<bool> _inSharedWorld;
+    private readonly Random _random = new();
     private int _frame;
     private long _dropUntil;
-    // Where our arrows just dropped their ammo ("x,y"), and until when that counts as our drop.
-    private readonly List<(string Spot, long Until)> _shots = new();
+    // Where our arrows just dropped their ammo, and until when that counts as our drop.
+    private readonly List<(double X, double Y, long Until)> _shots = new();
     // Our place, and our role there.
     private string? _place;
     private bool _owning, _following;
@@ -56,6 +66,21 @@ public sealed class LootSync
     private long _syncedAt;
     private int _waiting;
 
+    // Owner: our loot -> its sync id (what it goes by on the wire); sync id -> our loot, as last sent; our loot -> the
+    // drop token of the follower it came from.
+    private readonly Dictionary<Instance, long> _uidOf = new();
+    private readonly Dictionary<long, Instance> _known = new();
+    private readonly Dictionary<Instance, string> _tokenOf = new();
+    private long _nextUid;
+    // Follower: our loot -> the owner's sync id, and back; our drops sent to the owner (token -> our loot) and when;
+    // our marks on loot.
+    private readonly Dictionary<Instance, long> _hidOf = new();
+    private readonly Dictionary<long, Instance> _map = new();
+    private readonly Dictionary<string, Instance> _pending = new();
+    private readonly Dictionary<Instance, long> _sentAt = new();
+    private readonly Dictionary<Instance, Mark> _marks = new();
+    private long _nextToken;
+
     public LootSync(ModContext context, Session session, Func<bool> inSharedWorld)
     {
         _context = context;
@@ -68,12 +93,12 @@ public sealed class LootSync
                 _dropUntil = Environment.TickCount64 + DropWindowMs;
             return false;
         });
-        // One of our arrows landing: it drops its ammo by its target, far from us - our drop all the same.
+        // One of our arrows landing (o_arrow's user event 1 drops its ammo by its target with scr_loot_drop): far from
+        // us - our drop all the same.
         context.OnCode("gml_Object_o_arrow_Other_11", before: (self, _) =>
         {
-            string spot = Gml.MpLootShotSpot(self);
-            if (spot.Length > 0)
-                _shots.Add((spot, Environment.TickCount64 + DropWindowMs));
+            if (self.Exists && IsPlayer(self.Get("owner")))
+                _shots.Add((self.Get("target_x").AsReal, self.Get("target_y").AsReal, Environment.TickCount64 + DropWindowMs));
             return false;
         });
     }
@@ -84,6 +109,20 @@ public sealed class LootSync
         _owning = _following = false;
         _followers.Clear();
         _synced = false;
+        Reset();
+    }
+
+    // The loot tables start over (a new area, or a new role in it).
+    private void Reset()
+    {
+        _uidOf.Clear();
+        _known.Clear();
+        _tokenOf.Clear();
+        _hidOf.Clear();
+        _map.Clear();
+        _pending.Clear();
+        _sentAt.Clear();
+        _marks.Clear();
     }
 
     // Each frame.
@@ -92,7 +131,7 @@ public sealed class LootSync
         if (++_frame % Interval != 0)
             return;
         string? place = null;
-        if (_session.Connected && Gm.InGame && _inSharedWorld() && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger))
+        if (_session.Connected && Gm.InGame && _inSharedWorld() && !Rooms.IsChanging)
             place = OurPlayer.State()?.Place;
         // Who's here with us: the host owns, clients in its place follow.
         var here = place == null ? new List<RemotePlayer>() : _session.Players.Where(p => p.State?.Place == place).ToList();
@@ -108,14 +147,81 @@ public sealed class LootSync
             _synced = false;
             _waiting = 0;
             _snapshotOwed = true;
-            if (place != null)
-                Gml.MpLootReset();
+            Reset();
         }
         if (_owning)
             OwnerTick(here);
         else if (_following)
             FollowerTick();
     }
+
+    // ---- what's on the ground ----
+
+    // Every ground item in the room - off screen too - but not an item in flight (a thrown item waits, hidden, where it
+    // will land, and is loot once it has) nor a persistent one.
+    private static List<GroundItem> All()
+    {
+        var flying = Carried();
+        return GroundItems.All().Where(item => !flying.Contains(item.Instance) && !item.Instance.Get("persistent").AsBool).ToList();
+    }
+
+    // The items in the air in a throw (o_physical_shell carries its item as loot_object).
+    private static HashSet<Instance> Carried()
+    {
+        var carried = new HashSet<Instance>();
+        foreach (Instance shell in Instances.All(GameObjectId.o_physical_shell))
+            if (Carrying(shell) is { IsNone: false } item)
+                carried.Add(item);
+        return carried;
+    }
+
+    // The item a throw carries (none if it carries none that's still there).
+    private static Instance Carrying(Instance shell)
+        => UnitGrid.InstanceOf(shell.Get("loot_object")) is { IsNone: false, Exists: true } item ? item : default;
+
+    // Loot removed from the world, culled or not (Instance.Destroy takes a culled one out of the culling controller's
+    // list first). Never an item in flight: the throw reads it when it lands (removing it first crashed the game).
+    private static void Destroy(Instance item)
+    {
+        if (!Carried().Contains(item))
+            item.Destroy();
+    }
+
+    // Whether loot really left the world (picked up, destroyed) - culled loot is still there.
+    private static bool Gone(Instance item) => item.IsGone;
+
+    // Loot's matching key: what the game hashes it by (scr_locationRoomEntityLootInstanceGetHash) - a weapon's idName or
+    // the object's name, and its floored position - so twins from the same save match.
+    private static string Key(GroundItem item)
+    {
+        string name = item.ObjectName;
+        if (name == "o_weapon_loot" && item.Instance.Get("data").AsDsMap is { } data)
+            name = data.Get("idName", "N/A").AsString;
+        return $"{name}_{Math.Floor(item.X)}_{Math.Floor(item.Y)}";
+    }
+
+    // What's on the ground with its matching key, worked out when first asked.
+    private static Lazy<List<(GroundItem Item, string Key)>> Here() => new(() => All().Select(item => (item, Key(item))).ToList());
+
+    private static JsonNode? Flight(GroundItem item) => item.Flight is { } flight ? JsonNode.Parse(flight.ToJson()) : null;
+
+    // Loot made from its saved state (another game's): where it lay, then put back in the air if it was in a throw.
+    private static GroundItem? Create(string? json, JsonNode? flight)
+    {
+        if (json is not { Length: > 0 } || GroundItems.Create(json) is not { } item)
+            return null;
+        if (flight != null && ItemFlight.FromJson(flight.ToJsonString()) is { } arc)
+            item.Fly(arc);
+        return item;
+    }
+
+    private bool Has(Instance item, Mark mark) => _marks.TryGetValue(item, out Mark marks) && (marks & mark) != 0;
+    private void Set(Instance item, Mark mark) => _marks[item] = _marks.GetValueOrDefault(item) | mark;
+
+    private static bool IsPlayer(GmValue unit) => !unit.IsUndefined && Game.CallScript("is_player", default, unit).AsBool;
+
+
+    // ---- owner ----
 
     private void OwnerTick(List<RemotePlayer> here)
     {
@@ -127,14 +233,87 @@ public sealed class LootSync
         if (_snapshotOwed)
         {
             _snapshotOwed = false;
-            string snapshot = Gml.MpLootOwnerSnapshot();
-            SendToFollowers(LootKind.Snapshot, snapshot);
+            SendToFollowers(LootKind.Snapshot, OwnerSnapshot());
             return;
         }
-        string changes = Gml.MpLootOwnerDiff();
-        if (changes.Length > 0)
+        if (OwnerDiff() is { } changes)
             SendToFollowers(LootKind.Changes, changes);
     }
+
+    // Owner: loot's sync id, given on first use.
+    private long Uid(Instance item)
+    {
+        if (!_uidOf.TryGetValue(item, out long uid))
+            _uidOf[item] = uid = ++_nextUid;
+        return uid;
+    }
+
+    // Owner: one loot item for followers - {u: sync id, k: matching key, j: its saved state, f: its throw if it's in
+    // the air, t: the drop token a follower gave it ("" if none) - so the follower whose drop it is keeps its own
+    // instead of getting a second}.
+    private JsonObject Entry(GroundItem item) => new()
+    {
+        ["u"] = Uid(item.Instance), ["k"] = Key(item), ["j"] = item.ToJson() ?? "", ["f"] = Flight(item),
+        ["t"] = _tokenOf.GetValueOrDefault(item.Instance, ""),
+    };
+
+    // Owner: all our ground loot, for followers starting over - everything in it is now known.
+    private string OwnerSnapshot()
+    {
+        _known.Clear();
+        var all = new JsonArray();
+        foreach (GroundItem item in All())
+        {
+            JsonObject entry = Entry(item);
+            _known[entry["u"]!.GetValue<long>()] = item.Instance;
+            all.Add(entry);
+        }
+        return all.ToJsonString();
+    }
+
+    // Owner, every few frames: what changed since - new loot (drops, kills, a follower's drop we made), at once, in the
+    // air or not; and loot that left (picked up by anyone). {add: [entries], gone: [sync ids]}; null if nothing did.
+    private string? OwnerDiff()
+    {
+        var add = new JsonArray();
+        foreach (GroundItem item in All())
+        {
+            long uid = Uid(item.Instance);
+            if (_known.TryAdd(uid, item.Instance))
+                add.Add(Entry(item));
+        }
+        var gone = new JsonArray();
+        foreach (var (uid, id) in _known.ToList())
+            if (Gone(id))
+            {
+                _known.Remove(uid);
+                gone.Add(uid);
+            }
+        return add.Count == 0 && gone.Count == 0 ? null : new JsonObject { ["add"] = add, ["gone"] = gone }.ToJsonString();
+    }
+
+    // Owner: a follower dropped something - {j: its saved state, f: its throw, t: its token}. Made here and thrown along
+    // the same arc; our next diff adds it, token and all, to every follower - the one whose drop it is then keeps its own
+    // copy as the synced item (FollowerAdd).
+    private void OwnerDrop(string json)
+    {
+        if (!Gm.InstanceExists(GameObjectId.o_player) || JsonNode.Parse(json) is not JsonObject drop)
+            return;
+        if (Create(drop["j"]?.GetValue<string>(), drop["f"]) is { } item)
+            _tokenOf[item.Instance] = drop["t"]?.GetValue<string>() ?? "";
+    }
+
+    // Owner: a follower picked these up (our sync ids) - gone from our world too; our next diff tells every follower.
+    private void OwnerTaken(string json)
+    {
+        if (JsonNode.Parse(json) is not JsonArray uids)
+            return;
+        foreach (JsonNode? uid in uids)
+            if (uid != null && _known.TryGetValue(uid.GetValue<long>(), out Instance id) && !Gone(id))
+                Destroy(id);
+    }
+
+    // ---- follower ----
 
     private void FollowerTick()
     {
@@ -150,17 +329,150 @@ public sealed class LootSync
         }
         long now = Environment.TickCount64;
         _shots.RemoveAll(shot => shot.Until < now);
-        string report = Gml.MpLootFollowerStep(now <= _dropUntil, now - _syncedAt < SettleMs, DropPendingMs,
-            string.Join(";", _shots.Select(shot => shot.Spot)));
-        if (report.Length == 0)
-            return;
-        using var doc = JsonDocument.Parse(report);
-        var taken = doc.RootElement.GetProperty("taken");
-        if (taken.GetArrayLength() > 0)
-            Send(LootKind.Taken, taken.GetRawText(), 0);
-        foreach (var drop in doc.RootElement.GetProperty("drops").EnumerateArray())
-            Send(LootKind.Dropped, drop.GetRawText(), 0);
+        var (taken, drops) = FollowerStep(now <= _dropUntil, now - _syncedAt < SettleMs, now);
+        if (taken.Count > 0)
+            Send(LootKind.Taken, taken.ToJsonString(), 0);
+        foreach (JsonObject drop in drops)
+            Send(LootKind.Dropped, drop.ToJsonString(), 0);
     }
+
+    // Follower: the owner has this loot (an entry). Bound to ours if we have it - our own drop coming back (its token),
+    // or our twin from the same save (same key: among here's, what's on the ground worked out once for a batch of
+    // entries) - else made from its saved state, and flown along the owner's arc if it's in the air.
+    private void FollowerAdd(JsonObject entry, Lazy<List<(GroundItem Item, string Key)>> here)
+    {
+        long uid = entry["u"]!.GetValue<long>();
+        if (_map.TryGetValue(uid, out Instance have) && !Gone(have))
+            return;
+        Instance bound = default;
+        string token = entry["t"]?.GetValue<string>() ?? "";
+        if (token.Length > 0 && _pending.Remove(token, out Instance mine) && !Gone(mine))
+            bound = mine;
+        if (bound.IsNone)
+        {
+            string key = entry["k"]?.GetValue<string>() ?? "";
+            (GroundItem Item, string Key) twin = here.Value.FirstOrDefault(found => found.Key == key && !_hidOf.ContainsKey(found.Item.Instance)
+                && !Has(found.Item.Instance, Mark.OurDrop) && !Gone(found.Item.Instance));
+            bound = twin.Item.Instance;
+        }
+        if (bound.IsNone && Create(entry["j"]?.GetValue<string>(), entry["f"]) is { } made)
+            bound = made.Instance;
+        if (bound.IsNone)
+            return;
+        Set(bound, Mark.FromOwner);
+        _hidOf[bound] = uid;
+        _map[uid] = bound;
+    }
+
+    // Follower: the owner's ground loot - ours made to match it: each item bound to our twin or made, and anything it
+    // didn't list removed (it isn't in the owner's world). What's here now is the owner's to list, so none of it can be a
+    // drop of ours. "listed N, removed M", for the log.
+    private string FollowerSnapshot(string json)
+    {
+        Reset();
+        if (JsonNode.Parse(json) is not JsonArray list)
+            return "unreadable";
+        var here = Here();
+        foreach (var (item, _) in here.Value)
+            Set(item.Instance, Mark.FromOwner);
+        foreach (JsonObject entry in list.OfType<JsonObject>())
+            FollowerAdd(entry, here);
+        int removed = 0;
+        foreach (GroundItem item in All())
+            if (!_hidOf.ContainsKey(item.Instance))
+            {
+                Destroy(item.Instance);
+                removed++;
+            }
+        return $"listed {list.Count}, removed {removed}";
+    }
+
+    // Follower: what changed on the owner - loot gone from its world removed here, new loot bound or made.
+    private void FollowerDiff(string json)
+    {
+        if (JsonNode.Parse(json) is not JsonObject diff)
+            return;
+        if (diff["gone"] is JsonArray gone)
+            foreach (JsonNode? uid in gone)
+                if (uid != null && _map.Remove(uid.GetValue<long>(), out Instance id))
+                    Destroy(id);
+        if (diff["add"] is JsonArray add)
+        {
+            var here = Here();
+            foreach (JsonObject entry in add.OfType<JsonObject>())
+                FollowerAdd(entry, here);
+        }
+    }
+
+    // Follower, every few frames once we have the owner's snapshot: what to tell the owner - the owner's ids of loot we
+    // picked up, and our drops ({j: saved state, f: throw, t: token}).
+    // - Picked up: bound loot that left our world.
+    // - Dropped: sent to the owner as soon as we see it, with its throw and a token, and ours kept, in the air. The owner
+    //   makes it and throws it along the same arc; its diff brings it back with the token and ours becomes the synced
+    //   item (FollowerAdd). One the owner doesn't bring back within a few seconds (it didn't take it) is removed: the
+    //   owner's list decides what lies here.
+    // A drop is decided once, when we first see the loot: it must turn up next to our player while dropWindow is open
+    // (our player just dropped something: the game's "dropped" log line), or by where one of our arrows just landed (an
+    // arrow drops its ammo by its target), or have flown there in one of our own throws (an o_physical_shell of ours
+    // carrying it: marked our drop while it's still in the air). Any other unbound loot isn't ours to add - the game
+    // swapping an item for a new one (food changing), loot made here that the owner makes too - and is removed: the
+    // owner's list decides what lies here (reporting those made the owner create copies endlessly). Except while settling
+    // (the first seconds after the snapshot: loot still turning up is the area finishing loading here).
+    private (JsonArray Taken, List<JsonObject> Drops) FollowerStep(bool dropWindow, bool settling, long now)
+    {
+        var taken = new JsonArray();
+        var drops = new List<JsonObject>();
+        if (OurPlayer.Instance is not { IsNone: false } player)
+            return (taken, drops);
+        foreach (var (uid, id) in _map.ToList())
+            if (Gone(id))
+            {
+                _map.Remove(uid);
+                taken.Add(uid);
+            }
+        // Items in our throws: ours.
+        foreach (Instance shell in Instances.All(GameObjectId.o_physical_shell))
+            if (Carrying(shell) is { IsNone: false } item && IsPlayer(shell.Get("owner")) && !Has(item, Mark.Decided))
+                Set(item, Mark.OurDrop);
+        // Where loot can be our drop: by our player while the drop window is open, by our arrows' landing spots.
+        var near = _shots.Select(shot => (shot.X, shot.Y)).ToList();
+        if (dropWindow)
+            near.Add((player.Get("x").AsReal, player.Get("y").AsReal));
+        foreach (GroundItem item in All())
+        {
+            Instance id = item.Instance;
+            if (_hidOf.ContainsKey(id) || item.IsStatic)
+                continue;
+            if (!Has(id, Mark.Decided))
+            {
+                Set(id, Mark.Decided);
+                if (!Has(id, Mark.FromOwner) && near.Any(spot => Math.Sqrt(Math.Pow(item.X - spot.X, 2) + Math.Pow(item.Y - spot.Y, 2)) <= DropReach))
+                    Set(id, Mark.OurDrop);
+            }
+            if (!Has(id, Mark.OurDrop))
+            {
+                if (!settling)
+                    Destroy(id);
+                continue;
+            }
+            if (Has(id, Mark.Sent))
+            {
+                if (now - _sentAt.GetValueOrDefault(id, now) > DropPendingMs)
+                    Destroy(id);
+                continue;
+            }
+            if (item.ToJson() is not { } json)
+                continue;
+            string token = $"{++_nextToken}_{_random.Next(1000000)}";
+            drops.Add(new JsonObject { ["j"] = json, ["f"] = Flight(item), ["t"] = token });
+            Set(id, Mark.Sent);
+            _pending[token] = id;
+            _sentAt[id] = now;
+        }
+        return (taken, drops);
+    }
+
+    // ---- network ----
 
     private void SendToFollowers(LootKind kind, string json)
     {
@@ -181,20 +493,20 @@ public sealed class LootSync
         switch (packet.Kind)
         {
             case LootKind.Snapshot when _following && sender.Slot == 0:
-                string result = Gml.MpLootFollowerSnapshot(json);
+                string result = FollowerSnapshot(json);
                 _synced = true;
                 _syncedAt = Environment.TickCount64;
                 _waiting = 0;
                 _context.Log($"Ground loot here from {sender.Name}: {result}");
                 break;
             case LootKind.Changes when _following && sender.Slot == 0 && _synced:
-                Gml.MpLootFollowerDiff(json);
+                FollowerDiff(json);
                 break;
             case LootKind.SnapshotRequest when _owning:
                 _snapshotOwed = true;
                 break;
             case LootKind.Taken when _owning:
-                Gml.MpLootOwnerTaken(json);
+                OwnerTaken(json);
                 break;
             case LootKind.Dropped when _owning:
                 long now = Environment.TickCount64;
@@ -204,7 +516,7 @@ public sealed class LootSync
                     _dropCount = 0;
                 }
                 if (++_dropCount <= DropsPerSecond)
-                    Gml.MpLootOwnerDrop(json);
+                    OwnerDrop(json);
                 else
                     _context.Log($"Ignored a drop from {sender.Name}: more than {DropsPerSecond} a second");
                 break;

@@ -49,8 +49,8 @@ game twice.
 - `Net\Session.cs` is the session: a star with the host as slot 0, which relays clients' packets.
 - `Features\` has one folder per feature (Players, Effects, Menu, Areas, Clock, Join, Saves, World, Loot, Debug),
   each in its own `StoneshardMP.Features.<Folder>` namespace. Its packets are in the same-named folder under
-  `Net\Packets`, and any GML it still needs in the same-named folder under `GML\`. `MultiplayerMod.cs` wires them
-  together; `GameData.cs` has helpers for the game's ds_maps, ds_lists and instances.
+  `Net\Packets`. `MultiplayerMod.cs` wires them together. It's all C#: the game's data, saves, world map, clock,
+  ground items and characters come through StoneForge's API (no GML of its own).
 - `Net\Packets` contains one struct per packet, each with its numeric ID and span-based Read/Write contract. `PacketCodec` validates and decodes envelopes; `Session.On<T>` and `Session.Send(packet)` dispatch typed messages. Raise `Session.Protocol` whenever the wire format changes.
 
 ## Licences

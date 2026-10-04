@@ -88,14 +88,13 @@ public sealed class QuestSync
         // not there - so it's filled in before it goes; none from off the world map.
         Share(Scripts.scr_globaltile_reputation_update, args =>
         {
-            double gridX = Game.Global["playerGridX"].AsReal;
-            if (gridX == -4)
+            if (WorldMap.PlayerCell is not var (gridX, gridY))
                 return null;
             var sent = Pad(args, 6);
             if (sent[1].IsUndefined)
                 sent[1] = gridX;
             if (sent[2].IsUndefined)
-                sent[2] = Game.Global["playerGridY"];
+                sent[2] = gridY;
             return sent;
         });
         // Dialogue flags (said, offered, settled): with one argument it only reads.

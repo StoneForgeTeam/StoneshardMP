@@ -338,9 +338,12 @@ public sealed class JoinManager
     {
         if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0)
             return;
-        if (!JoinSave.SetPending(JoinCompression.Decompress(packet.Save), HostName))
+        string save = JoinCompression.Decompress(packet.Save);
+        if (!JoinSave.SetPending(save, HostName))
         {
             Status = $"{HostName}'s world arrived damaged - leave and join again";
+            _context.Log($"{HostName}'s world didn't read ({save.Length} characters): {JoinSave.WhyUnreadable(save)}"
+                + $" - kept as {JoinSave.KeepUnreadable(save)}");
             return;
         }
         _state = ClientState.Received;

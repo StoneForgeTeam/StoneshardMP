@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using StoneForge;
-using static StoneshardMP.GmJson;
 
 namespace StoneshardMP.Features.World;
 
@@ -13,93 +11,83 @@ namespace StoneshardMP.Features.World;
 // saved state, and the weather. (Legacy: scr_mp_tile_*, scr_mp_dungeon_*, scr_mp_location_*, scr_mp_weather_*.)
 internal static class SharedWorld
 {
-    // The per-tile seeds an area is built from (scr_globaltile_seed_validate).
-    private static readonly string[] SeedKeys = { "seed", "growSeed", "mobsSeed", "presetSeed", "containersSeed", "Trade_Seed" };
     // Floors the game rejected and is building again: (cell, floor, day) -> attempts.
     private static readonly Dictionary<string, int> DungeonRetries = new();
 
     /// <summary>The seed our world map is made from (every location, village and dungeon); -1 with none.</summary>
     public static double WorldSeed() => Game.Global["seed"] is { Kind: GmKind.Real } seed ? seed.AsReal : -1;
 
-    private static double GridX => Game.Global["playerGridX"].AsReal;
-    private static double GridY => Game.Global["playerGridY"].AsReal;
-    // (-4: the prologue, which has its own map.)
-    private static bool OnWorldMap => !Game.Global["playerGridX"].IsUndefined && GridX != -4;
+    // (The day of the calendar, from 1: what a respawn and a dungeon reset mix into their seeds.)
+    private static double Day => Math.Floor(Time.Timestamp / (double)GameTime.MinutesPerDay) + 1;
 
     // ---- seeds ----
 
     /// <summary>In place of scr_globaltile_seed_validate: the game's own version, except that a world-map tile's
     /// layout seeds (first visit, or a respawn) come from the world seed instead of randomize() - so every game in the
-    /// same world builds the same area there. "x_y" when a seed of that tile was set (to tell the others), "" if not.</summary>
-    public static string TileSeedValidate(GmValue key, GmValue tileX, GmValue tileY)
+    /// same world builds the same area there. The tile, when one of its seeds was set (to tell the others); null if not.</summary>
+    public static (int X, int Y)? TileSeedValidate(GmValue key, GmValue tileX, GmValue tileY)
     {
-        if (!OnWorldMap)
-            return "";
-        double x = tileX.IsUndefined ? GridX : tileX.AsReal, y = tileY.IsUndefined ? GridY : tileY.AsReal;
-        string tile = Text(x) + "_" + Text(y);
-        GmValue Seed() => Game.CallScript("scr_globaltile_seed_get", default, key, x, y);
-        GmValue Generated() => Game.CallScript("scr_globaltile_get", default, key, x, y, -1, Game.Global["globaltile_lookup_temp"]);
-        void SetSeed(GmValue value) => Game.CallScript("scr_globaltile_set", default, key, value, x, y);
-        switch (key.AsString)
+        if (WorldMap.PlayerCell is not var (gridX, gridY))
+            return null;
+        var tile = new WorldTile(tileX.IsUndefined ? gridX : tileX.AsInt, tileY.IsUndefined ? gridY : tileY.AsInt);
+        string name = key.AsString;
+        GmValue Generated() => tile.Get(name, TileLayer.Generated) is { IsUndefined: false } value ? value : -1;
+        switch (name)
         {
             case "seed":
             case "growSeed":
             case "mobsSeed":
             case "presetSeed":
             {
-                double seed = Seed().AsReal;
-                string location = Game.CallScript("scr_locationGenerateTag", default, x, y).AsString;
+                double seed = tile.Seeds[name];
+                string location = Game.CallScript("scr_locationGenerateTag", default, tile.X, tile.Y).AsString;
                 if (Game.CallScript("scr_locationExists", default, location).AsBool && seed == -1)
                 {
-                    SetSeed(Generated());
-                    return tile;
+                    tile[name] = Generated();
+                    return (tile.X, tile.Y);
                 }
                 if (seed == -1 || seed == -2)
                 {
-                    SetSeed(TileSeed(key.AsString, x, y, seed == -2));
-                    return tile;
+                    tile[name] = TileSeed(name, tile, seed == -2);
+                    return (tile.X, tile.Y);
                 }
                 break;
             }
             case "containersSeed":
             case "Trade_Seed":
-                if (Seed().AsReal == -1)
+                if (tile.Seeds[name] == -1)
                 {
-                    SetSeed(Generated());
-                    return tile;
+                    tile[name] = Generated();
+                    return (tile.X, tile.Y);
                 }
                 break;
         }
-        return "";
+        return null;
     }
 
     // A tile's layout seed from the world seed: the same in every game in this world. A respawn mixes in the in-game
     // day (the host keeps everyone's clock), so it gets a new layout - the same in every game that respawns it that
-    // day. The random generator is randomized after, as the randomize() it replaces leaves it.
-    private static double TileSeed(string key, double x, double y, bool respawn)
+    // day.
+    private static double TileSeed(string key, WorldTile tile, bool respawn)
     {
         int kind = key switch { "growSeed" => 2, "mobsSeed" => 3, "presetSeed" => 4, _ => 1 };
-        double salt = respawn ? Math.Floor(Timestamp() / 1440) + 1 : 0;
-        double mix = WorldSeed() + x * 73856093 + y * 19349663 + kind * 83492791 + salt * 2654435761;
-        Game.CallBuiltin("random_set_seed", Math.Abs(mix) % 2147483647);
-        GmValue value = Game.CallBuiltin("irandom_range", 1, 2000000000);
-        Game.CallBuiltin("randomize");
-        return value.AsReal;
+        double salt = respawn ? Day : 0;
+        double mix = WorldSeed() + tile.X * 73856093.0 + tile.Y * 19349663.0 + kind * 83492791.0 + salt * 2654435761;
+        return Game.WithSeed((long)(Math.Abs(mix) % 2147483647), () => Game.CallBuiltin("irandom_range", 1, 2000000000).AsReal);
     }
 
     /// <summary>A seed for the dungeon at the player's world-map cell - kind 1: the layout of a floor, 2: which floors
     /// are special - from the world seed, so every game in this world builds the same dungeon. Mixed with the in-game day
     /// (a dungeon that resets gets a new layout, the same everywhere that day) and, for a floor the game rejected and is
     /// building again (DungeonRetry), the attempt. -1: a prologue dungeon (as vanilla).</summary>
-    public static double DungeonSeed(int kind, int floor)
+    public static long DungeonSeed(int kind, int floor)
     {
-        if (!OnWorldMap)
+        if (WorldMap.PlayerCell is not var (x, y))
             return -1;
-        double day = Math.Floor(Timestamp() / 1440) + 1;
         int retry = kind == 1 && DungeonRetries.TryGetValue(RetryKey(floor), out int n) ? n : 0;
-        double mix = WorldSeed() + GridX * 73856093 + GridY * 19349663 + (10 + kind) * 83492791 + floor * 50331653
-            + day * 2654435761 + retry * 40503;
-        return Math.Abs(mix) % 2147483647;
+        double mix = WorldSeed() + x * 73856093.0 + y * 19349663.0 + (10 + kind) * 83492791.0 + floor * 50331653.0
+            + Day * 2654435761 + retry * 40503.0;
+        return (long)(Math.Abs(mix) % 2147483647);
     }
 
     /// <summary>The floor just built was rejected (o_dungeon_controller's user event 5): the game drops its seed and
@@ -113,103 +101,69 @@ internal static class SharedWorld
     }
 
     // Which floor build a retry count belongs to: the world-map cell, the floor and the in-game day.
-    private static string RetryKey(int floor) => $"{Text(GridX)}_{Text(GridY)}_{floor}_{Math.Floor(Timestamp() / 1440)}";
-
-    private static double Timestamp() => Game.CallScript("scr_timeGetTimestamp", default).AsReal;
+    private static string RetryKey(int floor) => $"{WorldMap.PlayerCell}_{floor}_{Day}";
 
     // ---- locations ----
 
-    /// <summary>A location's saved state as the game keeps it in global.locationsRoomsDataMap - its tags, preset flags
-    /// and entities (what's dead, taken, opened) - as JSON for the others (LocationStore). The tags keep their types (a
-    /// room or preset tag can be a number: a ds_map key 3 isn't "3"). "" if there's none.</summary>
-    public static string LocationExport(GmValue location, GmValue room, GmValue preset)
-    {
-        GmValue map = Game.CallScript("scr_locationRoomPresetGet", default, location, room, preset, false);
-        if (!Ds.IsMap(map))
-            return "";
-        GmValue entities = Ds.Get(map, "entitiesDataMapString", "N/A");
-        if (entities.Kind != GmKind.String || entities.AsString == "N/A")
-            return "";
-        return new JsonObject
-        {
-            ["tags"] = new JsonArray(ToJson(location), ToJson(room), ToJson(preset)),
-            ["flags"] = ToJson(Ds.Get(map, "flags", 0)),
-            ["entities"] = entities.AsString,
-        }.ToJsonString();
-    }
+    /// <summary>A location's saved state as the game keeps it - its tags, preset flags and entities (what's dead, taken,
+    /// opened) - as JSON for the others (LocationStore). "" if there's none.</summary>
+    public static string LocationExport(string location, GmValue room, GmValue preset)
+        => Locations.Get(location)?.Room(room)?.Preset(preset)?.Export() is { EntitiesJson: not null } state ? state.ToJson() : "";
 
     /// <summary>The location an o_roomEntitySaver has just saved (the end of its user event 2), as LocationExport.</summary>
     public static string LocationExportSaved(Instance saver)
-        => saver.Exists ? LocationExport(saver.Get("locationTag"), saver.Get("roomTag"), saver.Get("presetTag")) : "";
+        => saver.Exists ? LocationExport(saver.Get("locationTag").AsString, saver.Get("roomTag"), saver.Get("presetTag")) : "";
 
     /// <summary>Another game's saved state for a location (LocationExport) into our world data, where the game keeps its
     /// own save of that location, so our next visit there loads theirs. The flags go too: they decide whether its
     /// spawners run on entry, so a location we never visited doesn't spawn fresh mobs on top of theirs. What happened,
     /// for the log ("" for nothing to say).</summary>
-    public static string LocationStore(string state)
+    public static string LocationStore(string json)
     {
-        if (!InGame.Exists(GameObjectId.o_player))
+        if (!Gm.InstanceExists(GameObjectId.o_player) || !Locations.Available)
             return "";
-        if (JsonNode.Parse(state) is not JsonObject s || s["tags"] is not JsonArray tags || tags.Count < 3)
+        if (LocationState.FromJson(json) is not { } state)
             return "unreadable location";
-        GmValue location = FromJson(tags[0]), room = FromJson(tags[1]), preset = FromJson(tags[2]);
-        string what = $"{location} / {room} / {preset}";
+        string what = $"{state.Location} / {state.Room} / {state.Preset}";
         // We're standing in it: our live copy is the current one.
-        if (Game.CallScript("scr_locationGenerateTag", default).AsString == location.AsString
-            && Game.CallScript("scr_locationRoomGenerateTag", default).AsString == room.AsString)
+        if (Locations.Here is var (location, room) && location == state.Location && room.AsString == state.Room.AsString)
             return "";
-        string entities = s["entities"]?.GetValue<string>() ?? "";
-        // Only a state that reads back: a broken one would make the game rebuild the location from scratch.
-        GmValue check = Ds.FromJson(entities);
-        if (!Ds.IsMap(check))
-            return $"location {what}: its state didn't read back - kept ours";
-        Ds.Destroy(check);
-        GmValue map = Game.CallScript("scr_locationRoomPresetGet", default, location, room, preset, true);
-        if (!Ds.IsMap(map))
-            return $"location {what}: no place for it here";
-        Ds.Set(map, "flags", FromJson(s["flags"]));
-        Ds.Set(map, "entitiesDataMapString", entities);
-        return $"location {what}: stored";
+        return Locations.Store(state) ? $"location {what}: stored" : $"location {what}: its state didn't read back - kept ours";
     }
 
     // ---- tiles ----
 
     /// <summary>A world-map tile as JSON for the others (TileApply): the seeds its areas are built from (-1: not set
     /// here), and its dungeon, if it has one - every value: numbers and text as they are, its maps (the saved floor
-    /// graphs, which rooms dropped what, the boss's name) as {m: their JSON}, its level list as {l: [...]}. (Its
+    /// graphs, which rooms dropped what, the boss's name) as {m: their JSON}, its lists as {l: their JSON}. (Its
     /// contract_map is an index into the handed-out contracts, the same in every game: ContractSync.) "" outside a
     /// world.</summary>
-    public static string TileExport(double x, double y)
+    public static string TileExport(int x, int y)
     {
-        if (!Ds.IsMap(Game.Global["globalmapLocationsDataMap"]) || !OnWorldMap)
+        if (!WorldMap.Available || x < 0 || y < 0 || x >= WorldMap.Width || y >= WorldMap.Height)
             return "";
-        GmValue lookup = Game.Global["globaltile_lookup_save"];
-        var seeds = new JsonArray(SeedKeys.Select(key => ToJson(Game.CallScript("scr_globaltile_get", default, key, x, y, -1, lookup))).ToArray());
+        WorldTile tile = WorldMap.Tile(x, y);
+        var seeds = new JsonArray(TileSeeds.Names.Select(name => (JsonNode)tile.Seeds[name]).ToArray());
         JsonNode dungeon = -1;
-        GmValue map = Game.CallScript("scr_globaltile_get", default, "dungeon", x, y, -1, lookup);
-        if (Ds.IsMap(map))
+        if (tile.Dungeon is { } found)
         {
             var values = new JsonObject();
-            foreach (GmValue key in Ds.Keys(map))
+            foreach (GmValue key in found.Keys)
             {
                 if (key.Kind != GmKind.String)
                     continue;
-                GmValue value = Ds.Get(map, key);
-                if (Ds.KeyIsMap(map, key))
-                    values[key.AsString] = new JsonObject { ["m"] = Ds.ToJson(value) };
-                else if (Ds.KeyIsList(map, key))
-                    values[key.AsString] = new JsonObject
-                    {
-                        ["l"] = new JsonArray(Enumerable.Range(0, Ds.Count(value)).Select(i => ToJson(Ds.At(value, i))).ToArray()),
-                    };
-                else if (ToJson(value) is { } scalar)
+                if (found.GetMap(key.AsString) is { } map)
+                    values[key.AsString] = new JsonObject { ["m"] = map.ToJson() };
+                else if (found.GetList(key.AsString) is { } list)
+                    values[key.AsString] = new JsonObject { ["l"] = list.ToJson() };
+                else if (found[key.AsString].ToJsonNode() is { } scalar)
                     values[key.AsString] = scalar;
             }
             dungeon = values;
         }
         return new JsonObject
         {
-            ["x"] = x, ["y"] = y, ["keys"] = new JsonArray(SeedKeys.Select(k => (JsonNode)k).ToArray()),
+            ["x"] = x, ["y"] = y, ["keys"] = new JsonArray(TileSeeds.Names.Select(k => (JsonNode)k).ToArray()),
             ["seeds"] = seeds, ["dungeon"] = dungeon,
         }.ToJsonString();
     }
@@ -217,70 +171,59 @@ internal static class SharedWorld
     /// <summary>Another game's world-map tile (TileExport): its seeds (-1: not set there, ours kept) and its dungeon's
     /// values, so the areas and dungeon there are built and behave as theirs - a floor they've built is rebuilt from their
     /// saved graph. Not the tile we're standing on: it's built here already, and we'd take it on our next visit.</summary>
-    public static void TileApply(string state)
+    public static void TileApply(string json)
     {
-        if (!InGame.Exists(GameObjectId.o_player) || !OnWorldMap)
+        if (!Gm.InstanceExists(GameObjectId.o_player) || WorldMap.PlayerCell is not var (gridX, gridY))
             return;
-        if (JsonNode.Parse(state) is not JsonObject s || s["seeds"] is not JsonArray seeds || s["keys"] is not JsonArray keys)
+        if (JsonNode.Parse(json) is not JsonObject s || s["seeds"] is not JsonArray seeds || s["keys"] is not JsonArray keys)
             return;
-        double x = s["x"]!.GetValue<double>(), y = s["y"]!.GetValue<double>();
-        if (x == GridX && y == GridY)
+        int x = s["x"]!.GetValue<int>(), y = s["y"]!.GetValue<int>();
+        if ((x, y) == (gridX, gridY) || x < 0 || y < 0 || x >= WorldMap.Width || y >= WorldMap.Height)
             return;
+        WorldTile tile = WorldMap.Tile(x, y);
         for (int i = 0; i < keys.Count && i < seeds.Count; i++)
-            if (FromJson(seeds[i]) is { Kind: GmKind.Real } seed && seed.AsReal != -1)
-                Game.CallScript("scr_globaltile_set", default, keys[i]!.GetValue<string>(), seed, x, y);
+            if (GmValue.FromJsonNode(seeds[i]) is { Kind: GmKind.Real } seed && seed.AsReal != -1)
+                tile[keys[i]!.GetValue<string>()] = seed;
         if (s["dungeon"] is not JsonObject dungeon)
             return;
+        // (Through the game's own setters - they make the dungeon if the tile has none yet.)
         foreach (var (key, value) in dungeon.ToList())
         {
             if (value is JsonObject { } nested && nested["m"] is { } m)
             {
-                GmValue map = Ds.FromJson(m.GetValue<string>());
-                if (Ds.IsMap(map))
+                if (DsMap.FromJson(m.GetValue<string>()) is { } map)
                     Game.CallScript("scr_globaltile_dungeon_set_map", default, key, map, x, y);
             }
-            else if (value is JsonObject { } listed && listed["l"] is JsonArray items)
+            else if (value is JsonObject { } listed && listed["l"] is { } l)
             {
-                GmValue list = Game.CallBuiltin("ds_list_create");
-                foreach (var item in items)
-                    Game.CallBuiltin("ds_list_add", list, FromJson(item));
-                Game.CallScript("scr_globaltile_dungeon_set_list", default, key, list, x, y);
+                if (DsList.FromJson(l.GetValue<string>()) is { } list)
+                    Game.CallScript("scr_globaltile_dungeon_set_list", default, key, list, x, y);
             }
             else
-                Game.CallScript("scr_globaltile_dungeon_set", default, key, FromJson(value), x, y);
+                Game.CallScript("scr_globaltile_dungeon_set", default, key, GmValue.FromJsonNode(value), x, y);
         }
     }
 
     // ---- the host's copy for a newcomer ----
 
-    /// <summary>Every location we have a stored state for (its tags), and every world-map tile ("x_y" keyed): what a
+    /// <summary>Every location we have a stored state for (its tags), and every world-map tile the save keeps: what a
     /// player coming into our world is copied.</summary>
-    public static (List<(GmValue Location, GmValue Room, GmValue Preset)> Locations, List<(double X, double Y)> Tiles) CopyList()
+    public static (List<(string Location, GmValue Room, GmValue Preset)> Locations, List<(int X, int Y)> Tiles) CopyList()
     {
-        var locations = new List<(GmValue, GmValue, GmValue)>();
-        var tiles = new List<(double, double)>();
-        GmValue all = Game.Global["locationsRoomsDataMap"];
-        if (Ds.IsMap(all))
-            foreach (GmValue location in Ds.Keys(all))
-            {
-                GmValue rooms = Ds.Get(all, location);
-                if (!Ds.IsMap(rooms))
-                    continue;
-                foreach (GmValue room in Ds.Keys(rooms))
-                {
-                    GmValue presets = Ds.Get(rooms, room);
-                    if (Ds.IsMap(presets))
-                        locations.AddRange(Ds.Keys(presets).Select(preset => (location, room, preset)));
-                }
-            }
-        GmValue map = Game.Global["globalmapLocationsDataMap"];
-        if (Ds.IsMap(map))
-            foreach (GmValue tag in Ds.Keys(map))
+        var locations = new List<(string, GmValue, GmValue)>();
+        foreach (string tag in StoneForge.Locations.Tags)
+            if (StoneForge.Locations.Get(tag) is { } location)
+                foreach (GmValue room in location.Rooms)
+                    if (location.Room(room) is { } r)
+                        locations.AddRange(r.Presets.Select(preset => (tag, room, preset)));
+        var tiles = new List<(int, int)>();
+        if (Game.Global["globalmapLocationsDataMap"].AsDsMap is { } map)
+            foreach (GmValue tag in map.Keys)
             {
                 string text = tag.AsString;
                 int sep = text.IndexOf('_');
-                if (sep > 0 && double.TryParse(text[..sep], NumberStyles.Float, CultureInfo.InvariantCulture, out double x)
-                    && double.TryParse(text[(sep + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture, out double y))
+                if (sep > 0 && int.TryParse(text[..sep], NumberStyles.Integer, CultureInfo.InvariantCulture, out int x)
+                    && int.TryParse(text[(sep + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int y))
                     tiles.Add((x, y));
             }
         return (locations, tiles);
@@ -288,30 +231,29 @@ internal static class SharedWorld
 
     // ---- weather ----
 
-    /// <summary>The weather as the game keeps it - global.weatherDataMap (rain, thunderstorm, duration, phase) and
-    /// global.smokeDataMap (fog) - as "weatherJSON|fogJSON"; "" with no game loaded.</summary>
+    // The weather as the game reads it - global.weatherDataMap (rain, thunderstorm, duration, phase) and
+    // global.smokeDataMap (fog): the save data's sections, or maps of their own when the save had none.
+    private static DsMap? Weather => Game.Global["weatherDataMap"].AsDsMap;
+    private static DsMap? Smoke => Game.Global["smokeDataMap"].AsDsMap;
+
+    /// <summary>The weather and fog as "weatherJSON|fogJSON"; "" with no game loaded.</summary>
     public static string WeatherState()
-    {
-        GmValue weather = Game.Global["weatherDataMap"], smoke = Game.Global["smokeDataMap"];
-        return Ds.IsMap(weather) && Ds.IsMap(smoke) ? Ds.ToJson(weather) + "|" + Ds.ToJson(smoke) : "";
-    }
+        => Weather is { } weather && Smoke is { } smoke ? weather.ToJson() + "|" + smoke.ToJson() : "";
 
     /// <summary>The host's weather and fog (WeatherState), value by value into our own maps - the game's rain and fog
     /// objects read them from there.</summary>
     public static void WeatherApply(string state)
     {
-        GmValue weather = Game.Global["weatherDataMap"], smoke = Game.Global["smokeDataMap"];
         int sep = state.IndexOf('|');
-        if (!Ds.IsMap(weather) || !Ds.IsMap(smoke) || sep < 1)
+        if (Weather is not { } weather || Smoke is not { } smoke || sep < 1)
             return;
         foreach (var (target, json) in new[] { (weather, state[..sep]), (smoke, state[(sep + 1)..]) })
         {
-            GmValue source = Ds.FromJson(json);
-            if (!Ds.IsMap(source))
+            if (DsMap.FromJson(json) is not { } source)
                 continue;
-            foreach (GmValue key in Ds.Keys(source))
-                Ds.Set(target, key, Ds.Get(source, key));
-            Ds.Destroy(source);
+            foreach (GmValue key in source.Keys)
+                target[key] = source[key];
+            source.Destroy();
         }
     }
 }

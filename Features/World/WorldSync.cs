@@ -48,13 +48,13 @@ public sealed class WorldSync
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly JoinManager _join;
-    // Tiles ("x_y") whose seeds or dungeon were set here, to send.
-    private readonly HashSet<string> _changedTiles = new();
+    // Tiles whose seeds or dungeon were set here, to send.
+    private readonly HashSet<(int X, int Y)> _changedTiles = new();
     // Host: players waiting for a copy, and the one being copied (where it's got to).
     private readonly Queue<int> _copyQueue = new();
     private int _copyTo = -1;
-    private List<(GmValue Location, GmValue Room, GmValue Preset)> _copyLocations = new();
-    private List<(double X, double Y)> _copyTiles = new();
+    private List<(string Location, GmValue Room, GmValue Preset)> _copyLocations = new();
+    private List<(int X, int Y)> _copyTiles = new();
     private int _copyLocation, _copyTile;
     // (Taking another game's tile: its dungeon keys aren't news to send back.)
     private bool _applying;
@@ -79,8 +79,7 @@ public sealed class WorldSync
 
         Scripts.scr_globaltile_seed_validate.Before(context, call =>
         {
-            string tile = SharedWorld.TileSeedValidate(Arg(call, 0), Arg(call, 1), Arg(call, 2));
-            if (tile.Length > 0)
+            if (SharedWorld.TileSeedValidate(Arg(call, 0), Arg(call, 1), Arg(call, 2)) is { } tile)
                 _changedTiles.Add(tile);
             return true;
         });
@@ -94,26 +93,12 @@ public sealed class WorldSync
         Scripts.scr_globaltile_dungeon_set.Before(context, dungeonSet);
         Scripts.scr_globaltile_dungeon_set_map.Before(context, dungeonSet);
         Scripts.scr_globaltile_dungeon_set_list.Before(context, dungeonSet);
-        // A floor's layout seed: the vanilla irandom draws from the world seed's.
+        // A floor's layout seed, and which floors are special: the vanilla rolls, drawn from the world seed's (then the
+        // game's random carries on, as it would have).
         Scripts.scr_dungeonFloorSeedGenerate.Before(context, call =>
-        {
-            double seed = SharedWorld.DungeonSeed(1, Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt);
-            if (seed >= 0)
-                Game.CallBuiltin("random_set_seed", seed);
-            return false;
-        });
-        // Which floors are special: rolled from the world seed, then the generator back as it was (the floor's own).
+            Seeded(call, Scripts.scr_dungeonFloorSeedGenerate, SharedWorld.DungeonSeed(1, Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt)));
         Scripts.scr_dungeonSpecialRoomInit.Before(context, call =>
-        {
-            double seed = SharedWorld.DungeonSeed(2, 0);
-            if (seed < 0)
-                return false;
-            GmValue previous = Game.CallBuiltin("random_get_seed");
-            Game.CallBuiltin("random_set_seed", seed);
-            try { call.Result = Scripts.scr_dungeonSpecialRoomInit.CallOriginal(call); }
-            finally { Game.CallBuiltin("random_set_seed", previous); }
-            return true;
-        });
+            Seeded(call, Scripts.scr_dungeonSpecialRoomInit, SharedWorld.DungeonSeed(2, 0)));
         // A floor rejected: counted, for its next seed.
         context.OnCode("gml_Object_o_dungeon_controller_Other_15", before: (_, _) =>
         {
@@ -159,13 +144,8 @@ public sealed class WorldSync
             _changedTiles.Clear();
             return;
         }
-        foreach (string tile in _changedTiles)
-        {
-            int sep = tile.IndexOf('_');
-            string state = SharedWorld.TileExport(double.Parse(tile[..sep]), double.Parse(tile[(sep + 1)..]));
-            if (state.Length > 0)
-                Send(WorldData.Tile, state);
-        }
+        foreach (var (x, y) in _changedTiles)
+            Send(WorldData.Tile, SharedWorld.TileExport(x, y));
         _changedTiles.Clear();
         if (_session.Mode == Session.SessionMode.Host)
         {
@@ -296,9 +276,21 @@ public sealed class WorldSync
         }
     }
 
-    // A world-map tile to send ("x_y"; undefined: the one we're on).
+    // A world-map tile to send (undefined: the one we're on).
     private void QueueTile(GmValue x, GmValue y)
-        => _changedTiles.Add($"{(x.IsUndefined ? Game.Global["playerGridX"] : x).AsReal}_{(y.IsUndefined ? Game.Global["playerGridY"] : y).AsReal}");
+    {
+        if (WorldMap.PlayerCell is var (gridX, gridY))
+            _changedTiles.Add((x.IsUndefined ? gridX : x.AsInt, y.IsUndefined ? gridY : y.AsInt));
+    }
+
+    // A script run with the game's random seeded (a dungeon seed: -1, none - as vanilla).
+    private static bool Seeded(ScriptCall call, Script script, long seed)
+    {
+        if (seed < 0)
+            return false;
+        call.Result = Game.WithSeed(seed, () => script.CallOriginal(call));
+        return true;
+    }
 
     private static GmValue Arg(ScriptCall call, int index) => index < call.Args.Length ? call.Args[index] : GmValue.Undefined;
 }
