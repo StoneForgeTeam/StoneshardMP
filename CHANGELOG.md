@@ -1,5 +1,10 @@
 # StoneshardMP changes
 
+## 0.19.13
+
+- The debug dump (Ctrl+Shift+D), with the profiler on (Ctrl+Shift+P), has its whole last second: every part of every
+  mod, where the overlay shows ten. That's average and worst ms a frame, runs a frame, and ms a run.
+
 ## 0.19.12
 
 - The world turn run for another player's action sets one skill's alarm 10, not every skill's. All it does

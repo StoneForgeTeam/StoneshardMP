@@ -47,6 +47,7 @@ public sealed class DebugDump
             string file = Path.Combine(folder, $"stoneshardmp-dump-{role}-{Environment.ProcessId}.txt");
             File.WriteAllText(file, $"{DateTime.Now:HH:mm:ss} {role} place={state?.Place} cell={state?.CellX},{state?.CellY} clock={GameClock.Snapshot()}"
                 + $" busy={Game.IsBusy}\n{Input()}\nground items: {items.Count} ({items.Count(i => i.Instance.IsCulled)} off screen)\n"
+                + Timings()
                 + string.Join("\n", Nearby().OrderBy(line => line, StringComparer.Ordinal)) + "\n");
             _context.Log("Dump written: " + file);
             DecodeCheck(folder);
@@ -79,6 +80,17 @@ public sealed class DebugDump
                     + $" ai={Text(instance.Get("ai_is_on"))} hosts={_areaUnits.IsHosts(instance)}";
             return line;
         }).OfType<string>().ToArray();
+    }
+
+    // The profiler's last second, every part of every mod (the overlay shows ten a mod), while it's on (Ctrl+Shift+P):
+    // average and worst ms per frame, and runs per frame. Per run: the average over the runs.
+    private static string Timings()
+    {
+        if (!Profiler.Visible || Profiler.Timings.Count == 0)
+            return "";
+        var lines = Profiler.Timings.Select(t => $"  {t.Mod} {(t.Section ? "- " : "")}{t.Name}: {t.Average:0.000} ms/frame, worst {t.Worst:0.000} ms,"
+            + $" {t.CallsPerFrame:0.###} runs/frame, {(t.CallsPerFrame > 0 ? t.Average / t.CallsPerFrame : 0):0.000} ms/run");
+        return $"profiler ({Profiler.Fps:0} fps, worst frame {Profiler.WorstFrameMs:0} ms):\n{string.Join("\n", lines)}\n";
     }
 
     // A host's world that didn't read here (JoinManager kept it): the game's json_decode tried on it whole, without
