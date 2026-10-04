@@ -18,6 +18,9 @@ public sealed class WorldClock
 {
     private readonly Session _session;
     private readonly Func<bool> _inSharedWorld;
+    // Whether a player's action isn't a world turn of its own (TurnRounds): while there's a round in the host's place, the
+    // host's units move once a round, not after each action - anyone's.
+    private readonly Func<int, bool> _inRound;
     private readonly Queue<int> _remoteActions = new();
     private bool _tracking;
     private int _turns;
@@ -28,11 +31,12 @@ public sealed class WorldClock
 
     private readonly ModContext _context;
 
-    public WorldClock(ModContext context, Session session, Func<bool> inSharedWorld)
+    public WorldClock(ModContext context, Session session, Func<bool> inSharedWorld, Func<int, bool> inRound)
     {
         _context = context;
         _session = session;
         _inSharedWorld = inSharedWorld;
+        _inRound = inRound;
         session.On<WorldActionPacket>(RequestAction);
         session.On<WorldTickPacket>(ReceiveAction);
     }
@@ -77,6 +81,9 @@ public sealed class WorldClock
             while (_remoteActions.Count > 0 && GameClock.TickReady())
             {
                 int source = _remoteActions.Dequeue();
+                // (In a round, the enemies move once everyone's acted - the round's turn - not after each action.)
+                if (_inRound(source))
+                    continue;
                 GameClock.Tick(_context);
                 Publish(source, GameClock.Turns());
             }

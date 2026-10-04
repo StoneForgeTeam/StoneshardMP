@@ -49,6 +49,11 @@ public static class PacketCodec
             QuestItemsPacket.PacketId => QuestItemsPacket.Read(ref reader),
             ContractPacket.PacketId => ContractPacket.Read(ref reader),
             LootPacket.PacketId => LootPacket.Read(ref reader),
+            UnitHitPacket.PacketId => UnitHitPacket.Read(ref reader),
+            EnemyAttackPacket.PacketId => EnemyAttackPacket.Read(ref reader),
+            UnitKilledPacket.PacketId => UnitKilledPacket.Read(ref reader),
+            TurnStatusPacket.PacketId => TurnStatusPacket.Read(ref reader),
+            RoundPacket.PacketId => RoundPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

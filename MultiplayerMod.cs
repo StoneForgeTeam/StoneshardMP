@@ -1,6 +1,8 @@
 using System;
 using StoneForge;
 using StoneshardMP.Features.Areas;
+using StoneshardMP.Features.Combat;
+using StoneshardMP.Features.Rounds;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Contracts;
 using StoneshardMP.Features.Debug;
@@ -29,6 +31,9 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private PartyFrames _party = null!;
     private EffectManager _effects = null!;
     private AreaUnits _areaUnits = null!;
+    private CombatSync _combat = null!;
+    private TurnRounds _rounds = null!;
+    private Follow _follow = null!;
     private MultiplayerMenu _menu = null!;
     private WorldClock _clock = null!;
     private DebugDump _dump = null!;
@@ -46,11 +51,19 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _players = new PlayerManager(context, _session, () => settings.ShowNames.Value, () => _join.InSharedWorld);
         // A frame for each of the others: health, energy, level, effects, which way they are.
         _party = new PartyFrames(context, _session, settings, () => _join.InSharedWorld);
+        // "Follow" on another player's right-click menu: walk after them.
+        _follow = new Follow(context, _session, _players);
         _effects = new EffectManager(context, _session);
         _areaUnits = new AreaUnits(context, _session, () => _players.ObjectIndex);
+        // Combat where players are together: each game resolves its own character's fights, the host's units the real ones.
+        _combat = new CombatSync(context, _session, _areaUnits, _players, () => _join.InSharedWorld);
         // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
         // streamed back by AreaUnits), the host's own turn the clients' clocks.
-        _clock = new WorldClock(context, _session, () => _join.InSharedWorld);
+        // Shared turn-based rounds where players are together and anyone needs turns (in combat, bleeding out, on fire),
+        // with their turn order shown on the HUD.
+        _rounds = new TurnRounds(context, _session, () => _join.InSharedWorld);
+        context.UI.Hud.Add(new TurnOrder(_rounds, _session, () => _players.ObjectIndex));
+        _clock = new WorldClock(context, _session, () => _join.InSharedWorld, _ => _rounds.Active);
         _dump = new DebugDump(context, _session, _areaUnits);
         // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile) and the
         // Players & Settings window.
@@ -80,6 +93,9 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _party.Clear();
         _effects.Clear();
         _areaUnits.Clear();
+        _combat.Clear();
+        _rounds.Clear();
+        _follow.Clear();
         _clock.Clear();
         _join.Clear();
         _world.Clear();
@@ -107,6 +123,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "party", _party.Tick);
             Profiler.Measure(_context, "effects", _effects.Tick);
             Profiler.Measure(_context, "area units", _areaUnits.Tick);
+            Profiler.Measure(_context, "rounds", _rounds.Tick);
             Profiler.Measure(_context, "clock", _clock.Tick);
             Profiler.Measure(_context, "dump", _dump.Tick);
         }

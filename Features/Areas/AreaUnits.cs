@@ -85,6 +85,39 @@ public sealed class AreaUnits
     /// <summary>Whether this unit is one of the host's, from the latest roster (for the debug dump).</summary>
     public bool IsHosts(Instance unit) => _current.Contains(unit.Persist());
 
+    /// <summary>Client: the host's sync id for one of our units bound to one of its; null if it isn't one.</summary>
+    public long? HostIdOf(Instance unit)
+    {
+        unit = unit.Persist();
+        foreach (var (hostId, bound) in _bound)
+            if (bound.Persist().Equals(unit))
+                return hostId;
+        return null;
+    }
+
+    /// <summary>Client: our unit bound to the host's with this sync id; none if there's none.</summary>
+    public Instance LocalOf(long hostId)
+        => _bound.TryGetValue(hostId, out Instance unit) && unit.Exists ? unit : default;
+
+    /// <summary>Host: the sync id one of our units goes by (what a client calls it); null if it hasn't one yet.</summary>
+    public long? SyncIdOf(Instance unit)
+    {
+        unit = unit.Persist();
+        foreach (var (synced, id) in _syncIds)
+            if (synced.Persist().Equals(unit))
+                return id;
+        return null;
+    }
+
+    /// <summary>Host: our unit going by this sync id (what a client calls it); none if there's none here now.</summary>
+    public Instance UnitOf(long syncId)
+    {
+        foreach (var (unit, id) in _syncIds)
+            if (id == syncId)
+                return unit.Exists ? unit : default;
+        return default;
+    }
+
     public void Tick()
     {
         // (A client: the roster it's applying, a few more units of it.)

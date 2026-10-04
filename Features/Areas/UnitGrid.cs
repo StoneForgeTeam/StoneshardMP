@@ -26,17 +26,19 @@ internal static class UnitGrid
     public static Grids? Current()
         => Controller() is { IsNone: false } controller ? new Grids(controller, controller.Get("newgrid"), controller.Get("posgrid")) : null;
 
-    /// <summary>Moves a unit to a cell in the game's grids. Its own x / y follow only for a jump of more than two cells:
-    /// for a short move it's drawn there smoothly - another player's from their state, an area unit by its own step.</summary>
-    public static void Move(Instance unit, int cellX, int cellY)
+    /// <summary>Moves a unit to a cell in the game's grids. Its own x / y follow only for a jump of more than two cells -
+    /// for a short move an area unit walks there by its own step - or always with <paramref name="snap"/>: a unit drawn
+    /// from elsewhere (another player's, from their state) never walks. (A unit that walks clears the cell it leaves in the
+    /// position grid as it starts, whoever's there by then: our player, come onto it - the game then crashes on it.)</summary>
+    public static void Move(Instance unit, int cellX, int cellY, bool snap = false)
     {
         if (Current() is { } grids)
-            Move(unit, cellX, cellY, grids);
+            Move(unit, cellX, cellY, grids, snap: snap);
     }
 
     /// <summary>Moves a unit, with the room's grids already found, and whether it's a big unit (more than one cell:
     /// is_poly_cell) if that's known - it never changes; null: read it.</summary>
-    public static void Move(Instance unit, int cellX, int cellY, Grids grids, bool? poly = null)
+    public static void Move(Instance unit, int cellX, int cellY, Grids grids, bool? poly = null, bool snap = false)
     {
         if (!unit.Exists)
             return;
@@ -66,7 +68,7 @@ internal static class UnitGrid
         }
         unit["xx"] = x;
         unit["yy"] = y;
-        if (Math.Abs(cellX - oldX) > 2 || Math.Abs(cellY - oldY) > 2)
+        if (snap || Math.Abs(cellX - oldX) > 2 || Math.Abs(cellY - oldY) > 2)
         {
             unit["x"] = x;
             unit["y"] = y;
@@ -78,6 +80,18 @@ internal static class UnitGrid
         if (isPoly)
             Game.CallScript("scr_enemy_poly_cell_fill", unit, cellX, cellY);
         Game.CallScript("scr_collision_add_enemy", controller, collisions, cellX, cellY);
+    }
+
+    /// <summary>Whether a unit may take a cell in the position grid: it's free, or it's the unit's own - another unit there
+    /// (our player, an area unit, for a moment) would be overwritten in it, and the game then reads the wrong unit there.
+    /// (Legacy: mp_ghost_step.)</summary>
+    public static bool CanTake(Instance unit, int cellX, int cellY)
+    {
+        if (Controller() is not { IsNone: false } controller)
+            return false;
+        Instance occupant = At(controller, controller.Get("posgrid"), cellX, cellY);
+        return occupant.IsNone || !occupant.Exists || occupant.Equals(unit.Persist())
+            || !Gm.ObjectIsAncestor(occupant.Get("object_index").AsInt, (int)GameObjectId.o_unit);
     }
 
     /// <summary>Takes a unit out of the world quietly: out of the grids and the player's list of units to run each turn,

@@ -24,12 +24,17 @@ public sealed class Player : GameObject
         // Caravan Dummy record first: that supplies every field the normal inspection UI expects (type, stats,
         // resistances, icons, mobIndex, etc.) without inheriting the dummy object's context actions.
         Game.CallScript("scr_param", self, "Caravan Dummy");
-        // o_enemy supplies the normal unit fields, collision and target shape. Keep this proxy passive:
-        // no AI, no saves, no dialogue, no enemy attention, and enough local HP that unsynchronized local damage
-        // cannot destroy it before combat forwarding is implemented.
+        // o_enemy supplies the normal unit fields, collision and target shape. Keep this proxy passive - no AI, no
+        // saves, no dialogue - and with enough local HP that nothing here can destroy it: its player's own game resolves
+        // what's done to them (CombatSync).
         self["ai_is_on"] = false;
         self["is_neutral"] = true;
-        self["is_ignored_by_enemies"] = true;
+        // Enemies hostile to the player go for it as they would the player: it's in the game's "Player" faction list
+        // (the AI table's Player column), out of the dummy record's. An attack on it goes to its player's game.
+        Game.CallScript("scr_faction_map_remove", self, self);
+        self["subfaction_key"] = "Player";
+        Game.CallScript("scr_faction_map_add", self, self);
+        self["is_ignored_by_enemies"] = false;
         self["can_speak"] = false;
         self["roomEntityIsSavable"] = false;
         self["name"] = "Player";

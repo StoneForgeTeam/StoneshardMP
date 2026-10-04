@@ -1,5 +1,54 @@
 # StoneshardMP changes
 
+## 0.24.0
+
+- **Combat between players' games.** Each game resolves the fights its own character is in - it has the real stats,
+  gear, buffs and skills - and the host's enemies are the real ones:
+  - **A client's attacks count in the host's world.** The client rolls its attack as the game does - hit, dodge,
+    block, crit, with its own weapon - against its copy of the host's enemy, and the host deals the damage to the real
+    one, as from that client. Whether it dies is the host's to say: the client's copy stays alive until the host's
+    update says it's dead, and its corpse and loot come from the host.
+  - **Enemies fight clients.** On the host, a client's stand-in is in the game's "Player" faction list, so enemies
+    hostile to the player chase and attack it as they would the player, and turn on a client who hits them. Their
+    attack isn't resolved on the host: the client's game has its copy of the enemy attack the client's character, with
+    its real armour, dodge and block.
+  - **Kills give a client XP.** An enemy a client hit that dies on the host gives that client its XP, worked out as the
+    game does (less for an enemy of a lower tier than their level), with the game's kill line in the log.
+  - The host logs each hit ("<player> hit unit N (<object>): X damage, Y health left"); the client what it sent, and
+    the XP for a kill.
+  - Still to come: skills and spells, status effects, a client knocked out or killed.
+- **Shared turn-based rounds are back** (from the GML version). Where two or more players are in the host's place and
+  any of them needs turns - in combat, bleeding to death (their bleeds would take them to 0 before they stop and health
+  comes back), or on fire - play goes in rounds: each player in turn, in slot order (the host first), one action each,
+  then the enemies, all together.
+  - Until it's your turn, and once you've taken it, your character counts as busy: no walking, attacking, skipping or
+    using anything.
+  - The host's enemies wait until every player has acted (the host's own action is held from setting them off), then
+    all move. A client's action isn't a world turn of its own meanwhile.
+  - Whoever hasn't acted in 30 s is skipped, so nobody holds a round up for good.
+  - **The turn order carousel is back**, under your status effects: whose turn it is in the centre, who's next to its
+    right and who just went to its left, turning as the turn moves on; the enemies' portrait is the nearest enemy after
+    you. Below: YOUR TURN / <NAME>'S TURN / ENEMIES' TURN, and why play is turn-based.
+  - The host logs each round, who's acted and who was skipped; a client each round it's in.
+- **Follow another player is back** (from the GML version): "Follow" on their character's right-click menu ("Stop
+  following" while you do).
+  - Whenever your character is standing still and they're more than a cell away, it walks to the free cell next to
+    them on your side, as a click on the ground would - so in a round it goes on your turn.
+  - When they leave your place, you go out the way they did: the door, stairs or entrance nearest where you last saw
+    them (through it, or walked to and through, as the game's own Exit), or across the edge of the area; then on
+    following them there.
+  - It stops on a left click on the world in your own window (not on the UI), when you lose them, or when they leave
+    the game. It goes on while your game's window is in the background.
+- **A crash when players stood next to each other is fixed.** Another player's character took their cell in the
+  game's position grid even when your own character (or an area unit) was there for a moment, overwriting it; the game
+  then crashed when it read that cell. It only moves onto a free cell now (or its own), as the GML version did, and
+  catches up once the cell's free. And it's put on its cell at once rather than walked there: a walking unit clears the
+  cell it leaves as it starts - which, after two players came through the same door onto the same cell, was yours.
+- Enemies go after another player's character again: it was marked ignored by enemies every step, undoing the combat
+  change above.
+- Needs the StoneForge release with `ContextMenus`.
+- Protocol 23.
+
 ## 0.23.0
 
 - **Party frames are back** (from the GML version), down the right edge of the screen: one per other player, in the

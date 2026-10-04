@@ -174,14 +174,19 @@ public sealed class PlayerManager
             view.VisY += (state.Y - view.VisY) * 0.5f;
         }
         // Keep the real unit in the occupancy grids too. That lets the game recognize a player as a character,
-        // while Draw deliberately uses the remote player's smoother visual position instead.
-        UnitGrid.Move(self, state.CellX, state.CellY);
+        // while Draw deliberately uses the remote player's smoother visual position instead. Only onto a free cell (or
+        // its own): our player, or an area unit, may be there for a moment - taking it would overwrite that unit in the
+        // position grid, and the game crashes on it. It catches up once the cell's free. Snapped there, never walked: a
+        // walking unit clears the cell it leaves as it starts, whoever's come onto it since (it's drawn from VisX / VisY).
+        if (UnitGrid.CanTake(self, state.CellX, state.CellY))
+            UnitGrid.Move(self, state.CellX, state.CellY, snap: true);
         self["name"] = view.Player.Name;
         self["type"] = "Player";
         self["desc"] = "Another player.";
         self["ai_is_on"] = false;
         self["is_neutral"] = true;
-        self["is_ignored_by_enemies"] = true;
+        // (Enemies go for it as for the player - CombatSync: what they do to it goes to its player's game.)
+        self["is_ignored_by_enemies"] = false;
         self["roomEntityIsSavable"] = false;
         self["can_drop_loot"] = false;
         self["is_full_destroy"] = false;
@@ -273,6 +278,10 @@ public sealed class PlayerManager
             Game.CallBuiltin("instance_destroy", view.Unit);
         view.Sprites?.Dispose();
     }
+
+    /// <summary>The object standing for a player in our game (none if they've none here now).</summary>
+    public Instance UnitOf(int slot)
+        => _views.TryGetValue(slot, out var view) && !view.Unit.IsNone && view.Unit.Exists ? view.Unit : default;
 
     private View? ViewOf(Instance self)
     {
