@@ -1,5 +1,11 @@
 # StoneshardMP changes
 
+## 0.22.6
+
+- **The Mods button stays on the main menu after multiplayer.** The Multiplayer screens put the menu back with
+  MainMenu.RestoreButtons, which undoes everyone's changes since startup, the loader's Mods button included. They now
+  undo only their own (MainMenu.UndoChanges). StoneForge also counts its own buttons as part of the startup menu now.
+
 ## 0.22.5
 
 - **No flash of old gear when a player comes in.** On joining, or after a reload, a player now sends its look before

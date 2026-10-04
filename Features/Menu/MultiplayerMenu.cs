@@ -72,8 +72,8 @@ public sealed class MultiplayerMenu
     // Multiplayer screen, goes back to it).
     private void Show(Screen screen)
     {
-        // (One screen deep: what an earlier one did undone first.)
-        MainMenu.RestoreButtons(_context);
+        // (One screen deep: what an earlier one did undone first - ours only: other mods' and the loader's buttons stay.)
+        MainMenu.UndoChanges(_context);
         _shown = screen;
         MainMenu.ClearButtons(_context);
         switch (screen)
@@ -104,7 +104,7 @@ public sealed class MultiplayerMenu
     private void Close()
     {
         _shown = Screen.None;
-        MainMenu.RestoreButtons(_context);
+        MainMenu.UndoChanges(_context);
     }
 
     private void Host() => _session.Host((int)_settings.Port.Value, _playerName(), (int)_settings.MaxPlayers.Value);
