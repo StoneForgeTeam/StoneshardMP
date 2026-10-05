@@ -26,7 +26,7 @@ namespace StoneshardMP.Features.World;
 // - Built alike: an area's layout seeds (first visit, respawn) and a dungeon's floors come from the world seed, not
 //   randomize()/irandom, so every game in the same world builds the same area or dungeon (SharedWorld.TileSeedValidate,
 //   SharedWorld.DungeonSeed). Always, solo too - an area a host builds before anyone joins is the one they'll find.
-// - Kept alike: when a game saves a location it was running (leaving it: o_roomEntitySaver), what's in it - what's
+// - Kept alike: when a game saves a location it was running (leaving it: StoneForge's Locations.OnSaved), what's in it - what's
 //   dead, taken, opened - goes to the others, who keep it as their own save of that location (SharedWorld.LocationStore). A
 //   game following the place's owner as it leaves (AreaOwnership) doesn't: the owner's copy is the real one, and the owner
 //   sends it when it leaves. The last one out sends theirs - whoever owned it at the end: an owner that left first
@@ -111,7 +111,7 @@ public sealed class WorldSync
             return false;
         });
         // A location saved as we leave it: to the others, if we were running it.
-        context.OnCode("gml_Object_o_roomEntitySaver_Other_12", after: (self, _) => LocationSaved(self));
+        Locations.OnSaved(context, LocationSaved);
         // A client in the host's world takes its weather instead of rolling its own.
         Scripts.scr_weatherEveryHourUpdate.Before(context, call => _join.ClientInWorld);
         Scripts.scr_weatherEveryMinuteUpdate.Before(context, call => _join.ClientInWorld);
@@ -177,14 +177,14 @@ public sealed class WorldSync
 
     // ---- locations ----
 
-    private void LocationSaved(Instance saver)
+    private void LocationSaved(LocationPreset saved)
     {
         if (!Sharing)
             return;
         // A game following the place's owner leaves the owner's copy as the real one.
         if (_following)
             return;
-        string state = SharedWorld.LocationExportSaved(saver);
+        string state = saved.Export() is { EntitiesJson: not null } export ? export.ToJson() : "";
         if (state.Length > 0)
             Send(WorldData.Location, state);
         // Its tile too: leaving a dungeon floor, the floor's graph is saved in the dungeon's maps, filled in place

@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- A door opened or shut goes to the others at once (StoneForge's `Doors.OnChanged`), where before each game compared
+  its doors every few frames and could miss one opened and shut again in between. Saving a location as we leave it
+  uses StoneForge's `Locations.OnSaved`.
 - **Map markers are shared** (from the GML version). Everyone in the world has one set of markers on the world map.
   When a player places one or takes one off (StoneForge's `MapMarkers.OnPlaced` / `OnRemoved`), the whole set goes to
   the others, whose markers become those; an open map's change on the spot. A client joining gets the host's markers

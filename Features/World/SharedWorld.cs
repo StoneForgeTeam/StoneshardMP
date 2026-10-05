@@ -110,10 +110,6 @@ internal static class SharedWorld
     public static string LocationExport(string location, GmValue room, GmValue preset)
         => Locations.Get(location)?.Room(room)?.Preset(preset)?.Export() is { EntitiesJson: not null } state ? state.ToJson() : "";
 
-    /// <summary>The location an o_roomEntitySaver has just saved (the end of its user event 2), as LocationExport.</summary>
-    public static string LocationExportSaved(Instance saver)
-        => saver.Exists ? LocationExport(saver.Get("locationTag").AsString, saver.Get("roomTag"), saver.Get("presetTag")) : "";
-
     /// <summary>Another game's saved state for a location (LocationExport) into our world data, where the game keeps its
     /// own save of that location, so our next visit there loads theirs. The flags go too: they decide whether its
     /// spawners run on entry, so a location we never visited doesn't spawn fresh mobs on top of theirs. What happened,
