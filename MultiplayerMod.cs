@@ -33,6 +33,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private AreaUnits _areaUnits = null!;
     private CombatSync _combat = null!;
     private TurnRounds _rounds = null!;
+    private TurnTime _turnTime = null!;
     private Follow _follow = null!;
     private MultiplayerMenu _menu = null!;
     private WorldClock _clock = null!;
@@ -64,6 +65,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _rounds = new TurnRounds(context, _session, () => _join.InSharedWorld);
         context.UI.Hud.Add(new TurnOrder(_rounds, _session, () => _players.ObjectIndex));
         _clock = new WorldClock(context, _session, () => _join.InSharedWorld, _ => _rounds.Active);
+        // A move's time shared out: 30 seconds over the number of players in the world (a round's turn keeps its 30).
+        _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
         _dump = new DebugDump(context, _session, _areaUnits);
         // Our name to the others: the setting, or the Steam name.
         string PlayerName() => settings.Name.Value.Trim() is { Length: > 0 } name ? name : SteamName();
@@ -95,6 +98,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _areaUnits.Clear();
         _combat.Clear();
         _rounds.Clear();
+        _turnTime.Clear();
         _follow.Clear();
         _clock.Clear();
         _join.Clear();

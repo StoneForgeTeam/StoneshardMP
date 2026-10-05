@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Time goes by at one player's pace.** Every player's move is a world turn, and a turn lets 30 seconds pass, so with
+  more players the day went by that many times as fast. A move now lets 30 seconds pass over the number of players in
+  the world: 15 with two, 10 with three. What's left of a second carries to the next move, so it still adds up
+  exactly. A shared round keeps its 30 seconds (everyone acts, then the world takes one turn), and sleeping,
+  travelling and the like let their time pass as ever.
 - `mod.json`'s `"stoneforge"` is `"latest"` while in development: any StoneForge loads it. A release names
   StoneForge's newest release, which it was built against, in its `mod.json` and notes. It fails if the mod needs
   StoneForge API that isn't released yet.
