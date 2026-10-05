@@ -58,7 +58,6 @@ internal static class JoinSave
         }
         world.Remove(PlayersKey);
         world.Remove(SlotsKey);
-        Game.Log($"[StoneshardMP] Save for slot {slot}: {(world[PersonalStash.StashesKey] as JsonObject)?.Count ?? 0} stash(es) in it");
         return world.ToJsonString(GameJson);
     }
 

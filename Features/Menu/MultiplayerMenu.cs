@@ -71,7 +71,6 @@ public sealed class MultiplayerMenu
             // (Hosting: its screen made again, Play on it now. Hosting but showing another: to it.)
             if (_session.Mode == Session.SessionMode.Host)
             {
-                _context.Log($"Lobby: Hosting screen made again ({(_lobby.Picked is { } picked ? "Play for " + picked.Name : "nothing picked")}; it was {_shown})");
                 Show(Screen.Hosting);
             }
         }

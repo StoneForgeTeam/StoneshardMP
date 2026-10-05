@@ -74,13 +74,8 @@ public sealed class PersonalStash
         GmValue kept = SaveData.ModMap(StashesKey)[key];
         string? items = kept.Kind == GmKind.String ? kept.AsString
             : _session.Connected && _session.Mode == Session.SessionMode.Client ? "[]" : null;
-        if (items == null)
-            _context.Log($"Stash {key}: none kept yet - as it is ({Count(Containers.ContentsJson(chest))} item(s)), ours from now");
-        else if (!Containers.SetContents(chest, items))
+        if (items != null && !Containers.SetContents(chest, items))
             _context.Log($"Stash {key}: couldn't put it in the chest");
-        else
-            _context.Log($"Stash {key}: put in, {Count(items)} item(s)" + (kept.Kind == GmKind.String ? "" : " (none kept yet: empty)")
-                + $" - {StashCount()} stash(es) in the save data");
     }
 
     // Our closed stashes' items, kept as ours - and a client's sent to the host to keep in its world.
@@ -99,10 +94,8 @@ public sealed class PersonalStash
             _closed.RemoveAt(i);
             string key = Key(_worldSlot(), id);
             SaveData.ModMap(StashesKey)[key] = items;
-            bool send = _session.Connected && _session.Mode == Session.SessionMode.Client;
-            if (send)
+            if (_session.Connected && _session.Mode == Session.SessionMode.Client)
                 _session.Send(new StashPacket(id, JoinCompression.Compress(items)), to: 0);
-            _context.Log($"Stash {key}: kept, {Count(items)} item(s)" + (send ? " - sent to the host" : ""));
         }
     }
 
@@ -111,19 +104,8 @@ public sealed class PersonalStash
     {
         if (_session.Mode != Session.SessionMode.Host || !SaveData.Available)
             return;
-        string items = JoinCompression.Decompress(packet.Data), key = Key(_slots.Of(from.Slot), packet.Chest);
-        SaveData.ModMap(StashesKey)[key] = items;
-        _context.Log($"Stash {key}: {from.Name}'s kept, {Count(items)} item(s)");
+        SaveData.ModMap(StashesKey)[Key(_slots.Of(from.Slot), packet.Chest)] = JoinCompression.Decompress(packet.Data);
     }
-
-    // (For the log: how many items, how many stashes.)
-    private static int Count(string? items)
-    {
-        try { return items != null && System.Text.Json.Nodes.JsonNode.Parse(items) is System.Text.Json.Nodes.JsonArray list ? list.Count : 0; }
-        catch (System.Text.Json.JsonException) { return 0; }
-    }
-
-    private static int StashCount() => SaveData.Map?.GetMap(StashesKey) is { } stashes ? stashes.Keys.Length : 0;
 
     private static string Key(int worldSlot, string id) => worldSlot.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + id;
 

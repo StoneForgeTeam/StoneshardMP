@@ -13,14 +13,12 @@ namespace StoneshardMP.Features.Join;
 // New Game still starts straight away: a new world has no characters to choose from.
 public sealed class HostLobby
 {
-    private readonly ModContext _context;
     private readonly Session _session;
     // Play pressed: its load is let through.
     private bool _playing;
 
     public HostLobby(ModContext context, Session session)
     {
-        _context = context;
         _session = session;
         session.Changed += () =>
         {
@@ -33,19 +31,9 @@ public sealed class HostLobby
         {
             if (_playing || _session.Mode != Session.SessionMode.Host || !Gm.InMainMenu)
                 return false;
-            string by = call.Self.IsNone ? "nothing" : Gm.ObjectGetName(call.Self.Get("object_index").AsInt);
-            if (!IsLoad(call.Args))
-            {
-                _context.Log($"Lobby: a room change from {by} on the main menu, not a save's load - let through");
+            if (!IsLoad(call.Args) || call.Self.IsNone || Gm.ObjectGetName(call.Self.Get("object_index").AsInt) != "o_saveMenuSlotSave"
+                || call.Self.Get("slotDirName") is not { Kind: GmKind.String } slot || call.Self.Get("saveDirName") is not { Kind: GmKind.String } save)
                 return false;
-            }
-            if (by != "o_saveMenuSlotSave" || call.Self.Get("slotDirName") is not { Kind: GmKind.String } slot
-                || call.Self.Get("saveDirName") is not { Kind: GmKind.String } save)
-            {
-                _context.Log($"Lobby: a save's load from {by}, not Load Game's list - let through");
-                return false;
-            }
-            _context.Log($"Lobby: picked {slot.AsString}/{save.AsString} from Load Game's list - press Play to go into it");
             Pick(new SaveFile(new SaveSlot(slot.AsString), save.AsString));
             // (No changer: the save menu doesn't set the save to load. Its loading screen, and the menu itself, gone - back
             // to the main menu.)
@@ -66,7 +54,6 @@ public sealed class HostLobby
     public void PickLast()
     {
         Pick(SaveSlots.CurrentSave);
-        _context.Log(Picked is { } save ? $"Lobby: picked {save.Slot.Name}/{save.Name} (Continue) - press Play to go into it" : "Lobby: no last save to continue");
     }
 
     /// <summary>Play: the picked save loaded (as Load Game does). False if there's none, or it couldn't be.</summary>
@@ -74,7 +61,6 @@ public sealed class HostLobby
     {
         if (Picked is not { } save)
             return false;
-        _context.Log($"Lobby: playing {save.Slot.Name}/{save.Name}");
         _playing = true;
         try
         {
