@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
@@ -13,33 +14,35 @@ using StoneshardMP.Net.Packets;
 namespace StoneshardMP.Features.Rounds;
 
 // Shared turn-based rounds (legacy: scr_mp_round_mode, scr_mp_turn_hold, scr_mp_hold_enemy_phase, scr_mp_tick_step's
-// rounds). Where two or more players are in the host's place and any of them needs turns - in combat, bleeding to death,
-// on fire (TurnReasons) - play there goes in rounds instead of each action being a world turn: each player in turn, in
-// slot order (the host first), one action each, then the enemies, all together. The host runs the rounds - its units are
-// the real ones - and tells everyone where they are (RoundPacket); each player tells it why they need turns and when
-// they've acted (TurnStatusPacket).
+// rounds). Where two or more players share a place and any of them needs turns - in combat, bleeding to death, on fire
+// (TurnReasons) - play there goes in rounds instead of each action being a world turn: each player in turn, in slot
+// order, one action each, then the enemies, all together. The place's owner (AreaOwnership) runs the rounds - its units
+// are the real ones - and tells the others there where they are (RoundPacket); each of them tells it why they need turns
+// and when they've acted (TurnStatusPacket).
 // - The gate: until it's our turn, and once we've taken it, the game counts the player as busy (scr_unitTurnGetTime):
 //   no walking, attacking, skipping or using anything.
-// - The enemies: the host's own action would set them off at once (its player's alarm 4: the units' turns). It's held
-//   till every player has acted; then they all move. A round where the host was skipped has its world turn run then.
+// - The enemies: the owner's own action would set them off at once (its player's alarm 4: the units' turns). It's held
+//   till every player has acted; then they all move. A round where the owner was skipped has its world turn run then.
 // - A player who hasn't acted in 30 s is skipped, so nobody holds a round up for good.
-// - Clients' actions aren't world turns of their own while there's a round in the host's place: the round's is (WorldClock
-//   asks Active) - a client elsewhere would otherwise move the host's enemies mid-round.
+// - Others' actions aren't world turns of their own in a place with a round: the round's is (WorldClock asks Active) - a
+//   player elsewhere would otherwise move the round's enemies mid-round.
+// A new owner (the old one left mid-round) starts the rounds afresh.
 public sealed class TurnRounds
 {
     private const long TimeoutMs = 30000, StatusEveryMs = 1000;
 
     private readonly ModContext _context;
     private readonly Session _session;
+    private readonly AreaOwnership _ownership;
     private readonly Func<bool> _inSharedWorld;
 
     // Everyone: our reason (read every few frames), the last round we acted in, the game's turn count last seen.
     private TurnReason _reason;
     private int _actedRound = -1, _turns = -1, _frame;
-    // Client: what we last told the host, and when.
+    // Follower: what we last told the owner, and when.
     private (TurnReason, int) _told;
     private long _toldAt;
-    // Host: each client's reason and last round acted in; who was skipped this round; when the round last moved on;
+    // Owner: each follower's reason and last round acted in; who was skipped this round; when the round last moved on;
     // whether the enemies' turn has begun (and when); what was last sent, and when.
     private readonly Dictionary<int, (TurnReason Reason, int ActedRound)> _status = new();
     private readonly HashSet<int> _skipped = new();
@@ -48,17 +51,19 @@ public sealed class TurnRounds
     private bool _enemiesTurn;
     private string _sent = "";
 
-    public TurnRounds(ModContext context, Session session, Func<bool> inSharedWorld)
+    public TurnRounds(ModContext context, Session session, AreaOwnership ownership, Func<bool> inSharedWorld)
     {
         _context = context;
         _session = session;
+        _ownership = ownership;
         _inSharedWorld = inSharedWorld;
+        ownership.Changed += (_, _) => Restart();
         Scripts.scr_unitTurnGetTime.After(context, call =>
         {
             if (GateShut && call.Result.AsReal <= 0)
                 call.Result = 1;
         });
-        // (The units' turns: the player's alarm 4 - held, while the host waits for the others, a frame at a time.)
+        // (The units' turns: the player's alarm 4 - held, while the owner waits for the others, a frame at a time.)
         context.OnCode("gml_Object_o_player_Alarm_4", before: (self, _) =>
         {
             if (!HoldEnemies(self))
@@ -70,7 +75,7 @@ public sealed class TurnRounds
         session.On<RoundPacket>(ReceiveRound);
     }
 
-    /// <summary>Whether rounds are on in the host's place (as the host last said).</summary>
+    /// <summary>Whether rounds are on in our place (as its owner last said, or as we run them).</summary>
     public bool Active { get; private set; }
 
     /// <summary>The round's number.</summary>
@@ -118,6 +123,20 @@ public sealed class TurnRounds
         _sent = "";
     }
 
+    // Our role in the place changed (a new place, or a new owner): no round here until its owner says.
+    private void Restart()
+    {
+        if (Active)
+            _context.Log("Rounds over (the place's owner changed)");
+        Active = false;
+        Seats = Array.Empty<RoundSeat>();
+        _told = default;
+        _status.Clear();
+        _skipped.Clear();
+        _enemiesTurn = false;
+        _sent = "";
+    }
+
     public void Tick()
     {
         if (!_session.Connected || !_inSharedWorld() || !Gm.InGame || OurPlayer.Instance.IsNone)
@@ -136,10 +155,10 @@ public sealed class TurnRounds
                 Acted();
             _turns = turns;
         }
-        if (_session.Mode == Session.SessionMode.Host)
+        if (_ownership.Role == AreaRole.Owner)
             RunRounds();
-        else
-            TellHost();
+        else if (_ownership.Role == AreaRole.Follower)
+            TellOwner();
     }
 
     private void Acted()
@@ -148,13 +167,13 @@ public sealed class TurnRounds
             return;
         _actedRound = Round;
         _context.Log($"Round {Round}: acted");
-        if (_session.Mode == Session.SessionMode.Client)
-            TellHost(force: true);
+        if (_ownership.Role == AreaRole.Follower)
+            TellOwner(force: true);
     }
 
-    // ---- client ----
+    // ---- follower ----
 
-    private void TellHost(bool force = false)
+    private void TellOwner(bool force = false)
     {
         long now = Environment.TickCount64;
         var status = (_reason, _actedRound);
@@ -162,12 +181,12 @@ public sealed class TurnRounds
             return;
         _told = status;
         _toldAt = now;
-        _session.Send(new TurnStatusPacket((byte)_reason, _actedRound), to: 0);
+        _session.Send(new TurnStatusPacket((byte)_reason, _actedRound), to: _ownership.Owner);
     }
 
     private void ReceiveRound(RemotePlayer from, RoundPacket round)
     {
-        if (_session.Mode != Session.SessionMode.Client || from.Slot != 0)
+        if (_ownership.Role != AreaRole.Follower || from.Slot != _ownership.Owner)
             return;
         if (round.Active && (!Active || round.Round != Round))
             _context.Log($"Round {round.Round}: {string.Join(", ", round.Seats.Select(s => s.Slot))}, then the enemies");
@@ -176,20 +195,19 @@ public sealed class TurnRounds
         Seats = round.Seats;
     }
 
-    // ---- host ----
+    // ---- owner ----
 
     private void ReceiveStatus(RemotePlayer from, TurnStatusPacket status)
     {
-        if (_session.Mode == Session.SessionMode.Host)
+        if (_ownership.Role == AreaRole.Owner)
             _status[from.Slot] = ((TurnReason)status.Reason, status.ActedRound);
     }
 
-    // Host: the round in our place - who's in it, who's acted, the enemies' turn, the next round.
+    // Owner: the round in our place - who's in it, who's acted, the enemies' turn, the next round.
     private void RunRounds()
     {
         long now = Environment.TickCount64;
-        string? place = OurPlayer.State()?.Place;
-        var here = _session.Players.Where(p => place != null && p.State?.Place == place).Select(p => p.Slot).ToList();
+        var here = _ownership.Others.ToList();
         foreach (int gone in _status.Keys.Where(slot => !_session.Players.Any(p => p.Slot == slot)).ToList())
             _status.Remove(gone);
         TurnReason ReasonOf(int slot) => slot == _session.Slot ? _reason : _status.GetValueOrDefault(slot).Reason;
@@ -254,11 +272,11 @@ public sealed class TurnRounds
         _context.Log($"Round {Round}");
     }
 
-    // Host: whether the units' turn (our player's alarm 4, about to run) waits - in a round, for the others to act. Our
+    // Owner: whether the units' turn (our player's alarm 4, about to run) waits - in a round, for the others to act. Our
     // own action set it off: we've acted. (Never mid-loop: only as it starts, enemy_iteration 0.)
     private bool HoldEnemies(Instance player)
     {
-        if (_session.Mode != Session.SessionMode.Host || !InRound || _enemiesTurn || player.Get("enemy_iteration").AsReal != 0)
+        if (_ownership.Role != AreaRole.Owner || !InRound || _enemiesTurn || player.Get("enemy_iteration").AsReal != 0)
             return false;
         if (_actedRound != Round && !_skipped.Contains(_session.Slot))
             Acted();
@@ -272,7 +290,9 @@ public sealed class TurnRounds
             return;
         _sent = text;
         _sentAt = now;
-        _session.Send(new RoundPacket(Active, Round, Seats.ToArray()));
+        var packet = new RoundPacket(Active, Round, Seats.ToArray());
+        foreach (int follower in _ownership.Others)
+            _session.Send(packet, follower);
     }
 
     /// <summary>A player's name: ours, or another's.</summary>

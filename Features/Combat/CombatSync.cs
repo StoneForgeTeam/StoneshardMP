@@ -6,11 +6,11 @@ using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
 
-// The game's attack: hooked to see what a client's attacks do to the host's units, and to send the host's units'
-// attacks on clients to their games.
+// The game's attack: hooked to see what a follower's attacks do to the owner's units, and to send the owner's units'
+// attacks on followers to their games.
 [assembly: HookScript(nameof(Scripts.scr_attack))]
-// A unit put on another cell (a knockback, a pull), and effects put on it: a client's own, on its copies of the host's
-// units, go to the host.
+// A unit put on another cell (a knockback, a pull), and effects put on it: a follower's own, on its copies of the owner's
+// units, go to the owner.
 [assembly: HookScript(nameof(Scripts.scr_change_coordinat))]
 [assembly: HookScript(nameof(Scripts.scr_effect_create))]
 [assembly: HookScript(nameof(Scripts.scr_effect_update))]
@@ -20,26 +20,27 @@ using StoneshardMP.Net.Packets;
 namespace StoneshardMP.Features.Combat;
 
 // Combat where players are together. Each game resolves the fights its own character is in - it has the real stats,
-// gear, buffs and skills - and the host's units are the real ones (AreaUnits):
-// - A client's attacks: the client rolls them against its copy of the host's unit, as the game does (scr_attack: hit,
+// gear, buffs and skills - and the units of the place's owner (AreaOwnership: whoever got there first) are the real ones
+// (AreaUnits):
+// - A follower's attacks: the follower rolls them against its copy of the owner's unit, as the game does (scr_attack: hit,
 //   dodge, block, crit, its own weapon); what they did - the damage, and whether it left the unit with none - goes to
-//   the host, which deals it to the real unit as from that client's stand-in. Whether it dies is the host's to say: the
-//   client's copy is kept alive, and goes when the host's roster says so (its corpse and loot come with the host's).
-//   Every attack on one of the host's units in a client's game is the client's own: there, their AI is off.
-// - What else a client's own actions do to the host's units goes to the host too, from the game's own scripts for it:
+//   the owner, which deals it to the real unit as from that follower's stand-in. Whether it dies is the owner's to say: the
+//   follower's copy is kept alive, and goes when the owner's roster says so (its corpse and loot come with the owner's).
+//   Every attack on one of the owner's units in a follower's game is the follower's own: there, their AI is off.
+// - What else a follower's own actions do to the owner's units goes to the owner too, from the game's own scripts for it:
 //   a unit put on another cell (scr_change_coordinat) inside our player's attack or a knockback our player owns is
-//   moved there on the host (UnitMovedPacket); an effect put on one (scr_effect_create - a stun, a bleed - or refreshed:
+//   moved there on the owner (UnitMovedPacket); an effect put on one (scr_effect_create - a stun, a bleed - or refreshed:
 //   scr_effect_update) inside our attack or knockback, or one our player owns (a skill's), is put on the real one, from
-//   the client's stand-in (UnitEffectPacket). Otherwise the host's unit stays where it was and acts unstunned, and the
+//   the follower's stand-in (UnitEffectPacket). Otherwise the owner's unit stays where it was and acts unstunned, and the
 //   two games' units drift apart. Only ours: the game moves units and refreshes their own buffs (No Retreat...) for
-//   reasons of its own, which are the host's to have. The host's roster then carries both back (AreaUnits: its cells,
+//   reasons of its own, which are the owner's to have. The owner's roster then carries both back (AreaUnits: its cells,
 //   and the effects on its units).
-// - The host's units' attacks on a client: its enemies go for the client's stand-in as for the player (it's in the
-//   "Player" faction list). Their attack on it isn't resolved on the host: the client's game has its copy of the unit
-//   attack the client's character, with the character's real armour, dodge and block.
-// - Kills: XP is shared. When a unit any player took part in dies on the host, every player in that place within 20
-//   tiles gets its XP - a client's game works it out from its copy of the unit as the game does (o_enemy's Destroy), and
-//   the host's comes from the game's own death code.
+// - The owner's units' attacks on a follower: its enemies go for the follower's stand-in as for the player (it's in the
+//   "Player" faction list). Their attack on it isn't resolved on the owner: the follower's game has its copy of the unit
+//   attack the follower's character, with the character's real armour, dodge and block.
+// - Kills: XP is shared. When a unit any player took part in dies on the owner, every player in that place within 20
+//   tiles gets its XP - a follower's game works it out from its copy of the unit as the game does (o_enemy's Destroy), and
+//   the owner's comes from the game's own death code.
 // (Still to come: skills' and spells' damage, players knocked out.)
 public sealed class CombatSync
 {
@@ -49,26 +50,29 @@ public sealed class CombatSync
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly AreaUnits _areaUnits;
+    private readonly AreaOwnership _ownership;
     private readonly PlayerManager _players;
     private readonly Func<bool> _inSharedWorld;
-    // Client: attacks under way (one may start inside another: a counterattack), each on one of the host's units with
+    // Follower: attacks under way (one may start inside another: a counterattack), each on one of the owner's units with
     // its health before - or null, an attack on anything else.
     private readonly Stack<(Instance Target, long HostId, double Health)?> _attacks = new();
-    // Host: which players (slots) have hit each of our units (by sync id) - when it dies, a player took part.
+    // Owner: which players (slots) have hit each of our units (by sync id) - when it dies, a player took part.
     private readonly Dictionary<long, HashSet<int>> _hitBy = new();
-    // Client: inside the host's unit's attack on us (ReceiveAttack) - what it does to itself is the host's; and inside a
+    // Follower: inside the owner's unit's attack on us (ReceiveAttack) - what it does to itself is the owner's; and inside a
     // refresh of an effect (scr_effect_update), which makes one when it must - sent as the refresh, not again as made.
     private int _hostsAttack, _refreshing;
-    // Client: our player's own action under way - its attack, or a knockback it owns (each pushed as whether it's ours:
-    // they nest) - while what it does to the host's units is ours to send.
+    // Follower: our player's own action under way - its attack, or a knockback it owns (each pushed as whether it's ours:
+    // they nest) - while what it does to the owner's units is ours to send.
     private readonly Stack<bool> _actions = new();
     private int _ourActions;
 
-    public CombatSync(ModContext context, Session session, AreaUnits areaUnits, PlayerManager players, Func<bool> inSharedWorld)
+    public CombatSync(ModContext context, Session session, AreaUnits areaUnits, AreaOwnership ownership, PlayerManager players,
+        Func<bool> inSharedWorld)
     {
         _context = context;
         _session = session;
         _areaUnits = areaUnits;
+        _ownership = ownership;
         _players = players;
         _inSharedWorld = inSharedWorld;
         Scripts.scr_attack.Before(context, call =>
@@ -102,7 +106,7 @@ public sealed class CombatSync
             Destroyed(self);
             return false;
         });
-        // (A client's own actions on the host's units: where they put them, and the effects they put on them.)
+        // (A follower's own actions on the owner's units: where they put them, and the effects they put on them.)
         Scripts.scr_change_coordinat.After(context, CoordinatesChanged);
         Scripts.scr_effect_create.After(context, EffectCreated);
         Scripts.scr_effect_update.Before(context, _ =>
@@ -132,10 +136,14 @@ public sealed class CombatSync
         _ourActions = 0;
     }
 
+    // Whether we run the place we're in with others (our units are the real ones), or follow whoever does (ours are copies).
+    private bool Owning => _ownership.Role == AreaRole.Owner;
+    private bool Following => _ownership.Role == AreaRole.Follower;
+
     // An action starting (whether it's our player's own), and the latest ending.
     private void Begin(bool ours)
     {
-        bool counted = ours && _session.Mode == Session.SessionMode.Client;
+        bool counted = ours && Following;
         _actions.Push(counted);
         if (counted)
             _ourActions++;
@@ -151,20 +159,20 @@ public sealed class CombatSync
     private static bool IsOurPlayer(Instance unit)
         => !unit.IsNone && unit.Exists && OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist());
 
-    // ---- a client's attacks ----
+    // ---- a follower's attacks ----
 
-    // Client: an attack starting - on one of the host's units, its health now.
+    // Follower: an attack starting - on one of the owner's units, its health now.
     private (Instance, long, double)? Started(ScriptCall call)
     {
-        if (_session.Mode != Session.SessionMode.Client || !_inSharedWorld() || call.Args.Length < 1)
+        if (!Following || !_inSharedWorld() || call.Args.Length < 1)
             return null;
         Instance target = Instance.Of(call.Args[0]);
-        if (target.IsNone || !target.Exists || _areaUnits.HostIdOf(target) is not { } hostId)
+        if (target.IsNone || !target.Exists || _areaUnits.OwnerIdOf(target) is not { } hostId)
             return null;
         return (target.Persist(), hostId, target.Get("HP").AsReal);
     }
 
-    // Client: the attack done - what it took off the unit goes to the host, and our copy stays alive till the host
+    // Follower: the attack done - what it took off the unit goes to the owner, and our copy stays alive till the owner
     // says otherwise.
     private void Finished((Instance Target, long HostId, double Health) attack)
     {
@@ -176,16 +184,16 @@ public sealed class CombatSync
         bool killed = health <= 0;
         if (killed)
             attack.Target["HP"] = 1;
-        _session.Send(new UnitHitPacket(attack.HostId, (float)damage, killed));
+        _session.Send(new UnitHitPacket(attack.HostId, (float)damage, killed), _ownership.Owner);
         _context.Log($"Hit the host's unit {attack.HostId}: {damage} damage{(killed ? ", leaving it none" : "")}");
     }
 
-    // Host: a client's hit, dealt to our unit as the game deals damage (scr_simple_damage: the flash, its morale, its
+    // Owner: a follower's hit, dealt to our unit as the game deals damage (scr_simple_damage: the flash, its morale, its
     // reaction to being hit), from their stand-in - the unit's last attacker, so it turns on them. Left with none, it
     // dies in its next step.
     private void ReceiveHit(RemotePlayer from, UnitHitPacket hit)
     {
-        if (_session.Mode != Session.SessionMode.Host || !Gm.InGame)
+        if (!Owning || !Gm.InGame)
             return;
         Instance unit = _areaUnits.UnitOf(hit.UnitId);
         if (unit.IsNone)
@@ -207,13 +215,13 @@ public sealed class CombatSync
             + $"{unit.Get("HP").AsReal} health left");
     }
 
-    // ---- the host's units attacking clients ----
+    // ---- the owner's units attacking followers ----
 
-    // Host: one of our units attacking a player's stand-in - not resolved here (the stand-in has none of their stats):
+    // Owner: one of our units attacking a player's stand-in - not resolved here (the stand-in has none of their stats):
     // sent to their game, and the unit's turn goes on as the attack would have taken it.
     private bool AttackOnPlayer(ScriptCall call)
     {
-        if (_session.Mode != Session.SessionMode.Host || call.Args.Length < 1)
+        if (!Owning || call.Args.Length < 1)
             return false;
         Instance target = Instance.Of(call.Args[0]);
         if (target.IsNone || !target.Exists || target.Get("object_index").AsInt != _players.ObjectIndex)
@@ -232,11 +240,11 @@ public sealed class CombatSync
         return true;
     }
 
-    // Client: one of the host's units attacks us - our copy of it attacks our character, as a forced attack (its turn
-    // is the host's; ours aren't run here).
+    // Follower: one of the owner's units attacks us - our copy of it attacks our character, as a forced attack (its turn
+    // is the owner's; ours aren't run here).
     private void ReceiveAttack(RemotePlayer from, EnemyAttackPacket attack)
     {
-        if (_session.Mode != Session.SessionMode.Client || from.Slot != 0 || !_inSharedWorld() || !Gm.InGame)
+        if (!Following || from.Slot != _ownership.Owner || !_inSharedWorld() || !Gm.InGame)
             return;
         Instance unit = _areaUnits.LocalOf(attack.UnitId), player = OurPlayer.Instance;
         if (unit.IsNone || player.IsNone)
@@ -249,24 +257,24 @@ public sealed class CombatSync
         finally { _hostsAttack--; }
     }
 
-    // ---- what else a client's actions do to the host's units ----
+    // ---- what else a follower's actions do to the owner's units ----
 
-    // Client: one of the host's units, as our action left it - ours to send, or not (null): the roster's own doing, the
-    // host's unit's own attack, or not one of the host's.
+    // Follower: one of the owner's units, as our action left it - ours to send, or not (null): the roster's own doing, the
+    // owner's unit's own attack, or not one of the owner's.
     private (Instance Copy, long HostId)? Ours(GmValue unit) => Ours(Instance.Of(unit));
 
     private (Instance Copy, long HostId)? Ours(Instance copy)
     {
-        if (_session.Mode != Session.SessionMode.Client || _areaUnits.Applying || _hostsAttack > 0 || !_inSharedWorld())
+        if (!Following || _areaUnits.Applying || _hostsAttack > 0 || !_inSharedWorld())
             return null;
         copy = copy.IsNone ? copy : copy.Persist();
-        if (copy.IsNone || !copy.Exists || _areaUnits.HostIdOf(copy) is not { } hostId)
+        if (copy.IsNone || !copy.Exists || _areaUnits.OwnerIdOf(copy) is not { } hostId)
             return null;
         return (copy, hostId);
     }
 
-    // Client: scr_change_coordinat(x, y, unit = self...) put one of the host's units on another cell - a knockback, a
-    // pull: the host moves the real one there.
+    // Follower: scr_change_coordinat(x, y, unit = self...) put one of the owner's units on another cell - a knockback, a
+    // pull: the owner moves the real one there.
     private void CoordinatesChanged(ScriptCall call)
     {
         if (_ourActions == 0)
@@ -276,12 +284,12 @@ public sealed class CombatSync
             return;
         Cell cell = Units.CellOf(copy);
         _areaUnits.Moved(copy, cell);
-        _session.Send(new UnitMovedPacket(hostId, (short)cell.X, (short)cell.Y));
+        _session.Send(new UnitMovedPacket(hostId, (short)cell.X, (short)cell.Y), _ownership.Owner);
         _context.Log($"Moved the host's unit {hostId} to {cell}");
     }
 
-    // Client: scr_effect_create(effect, duration, target, owner, stage...) put an effect on one of the host's units: the
-    // host puts it on the real one. (Made inside a refresh: sent as the refresh.)
+    // Follower: scr_effect_create(effect, duration, target, owner, stage...) put an effect on one of the owner's units: the
+    // owner puts it on the real one. (Made inside a refresh: sent as the refresh.)
     private void EffectCreated(ScriptCall call)
     {
         if (_refreshing > 0 || call.Args.Length < 3 || Instance.Of(call.Result).IsNone)
@@ -294,8 +302,8 @@ public sealed class CombatSync
         SendEffect(copy, hostId, name, call.Args[1].AsReal, stage, refresh: false);
     }
 
-    // Client: scr_effect_update(effect, target, duration, stacks) refreshed an effect on one of the host's units (or
-    // made it): the host does the same to the real one.
+    // Follower: scr_effect_update(effect, target, duration, stacks) refreshed an effect on one of the owner's units (or
+    // made it): the owner does the same to the real one.
     private void EffectRefreshed(ScriptCall call)
     {
         if (_ourActions == 0 || call.Args.Length < 3 || Ours(call.Args[1]) is not var (copy, hostId))
@@ -308,15 +316,15 @@ public sealed class CombatSync
     private void SendEffect(Instance copy, long hostId, string name, double duration, double stage, bool refresh)
     {
         _areaUnits.EffectsChanged(copy);
-        _session.Send(new UnitEffectPacket(hostId, name, (float)duration, (float)stage, refresh));
+        _session.Send(new UnitEffectPacket(hostId, name, (float)duration, (float)stage, refresh), _ownership.Owner);
         _context.Log($"{(refresh ? "Refreshed" : "Put")} {name} ({duration}) on the host's unit {hostId}");
     }
 
-    // Host: a client's action moved one of our units (in their game) - it's moved there here, onto that cell if it's
+    // Owner: a follower's action moved one of our units (in their game) - it's moved there here, onto that cell if it's
     // free (if it isn't, it stays, and our roster puts theirs back).
     private void ReceiveMove(RemotePlayer from, UnitMovedPacket move)
     {
-        if (_session.Mode != Session.SessionMode.Host || !Gm.InGame)
+        if (!Owning || !Gm.InGame)
             return;
         Instance unit = _areaUnits.UnitOf(move.UnitId);
         if (unit.IsNone)
@@ -330,11 +338,11 @@ public sealed class CombatSync
         _context.Log($"{from.Name} moved unit {move.UnitId} to {move.Cell}");
     }
 
-    // Host: a client's action put an effect on one of our units (in their game) - put on the real one as the game puts
+    // Owner: a follower's action put an effect on one of our units (in their game) - put on the real one as the game puts
     // one (with its immunities, the target's fortitude), from their stand-in: a new one, or a refresh.
     private void ReceiveEffect(RemotePlayer from, UnitEffectPacket effect)
     {
-        if (_session.Mode != Session.SessionMode.Host || !Gm.InGame)
+        if (!Owning || !Gm.InGame)
             return;
         Instance unit = _areaUnits.UnitOf(effect.UnitId);
         if (unit.IsNone)
@@ -352,13 +360,13 @@ public sealed class CombatSync
 
     // ---- kills ----
 
-    // Host: one of our units killed (no health left, and a full destroy: its corpse and loot). When any player took part -
-    // a client hit it, or we did as the game counts it (in its damage list, or its last attacker) - its XP is shared, as
-    // the GML version shared it: every client in our place within 20 tiles of it gets its own (UnitKilledPacket), and we
-    // get ours from the game's own death code - counted in its damage list if only clients hit it.
+    // Owner: one of our units killed (no health left, and a full destroy: its corpse and loot). When any player took part -
+    // a follower hit it, or we did as the game counts it (in its damage list, or its last attacker) - its XP is shared, as
+    // the GML version shared it: every follower in our place within 20 tiles of it gets its own (UnitKilledPacket), and we
+    // get ours from the game's own death code - counted in its damage list if only followers hit it.
     private void Destroyed(Instance unit)
     {
-        if (_session.Mode != Session.SessionMode.Host || _areaUnits.SyncIdOf(unit) is not { } unitId)
+        if (!Owning || _areaUnits.SyncIdOf(unit) is not { } unitId)
             return;
         _hitBy.Remove(unitId, out var hitters);
         if (unit.Get("HP").AsReal > 0 || !unit.Get("is_full_destroy").AsBool)
@@ -379,11 +387,11 @@ public sealed class CombatSync
                 _session.Send(new UnitKilledPacket(unitId), other.Slot);
     }
 
-    // Client: a unit was killed near us, with a player's part in it - its XP is ours too, as the game gives it (o_enemy's Destroy): its gain_xp, less for a
+    // Follower: a unit was killed near us, with a player's part in it - its XP is ours too, as the game gives it (o_enemy's Destroy): its gain_xp, less for a
     // weaker tier than our level, through scr_get_XP; logged as the game logs a kill.
     private void ReceiveKill(RemotePlayer from, UnitKilledPacket kill)
     {
-        if (_session.Mode != Session.SessionMode.Client || from.Slot != 0 || !Gm.InGame)
+        if (!Following || from.Slot != _ownership.Owner || !Gm.InGame)
             return;
         Instance unit = _areaUnits.LocalOf(kill.UnitId);
         if (unit.IsNone)

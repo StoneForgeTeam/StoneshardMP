@@ -31,6 +31,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private PlayerManager _players = null!;
     private PartyFrames _party = null!;
     private EffectManager _effects = null!;
+    private AreaOwnership _ownership = null!;
     private AreaUnits _areaUnits = null!;
     private CombatSync _combat = null!;
     private TurnRounds _rounds = null!;
@@ -57,16 +58,18 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // "Follow" on another player's right-click menu: walk after them.
         _follow = new Follow(context, _session, _players);
         _effects = new EffectManager(context, _session);
-        _areaUnits = new AreaUnits(context, _session, () => _players.ObjectIndex);
-        // Combat where players are together: each game resolves its own character's fights, the host's units the real ones.
-        _combat = new CombatSync(context, _session, _areaUnits, _players, () => _join.InSharedWorld);
-        // One completed action is one world turn for everyone: a client's moves turn the host's world (its units,
-        // streamed back by AreaUnits), the host's own turn the clients' clocks.
+        // Who runs each place players share: whoever got there first; the others follow (units, loot, fights, rounds).
+        _ownership = new AreaOwnership(context, _session, () => _join.InSharedWorld);
+        _areaUnits = new AreaUnits(context, _session, _ownership, () => _players.ObjectIndex);
+        // Combat where players are together: each game resolves its own character's fights, the owner's units the real ones.
+        _combat = new CombatSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
+        // One completed action is one world turn for everyone: a client's moves turn the host's world, the host's own
+        // turn the clients' clocks (a place's owner moving its units, streamed to its followers by AreaUnits).
         // Shared turn-based rounds where players are together and anyone needs turns (in combat, bleeding out, on fire),
         // with their turn order shown on the HUD.
-        _rounds = new TurnRounds(context, _session, () => _join.InSharedWorld);
+        _rounds = new TurnRounds(context, _session, _ownership, () => _join.InSharedWorld);
         context.UI.Hud.Add(new TurnOrder(_rounds, _session, () => _players.ObjectIndex));
-        _clock = new WorldClock(context, _session, () => _join.InSharedWorld, _ => _rounds.Active);
+        _clock = new WorldClock(context, _session, _ownership, () => _join.InSharedWorld, _ => _rounds.Active);
         // A move's time shared out: 30 seconds over the number of players in the world (a round's turn keeps its 30).
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
         _dump = new DebugDump(context, _session, _areaUnits);
@@ -77,11 +80,11 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // The host keeps everyone's save: a client joins the host's world, or makes a character for it.
         _join = new JoinManager(context, _session, PlayerName);
         // One world for everyone in it: areas built alike, what's in them shared, the host's weather.
-        _world = new WorldSync(context, _session, _join);
+        _world = new WorldSync(context, _session, _join, _ownership);
         // A multiplayer world's saves are named for who plays in it.
         new SaveNames(context, _session, PlayerName);
-        // Live ground loot where players are together: the host's is the real one.
-        _loot = new LootSync(context, _session, () => _join.InSharedWorld);
+        // Live ground loot where players are together: the place's owner's is the real one.
+        _loot = new LootSync(context, _session, _ownership, () => _join.InSharedWorld);
         // Doors opened or shut where players are together: the same in every game there.
         _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
         // One story: quest steps, reputation, dialogue and location flags, crime records; quest items held by anyone.
@@ -99,6 +102,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _players.Clear();
         _party.Clear();
         _effects.Clear();
+        _ownership.Clear();
         _areaUnits.Clear();
         _combat.Clear();
         _rounds.Clear();
@@ -125,6 +129,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "menu", _menu.Tick);
             Profiler.Measure(_context, "join", _join.Tick);
             Profiler.Measure(_context, "world", _world.Tick);
+            // (Who runs our place, before anything that goes by it.)
+            Profiler.Measure(_context, "ownership", _ownership.Tick);
             Profiler.Measure(_context, "loot", _loot.Tick);
             Profiler.Measure(_context, "doors", _doors.Tick);
             Profiler.Measure(_context, "quests", _quests.Tick);

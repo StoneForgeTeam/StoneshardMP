@@ -5,6 +5,22 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Area ownership** (from the GML version): where players share a place, whoever got there first runs it, not always
+  the host. Each game runs the place its player is in; where two or more are together, one owns it (its units, loot,
+  fights and rounds are the real ones) and the others follow it. The owner keeps the place for as long as it stays,
+  then the earliest of the rest takes over. The host decides and tells each client who runs its place when that
+  changes, and every second. Protocol 26. This fixes NPCs duplicating and respawning when players came and went:
+  - The host arriving where a client had been took the place over with its own, older save of it, so what the client
+    had killed came back. The client keeps running it now, and the host follows.
+  - A client's copies of the host's units stood frozen (AI off, out of its turns) after the host left. Leaving the
+    follower role hands them back: their AI is on and they take their own turns again (StoneForge's
+    `Units.ReturnToTurns`).
+  - A new owner rebinds the same units instead of making new ones.
+  - Whoever leaves a place last sends its copy of the place (what's dead, taken, opened) to the others, even if
+    they followed someone earlier. Before, a client that had once followed the host there never sent its copy, so
+    what it did there after the host left was lost.
+  - Shared rounds are run by the place's owner, and a follower's actions don't move the place's units a second
+    time.
 - **Doors are shared** (from the GML version). A few times a second each game compares its place's doors with how they
   last were, and one opened or shut - by a player, or by an NPC or enemy - opens or shuts in the other games there the
   game's own way, with its animation and sound. A door a player opened is unlocked for the others too (they had the

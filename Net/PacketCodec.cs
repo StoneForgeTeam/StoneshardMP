@@ -57,6 +57,7 @@ public static class PacketCodec
             TurnStatusPacket.PacketId => TurnStatusPacket.Read(ref reader),
             RoundPacket.PacketId => RoundPacket.Read(ref reader),
             DoorPacket.PacketId => DoorPacket.Read(ref reader),
+            AreaOwnerPacket.PacketId => AreaOwnerPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

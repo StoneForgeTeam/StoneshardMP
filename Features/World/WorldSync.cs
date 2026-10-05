@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
@@ -27,7 +28,10 @@ namespace StoneshardMP.Features.World;
 //   SharedWorld.DungeonSeed). Always, solo too - an area a host builds before anyone joins is the one they'll find.
 // - Kept alike: when a game saves a location it was running (leaving it: o_roomEntitySaver), what's in it - what's
 //   dead, taken, opened - goes to the others, who keep it as their own save of that location (SharedWorld.LocationStore). A
-//   client that followed the host there doesn't: the host's copy is the real one. A world-map tile goes out too
+//   game following the place's owner as it leaves (AreaOwnership) doesn't: the owner's copy is the real one, and the owner
+//   sends it when it leaves. The last one out sends theirs - whoever owned it at the end: an owner that left first
+//   handed the place over (its units, released, are run by who stayed), so what they did after counts. A world-map tile
+//   goes out too
 //   (SharedWorld.TileApply) when its seeds are set, when one of its dungeon's values is (its floor seeds, saved floor graphs,
 //   boss, open, cage, mob levels, contract...), and when a location on it is
 //   saved - leaving a dungeon floor, its graph is saved into the dungeon's maps in place.
@@ -48,6 +52,7 @@ public sealed class WorldSync
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly JoinManager _join;
+    private readonly AreaOwnership _ownership;
     // Tiles whose seeds or dungeon were set here, to send.
     private readonly HashSet<WorldTile> _changedTiles = new();
     // Host: players waiting for a copy, and the one being copied (where it's got to).
@@ -59,17 +64,17 @@ public sealed class WorldSync
     // (Taking another game's tile: its dungeon keys aren't news to send back.)
     private bool _applying;
     private bool _wasInWorld;
-    // Client: we've been following the host in this place - leaving it, our copy isn't sent.
-    private string? _place;
-    private bool _followedHere;
+    // Whether we're following the owner of our place (as of the last frame we were in it): leaving it, our copy isn't sent.
+    private bool _following;
     private int _frame;
     private string _weatherSent = "";
 
-    public WorldSync(ModContext context, Session session, JoinManager join)
+    public WorldSync(ModContext context, Session session, JoinManager join, AreaOwnership ownership)
     {
         _context = context;
         _session = session;
         _join = join;
+        _ownership = ownership;
         session.On<WorldDataPacket>(Receive);
         session.PlayerLeft += player =>
         {
@@ -120,8 +125,7 @@ public sealed class WorldSync
         _copyQueue.Clear();
         _copyTo = -1;
         _wasInWorld = false;
-        _place = null;
-        _followedHere = false;
+        _following = false;
         _weatherSent = "";
     }
 
@@ -137,6 +141,11 @@ public sealed class WorldSync
     public void Tick()
     {
         bool sharing = Sharing;
+        // (Our role where we are - kept while the game saves the place we're leaving, before we're anywhere else.)
+        if (OurPlayer.State()?.Place is { } here && here == _ownership.Place)
+            _following = _ownership.Role == AreaRole.Follower;
+        else if (_ownership.Place == null)
+            _following = false;
         if (_session.Mode == Session.SessionMode.Client)
             ClientTick();
         if (!sharing)
@@ -164,19 +173,6 @@ public sealed class WorldSync
             _context.Log("In the host's world: asking for its copy of the world");
         }
         _wasInWorld = inWorld;
-        // Following the host where we are (it's here too).
-        if (!inWorld || ++_frame % 6 != 0)
-            return;
-        string? mine = OurPlayer.State()?.Place;
-        if (mine == null)
-            return;
-        if (mine != _place)
-        {
-            _place = mine;
-            _followedHere = false;
-        }
-        if (_session.Players.FirstOrDefault(p => p.Slot == 0)?.State?.Place == mine)
-            _followedHere = true;
     }
 
     // ---- locations ----
@@ -185,8 +181,8 @@ public sealed class WorldSync
     {
         if (!Sharing)
             return;
-        // A client that followed the host here leaves the host's copy as the real one.
-        if (_session.Mode == Session.SessionMode.Client && _followedHere)
+        // A game following the place's owner leaves the owner's copy as the real one.
+        if (_following)
             return;
         string state = SharedWorld.LocationExportSaved(saver);
         if (state.Length > 0)

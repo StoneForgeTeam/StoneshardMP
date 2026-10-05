@@ -77,7 +77,7 @@ public sealed class DebugDump
                 + $"#{Math.Floor(instance.Get("image_index").AsReal)} vis={instance.Get("visible").AsBool} depth={instance.Get("depth")}";
             if (Gm.ObjectIsAncestor(obj, unit))
                 line += $" state={Text(instance.Get("state"))} is_life={Text(instance.Get("is_life"))} spr_render={SpriteName(instance.Get("spr"))}"
-                    + $" ai={Text(instance.Get("ai_is_on"))} hosts={_areaUnits.IsHosts(instance)}";
+                    + $" ai={Text(instance.Get("ai_is_on"))} owners={_areaUnits.IsOwners(instance)}";
             return line;
         }).OfType<string>().ToArray();
     }

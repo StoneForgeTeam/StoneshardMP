@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using StoneshardMP.Net.Packets;
 using StoneForge;
-using StoneshardMP.Features.Players;
+using StoneshardMP.Features.Areas;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Clock;
@@ -12,14 +11,15 @@ namespace StoneshardMP.Features.Clock;
 // Legacy StoneshardMP's "On move" model, without its timer: one completed normal action is one world turn.
 // Clients notify the host; the host serializes those actions and tells every game who caused each one. The actor
 // has already advanced through its normal action, while every other player performs one safe idle turn - but a
-// client in the host's area doesn't: its units there are the host's (AreaUnits - their AI off, out of its turn loop),
-// moved by the host's idle turn and streamed to it, so it only takes the host's clock.
+// client following a place's owner (AreaOwnership) doesn't: its units there are the owner's (AreaUnits - their AI off,
+// out of its turn loop), moved by the owner's turn and streamed to it, so it only takes the host's clock.
 public sealed class WorldClock
 {
     private readonly Session _session;
+    private readonly AreaOwnership _ownership;
     private readonly Func<bool> _inSharedWorld;
-    // Whether a player's action isn't a world turn of its own (TurnRounds): while there's a round in the host's place, the
-    // host's units move once a round, not after each action - anyone's.
+    // Whether a player's action isn't a world turn of its own (TurnRounds): while there's a round in our place, its
+    // units move once a round, not after each action - anyone's.
     private readonly Func<int, bool> _inRound;
     private readonly Queue<int> _remoteActions = new();
     private bool _tracking;
@@ -31,10 +31,12 @@ public sealed class WorldClock
 
     private readonly ModContext _context;
 
-    public WorldClock(ModContext context, Session session, Func<bool> inSharedWorld, Func<int, bool> inRound)
+    public WorldClock(ModContext context, Session session, AreaOwnership ownership, Func<bool> inSharedWorld,
+        Func<int, bool> inRound)
     {
         _context = context;
         _session = session;
+        _ownership = ownership;
         _inSharedWorld = inSharedWorld;
         _inRound = inRound;
         session.On<WorldActionPacket>(RequestAction);
@@ -99,7 +101,7 @@ public sealed class WorldClock
         while (_idleTurns > 0 && GameClock.TickReady())
         {
             _idleTurns--;
-            if (!InHostsArea())
+            if (!Following)
                 GameClock.Tick(_context);
             _turns = GameClock.Turns();
         }
@@ -132,19 +134,15 @@ public sealed class WorldClock
 
         // The player who made this action already ran its native global turn. Everyone else mirrors exactly
         // one idle turn, including NPC/unit processing, when their own game is in a safe state - unless this game
-        // is in the host's area: the host's turn moved its units, and they come from it.
-        if (source != _session.Slot && !InHostsArea())
+        // follows its place's owner (the owner's turn moved its units, and they come from it), or there's a round here
+        // (its units move once a round).
+        if (source != _session.Slot && !Following && !_inRound(source))
             _idleTurns++;
         ApplyClock(clock);
     }
 
-    // Whether we're where the host is (the host owns that area's units).
-    private bool InHostsArea()
-    {
-        var host = _session.Players.FirstOrDefault(p => p.Slot == 0);
-        var mine = OurPlayer.State();
-        return host?.State != null && mine != null && host.State.Place == mine.Place;
-    }
+    // Whether our place's units are another's (AreaOwnership): we follow its owner.
+    private bool Following => _ownership.Role == AreaRole.Follower;
 
     private static void ApplyClock(string clock)
     {

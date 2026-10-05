@@ -13,8 +13,8 @@ using StoneshardMP.Net.Packets;
 
 namespace StoneshardMP.Features.Loot;
 
-// Live ground loot where players are together (legacy StoneshardMP's loot sync). The host owns a place it shares
-// with clients - its loot is the real one - and they follow:
+// Live ground loot where players are together (legacy StoneshardMP's loot sync). The place's owner (AreaOwnership:
+// whoever got there first) has the real loot, and the others follow:
 // - The owner sends a snapshot of all its loot when a follower arrives (or asks), then every few frames what changed:
 //   new loot at once (in the air or not), loot that left (picked up by anyone).
 // - A follower takes it: twins from the same save are bound, the rest made from the owner's data, anything else
@@ -48,14 +48,16 @@ public sealed class LootSync
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly Func<bool> _inSharedWorld;
+    private readonly AreaOwnership _ownership;
     private readonly Random _random = new();
     private int _frame;
     private long _dropUntil;
     // Where our arrows just dropped their ammo, and until when that counts as our drop.
     private readonly List<(double X, double Y, long Until)> _shots = new();
-    // Our place, and our role there.
+    // Our place, and our role there (and whom we follow).
     private string? _place;
     private bool _owning, _following;
+    private int _owner = -1;
     // Owner: the followers here (a new one gets a snapshot), and a snapshot owed to everyone.
     private readonly HashSet<int> _followers = new();
     private bool _snapshotOwed;
@@ -90,10 +92,11 @@ public sealed class LootSync
     private int _presentFrame = -1;
     private long _nextToken;
 
-    public LootSync(ModContext context, Session session, Func<bool> inSharedWorld)
+    public LootSync(ModContext context, Session session, AreaOwnership ownership, Func<bool> inSharedWorld)
     {
         _context = context;
         _session = session;
+        _ownership = ownership;
         _inSharedWorld = inSharedWorld;
         session.On<LootPacket>((sender, packet) => Profiler.Measure(context, "loot received", () => Receive(sender, packet)));
         Scripts.scr_actionsLogItem.Before(context, call =>
@@ -146,16 +149,19 @@ public sealed class LootSync
         string? place = null;
         if (_session.Connected && Gm.InGame && _inSharedWorld() && !Rooms.IsChanging)
             place = OurPlayer.State()?.Place;
-        // Who's here with us: the host owns, clients in its place follow.
+        // Who's here with us, and who runs it (AreaOwnership): the place's owner, or we follow them.
         var here = place == null ? new List<RemotePlayer>() : _session.Players.Where(p => p.State?.Place == place).ToList();
-        bool owning = _session.Mode == Session.SessionMode.Host && here.Count > 0;
-        bool following = _session.Mode == Session.SessionMode.Client && here.Any(p => p.Slot == 0);
-        if (place != _place || owning != _owning || following != _following)
+        bool ours = place != null && _ownership.Place == place;
+        bool owning = ours && _ownership.Role == AreaRole.Owner && here.Count > 0;
+        bool following = ours && _ownership.Role == AreaRole.Follower;
+        int owner = following ? _ownership.Owner : -1;
+        if (place != _place || owning != _owning || following != _following || owner != _owner)
         {
-            // A new place or role: the tables start over (and an owner's snapshot goes out).
+            // A new place, role or owner: the tables start over (and an owner's snapshot goes out).
             _place = place;
             _owning = owning;
             _following = following;
+            _owner = owner;
             _followers.Clear();
             _synced = false;
             _waiting = 0;
@@ -358,7 +364,7 @@ public sealed class LootSync
             if (++_waiting >= SnapshotWait)
             {
                 _waiting = 0;
-                Send(LootKind.SnapshotRequest, "", 0);
+                Send(LootKind.SnapshotRequest, "", _owner);
             }
             return;
         }
@@ -366,9 +372,9 @@ public sealed class LootSync
         _shots.RemoveAll(shot => shot.Until < now);
         var (taken, drops) = FollowerStep(now <= _dropUntil, now - _syncedAt < SettleMs, now);
         if (taken.Count > 0)
-            Send(LootKind.Taken, taken.ToJsonString(), 0);
+            Send(LootKind.Taken, taken.ToJsonString(), _owner);
         foreach (JsonObject drop in drops)
-            Send(LootKind.Dropped, drop.ToJsonString(), 0);
+            Send(LootKind.Dropped, drop.ToJsonString(), _owner);
     }
 
     // Follower: the owner has this loot (an entry). Bound to ours if we have it - our own drop coming back (its token),
@@ -527,14 +533,14 @@ public sealed class LootSync
         string json = JoinCompression.Decompress(packet.Data);
         switch (packet.Kind)
         {
-            case LootKind.Snapshot when _following && sender.Slot == 0:
+            case LootKind.Snapshot when _following && sender.Slot == _owner:
                 string result = FollowerSnapshot(json);
                 _synced = true;
                 _syncedAt = Environment.TickCount64;
                 _waiting = 0;
                 _context.Log($"Ground loot here from {sender.Name}: {result}");
                 break;
-            case LootKind.Changes when _following && sender.Slot == 0 && _synced:
+            case LootKind.Changes when _following && sender.Slot == _owner && _synced:
                 FollowerDiff(json);
                 break;
             case LootKind.SnapshotRequest when _owning:
