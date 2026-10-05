@@ -139,12 +139,12 @@ public sealed class Follow
         if (now - _sentAt < ResendMs || !Idle(me))
             return;
         _sentAt = now;
-        Instance door = Doors.Nearest(seen);
+        Instance door = Exits.Nearest(seen);
         if (!door.IsNone && door.Exists
             && new Point(door.Get("x").AsReal, door.Get("y").AsReal).DistanceTo(seen.Center) <= ExitReach)
         {
             _context.Log($"Following {them.Name} out by {Gm.ObjectGetName(door.Get("object_index").AsInt)}");
-            Doors.Use(door);
+            Exits.Use(door);
             return;
         }
         // No way out there: they walked off the edge of the area - onto that border cell, and across.

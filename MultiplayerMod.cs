@@ -6,6 +6,7 @@ using StoneshardMP.Features.Rounds;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Contracts;
 using StoneshardMP.Features.Debug;
+using StoneshardMP.Features.Doors;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -34,6 +35,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private CombatSync _combat = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
+    private DoorSync _doors = null!;
     private Follow _follow = null!;
     private MultiplayerMenu _menu = null!;
     private WorldClock _clock = null!;
@@ -80,6 +82,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         new SaveNames(context, _session, PlayerName);
         // Live ground loot where players are together: the host's is the real one.
         _loot = new LootSync(context, _session, () => _join.InSharedWorld);
+        // Doors opened or shut where players are together: the same in every game there.
+        _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
         // One story: quest steps, reputation, dialogue and location flags, crime records; quest items held by anyone.
         _quests = new QuestSync(context, _session, _join);
         // One set of contracts: the host's, kept alike, with deadlines on the host's clock.
@@ -99,6 +103,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _combat.Clear();
         _rounds.Clear();
         _turnTime.Clear();
+        _doors.Clear();
         _follow.Clear();
         _clock.Clear();
         _join.Clear();
@@ -121,6 +126,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "join", _join.Tick);
             Profiler.Measure(_context, "world", _world.Tick);
             Profiler.Measure(_context, "loot", _loot.Tick);
+            Profiler.Measure(_context, "doors", _doors.Tick);
             Profiler.Measure(_context, "quests", _quests.Tick);
             Profiler.Measure(_context, "contracts", _contracts.Tick);
             Profiler.Measure(_context, "players", _players.Tick);

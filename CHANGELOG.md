@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Doors are shared** (from the GML version). A few times a second each game compares its place's doors with how they
+  last were, and one opened or shut - by a player, or by an NPC or enemy - opens or shuts in the other games there the
+  game's own way, with its animation and sound. A door a player opened is unlocked for the others too (they had the
+  key, or picked or broke the lock). When players come together, the place's first player (the host if it's there)
+  sends all its doors and the others' match them; a door off screen gets its change when it's next on. Protocol 25.
 - Cells and world-map tiles are StoneForge's `Cell` and `WorldTile` throughout, in place of `(x, y)` tuples: a player's state, the units' moves and rosters, following, the party frames' compass, and the shared world's tiles. (Packets are unchanged.)
 - **Time goes by at one player's pace.** Every player's move is a world turn, and a turn lets 30 seconds pass, so with
   more players the day went by that many times as fast. A move now lets 30 seconds pass over the number of players in
