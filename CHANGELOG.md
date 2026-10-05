@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.2.0
 
 - **Fixed: a player joining a world the host hadn't saved since making it crashed while loading.** The world map's
   fog is only written into the save data as the game saves, so the joining game got none and its world map failed to
