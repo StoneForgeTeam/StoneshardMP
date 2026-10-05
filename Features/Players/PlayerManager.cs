@@ -151,9 +151,10 @@ public sealed class PlayerManager
             }
             else if (!here && exists)
             {
-                // (The effects on it go with it: left, they'd read a unit that's gone.)
-                UnitEffects.RemoveAll(view.Unit);
-                view.Unit.Destroy();
+                // Taken out quietly (legacy: scr_mp_unit_remove): out of the grids and the turn list, the effects on it
+                // with it, and no Destroy event. Left in the turn list, the units' turn - held in a round - reads a
+                // unit that's gone, and the game crashes.
+                Units.Remove(view.Unit);
                 view.Unit = default;
             }
         }
@@ -182,6 +183,10 @@ public sealed class PlayerManager
         // walking unit clears the cell it leaves as it starts, whoever's come onto it since (it's drawn from VisX / VisY).
         if (Units.CanTake(self, state.Cell))
             Units.Move(self, state.Cell, snap: true);
+        // No turns: it has no AI, and its player's game runs them (o_enemy's Create put it in our player's list of units
+        // to run each turn; between turns only - never while the turn walks the list).
+        Instance me = self.Persist();
+        Units.RemoveFromTurns(listed => listed.Equals(me));
         self["name"] = view.Player.Name;
         self["type"] = "Player";
         self["desc"] = "Another player.";
@@ -267,10 +272,7 @@ public sealed class PlayerManager
         if (!Game.Running)
             return;
         if (!view.Unit.IsNone && view.Unit.Exists)
-        {
-            UnitEffects.RemoveAll(view.Unit);
-            view.Unit.Destroy();
-        }
+            Units.Remove(view.Unit);
         view.Sprites?.Dispose();
     }
 

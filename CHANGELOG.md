@@ -21,6 +21,14 @@ releases them: the release workflow titles that section with the version, sets i
     what it did there after the host left was lost.
   - Shared rounds are run by the place's owner, and a follower's actions don't move the place's units a second
     time.
+- **Fixed: the game crashed when another player left your place** - during a round, or on your next move once their
+  units were yours to run again. Their stand-in stayed in the list of units the game runs each turn, and the units
+  that had fought it still had it as their target; once it was destroyed, the units' turn read a unit that was gone.
+  The stand-in is kept out of that list now, as the GML version did, and taken out quietly (StoneForge's
+  `Units.Remove`): out of the grids, the turn list and its faction's list, with its effects, without its Destroy
+  event, and with every unit's references to it cleared. Units handed back drop references to units that are gone
+  too. (Its faction's list was what crashed the game when bandits were handed back: they looked there for players to
+  fight.)
 - **Doors are shared** (from the GML version). A few times a second each game compares its place's doors with how they
   last were, and one opened or shut - by a player, or by an NPC or enemy - opens or shuts in the other games there the
   game's own way, with its animation and sound. A door a player opened is unlocked for the others too (they had the
