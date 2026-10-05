@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Map markers are shared** (from the GML version). Everyone in the world has one set of markers on the world map.
+  When a player places one or takes one off (StoneForge's `MapMarkers.OnPlaced` / `OnRemoved`), the whole set goes to
+  the others, whose markers become those; an open map's change on the spot. A client joining gets the host's markers
+  with its world. Protocol 27.
 - **Area ownership** (from the GML version): where players share a place, whoever got there first runs it, not always
   the host. Each game runs the place its player is in; where two or more are together, one owns it (its units, loot,
   fights and rounds are the real ones) and the others follow it. The owner keeps the place for as long as it stays,
