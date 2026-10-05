@@ -70,10 +70,10 @@ public sealed class DebugDump
         return Instances.All(-3).Select(instance =>
         {
             double x = instance.Get("x").AsReal, y = instance.Get("y").AsReal;
-            if (Math.Sqrt(Math.Pow(x - px, 2) + Math.Pow(y - py, 2)) > Radius * Units.CellSize)
+            if (Math.Sqrt(Math.Pow(x - px, 2) + Math.Pow(y - py, 2)) > Radius * Cell.Size)
                 return null;
             int obj = instance.Get("object_index").AsInt;
-            string line = $"{Gm.ObjectGetName(obj)} @{(int)(x / Units.CellSize)},{(int)(y / Units.CellSize)} spr={SpriteName(instance.Get("sprite_index"))}"
+            string line = $"{Gm.ObjectGetName(obj)} @{Cell.At(x, y)} spr={SpriteName(instance.Get("sprite_index"))}"
                 + $"#{Math.Floor(instance.Get("image_index").AsReal)} vis={instance.Get("visible").AsBool} depth={instance.Get("depth")}";
             if (Gm.ObjectIsAncestor(obj, unit))
                 line += $" state={Text(instance.Get("state"))} is_life={Text(instance.Get("is_life"))} spr_render={SpriteName(instance.Get("spr"))}"

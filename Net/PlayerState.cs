@@ -1,3 +1,5 @@
+using StoneForge;
+
 namespace StoneshardMP.Net;
 
 // Where and how a player is drawn (OurPlayer.State): the place they're in, what o_player draws with, its shadow and
@@ -7,6 +9,9 @@ public sealed record PlayerState(
     float Angle, float Diss, float Alpha, int ShadowSprite, float ShadowX, float ShadowY, float ShadowScaleX,
     float ShadowScaleY, float ShadowAlpha, short CellX, short CellY, float Health, float MaxHealth, float Energy, float MaxEnergy)
 {
+    /// <summary>The cell they stand on.</summary>
+    public Cell Cell => new(CellX, CellY);
+
     // Moved sideways (the mirror test draws us two cells to the right).
     public PlayerState Shifted(float dx) => this with { X = X + dx, ShadowX = ShadowX + dx, CellX = (short)(CellX + (int)(dx / 26)) };
 }

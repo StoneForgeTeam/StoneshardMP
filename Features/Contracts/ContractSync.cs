@@ -64,14 +64,14 @@ public sealed class ContractSync
         {
             if (args.Length < 2 || !VillageCounts.Contains(args[0].AsString) || (args.Length > 4 && !args[4].IsUndefined && args[4].AsReal != 0))
                 return null;
-            if (WorldMap.PlayerCell is not var (gridX, gridY))
+            if (WorldMap.PlayerCell is not { } here)
                 return null;
             var sent = new GmValue[4];
             Array.Copy(args, sent, Math.Min(args.Length, 4));
             if (sent[2].IsUndefined)
-                sent[2] = gridX;
+                sent[2] = here.X;
             if (sent[3].IsUndefined)
-                sent[3] = gridY;
+                sent[3] = here.Y;
             return sent;
         });
     }

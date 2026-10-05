@@ -180,8 +180,8 @@ public sealed class PlayerManager
         // its own): our player, or an area unit, may be there for a moment - taking it would overwrite that unit in the
         // position grid, and the game crashes on it. It catches up once the cell's free. Snapped there, never walked: a
         // walking unit clears the cell it leaves as it starts, whoever's come onto it since (it's drawn from VisX / VisY).
-        if (Units.CanTake(self, state.CellX, state.CellY))
-            Units.Move(self, state.CellX, state.CellY, snap: true);
+        if (Units.CanTake(self, state.Cell))
+            Units.Move(self, state.Cell, snap: true);
         self["name"] = view.Player.Name;
         self["type"] = "Player";
         self["desc"] = "Another player.";

@@ -21,7 +21,7 @@ namespace StoneshardMP.Features.Players;
 public sealed class Follow
 {
     private const long ResendMs = 1500, LeaveGraceMs = 400, LeaveGiveUpMs = 20000, ArriveWaitMs = 6000;
-    private const double ExitReach = 2.5 * Units.CellSize;
+    private const double ExitReach = 2.5 * Cell.Size;
 
     private readonly ModContext _context;
     private readonly Session _session;
@@ -31,7 +31,7 @@ public sealed class Follow
     private bool _skipClick;
     // The cell we last walked them to, and when; where we last saw them, and in which place; when they left it, and when
     // we came out somewhere they weren't.
-    private (int X, int Y)? _lastSent, _seen;
+    private Cell? _lastSent, _seen;
     private long _sentAt, _goneAt, _arrivedAt;
     private string? _seenIn;
     private int _frame;
@@ -99,20 +99,19 @@ public sealed class Follow
         }
         // Where they are in our place - the way out, if they leave.
         _goneAt = _arrivedAt = 0;
-        _seen = (state.CellX, state.CellY);
+        Cell theirs = state.Cell, mine = Units.CellOf(me);
+        _seen = theirs;
         _seenIn = here;
-        var (px, py) = Units.CellOf(me);
-        int tx = state.CellX, ty = state.CellY;
-        if (Math.Max(Math.Abs(tx - px), Math.Abs(ty - py)) <= 1 || !Idle(me))
+        if (mine.DistanceTo(theirs) <= 1 || !Idle(me))
             return;
         // (Not the same walk again every frame while the game hasn't started it - waiting for our turn.)
         long now = Environment.TickCount64;
-        if (_lastSent == (tx, ty) && now - _sentAt < ResendMs)
+        if (_lastSent == theirs && now - _sentAt < ResendMs)
             return;
-        _lastSent = (tx, ty);
+        _lastSent = theirs;
         _sentAt = now;
         // The cell beside them on our side; if that's taken, the nearest free one to it (the game's own search).
-        Walk(me, tx + Math.Sign(px - tx), ty + Math.Sign(py - ty));
+        Walk(me, theirs.Offset(Math.Sign(mine.X - theirs.X), Math.Sign(mine.Y - theirs.Y)));
     }
 
     // They've left our place: out the way they went, or - gone through after them - wait for them there.
@@ -140,10 +139,9 @@ public sealed class Follow
         if (now - _sentAt < ResendMs || !Idle(me))
             return;
         _sentAt = now;
-        double ex = seen.X * Units.CellSize + 13, ey = seen.Y * Units.CellSize + 13;
-        Instance door = Doors.Nearest(ex, ey);
+        Instance door = Doors.Nearest(seen);
         if (!door.IsNone && door.Exists
-            && Math.Sqrt(Math.Pow(door.Get("x").AsReal - ex, 2) + Math.Pow(door.Get("y").AsReal - ey, 2)) <= ExitReach)
+            && new Point(door.Get("x").AsReal, door.Get("y").AsReal).DistanceTo(seen.Center) <= ExitReach)
         {
             _context.Log($"Following {them.Name} out by {Gm.ObjectGetName(door.Get("object_index").AsInt)}");
             Doors.Use(door);
@@ -152,7 +150,7 @@ public sealed class Follow
         // No way out there: they walked off the edge of the area - onto that border cell, and across.
         if (Units.CellOf(me) != seen)
         {
-            StoneForge.Player.WalkTo(seen.X * Units.CellSize, seen.Y * Units.CellSize);
+            StoneForge.Player.WalkTo(seen);
             return;
         }
         _context.Log($"Following {them.Name} off the edge of the area");
@@ -160,10 +158,10 @@ public sealed class Follow
     }
 
     // A walk to the free cell nearest one (the game's, along the line from us), as a click.
-    private static void Walk(Instance me, int x, int y)
+    private static void Walk(Instance me, Cell cell)
     {
-        if (Units.NearestFreeCell(me, x, y) is var (freeX, freeY))
-            StoneForge.Player.WalkTo(freeX * Units.CellSize, freeY * Units.CellSize);
+        if (Units.NearestFreeCell(me, cell) is { } free)
+            StoneForge.Player.WalkTo(free);
     }
 
     // Standing still: no path, not moving, on its cell, free to move.

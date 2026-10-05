@@ -106,13 +106,13 @@ public sealed class QuestSync
         // not there - so it's filled in before it goes; none from off the world map.
         Share(Scripts.scr_globaltile_reputation_update, args =>
         {
-            if (WorldMap.PlayerCell is not var (gridX, gridY))
+            if (WorldMap.PlayerCell is not { } here)
                 return null;
             var sent = Pad(args, 6);
             if (sent[1].IsUndefined)
-                sent[1] = gridX;
+                sent[1] = here.X;
             if (sent[2].IsUndefined)
-                sent[2] = gridY;
+                sent[2] = here.Y;
             return sent;
         });
         // Dialogue flags (said, offered, settled): with one argument it only reads.

@@ -274,10 +274,10 @@ public sealed class CombatSync
         Instance unit = call.Args.Length > 2 && !call.Args[2].IsUndefined ? Instance.Of(call.Args[2]) : call.Self;
         if (Ours(unit) is not var (copy, hostId))
             return;
-        var (x, y) = Units.CellOf(copy);
-        _areaUnits.Moved(copy, x, y);
-        _session.Send(new UnitMovedPacket(hostId, (short)x, (short)y));
-        _context.Log($"Moved the host's unit {hostId} to {x},{y}");
+        Cell cell = Units.CellOf(copy);
+        _areaUnits.Moved(copy, cell);
+        _session.Send(new UnitMovedPacket(hostId, (short)cell.X, (short)cell.Y));
+        _context.Log($"Moved the host's unit {hostId} to {cell}");
     }
 
     // Client: scr_effect_create(effect, duration, target, owner, stage...) put an effect on one of the host's units: the
@@ -321,13 +321,13 @@ public sealed class CombatSync
         Instance unit = _areaUnits.UnitOf(move.UnitId);
         if (unit.IsNone)
             return;
-        if (!Units.CanTake(unit, move.CellX, move.CellY))
+        if (!Units.CanTake(unit, move.Cell))
         {
-            _context.Log($"{from.Name} moved unit {move.UnitId} to {move.CellX},{move.CellY}, which isn't free here");
+            _context.Log($"{from.Name} moved unit {move.UnitId} to {move.Cell}, which isn't free here");
             return;
         }
-        Units.Move(unit, move.CellX, move.CellY);
-        _context.Log($"{from.Name} moved unit {move.UnitId} to {move.CellX},{move.CellY}");
+        Units.Move(unit, move.Cell);
+        _context.Log($"{from.Name} moved unit {move.UnitId} to {move.Cell}");
     }
 
     // Host: a client's action put an effect on one of our units (in their game) - put on the real one as the game puts
@@ -369,13 +369,13 @@ public sealed class CombatSync
                 || Instance.Of(unit.Get("last_attacker")).Equals(player.Persist()));
         if ((hitters == null || hitters.Count == 0) && !weTookPart)
             return;
-        var cell = Units.CellOf(unit);
+        Cell cell = Units.CellOf(unit);
         if (!weTookPart && !player.IsNone)
             StoneForge.Combat.AddDamageShare(unit, player);
         string? here = OurPlayer.State()?.Place;
         foreach (var other in _session.Players)
             if (other.State is { } state && state.Place == here
-                && Math.Max(Math.Abs(state.CellX - cell.X), Math.Abs(state.CellY - cell.Y)) <= KillXpReach)
+                && state.Cell.DistanceTo(cell) <= KillXpReach)
                 _session.Send(new UnitKilledPacket(unitId), other.Slot);
     }
 

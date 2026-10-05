@@ -49,12 +49,12 @@ public sealed class WorldSync
     private readonly Session _session;
     private readonly JoinManager _join;
     // Tiles whose seeds or dungeon were set here, to send.
-    private readonly HashSet<(int X, int Y)> _changedTiles = new();
+    private readonly HashSet<WorldTile> _changedTiles = new();
     // Host: players waiting for a copy, and the one being copied (where it's got to).
     private readonly Queue<int> _copyQueue = new();
     private int _copyTo = -1;
     private List<(string Location, GmValue Room, GmValue Preset)> _copyLocations = new();
-    private List<(int X, int Y)> _copyTiles = new();
+    private List<WorldTile> _copyTiles = new();
     private int _copyLocation, _copyTile;
     // (Taking another game's tile: its dungeon keys aren't news to send back.)
     private bool _applying;
@@ -144,8 +144,8 @@ public sealed class WorldSync
             _changedTiles.Clear();
             return;
         }
-        foreach (var (x, y) in _changedTiles)
-            Send(WorldData.Tile, SharedWorld.TileExport(x, y));
+        foreach (WorldTile tile in _changedTiles)
+            Send(WorldData.Tile, SharedWorld.TileExport(tile));
         _changedTiles.Clear();
         if (_session.Mode == Session.SessionMode.Host)
         {
@@ -215,8 +215,7 @@ public sealed class WorldSync
         // (Each as it is now: the list is only which ones.)
         for (int i = 0; i < CopyTilesPerFrame && _copyTile < _copyTiles.Count; i++)
         {
-            var (x, y) = _copyTiles[_copyTile++];
-            Send(WorldData.Tile, SharedWorld.TileExport(x, y), _copyTo);
+            Send(WorldData.Tile, SharedWorld.TileExport(_copyTiles[_copyTile++]), _copyTo);
         }
         for (int i = 0; i < CopyLocationsPerFrame && _copyLocation < _copyLocations.Count; i++)
         {
@@ -279,8 +278,8 @@ public sealed class WorldSync
     // A world-map tile to send (undefined: the one we're on).
     private void QueueTile(GmValue x, GmValue y)
     {
-        if (WorldMap.PlayerCell is var (gridX, gridY))
-            _changedTiles.Add((x.IsUndefined ? gridX : x.AsInt, y.IsUndefined ? gridY : y.AsInt));
+        if (WorldMap.PlayerCell is { } here)
+            _changedTiles.Add(new WorldTile(x.IsUndefined ? here.X : x.AsInt, y.IsUndefined ? here.Y : y.AsInt));
     }
 
     // A script run with the game's random seeded (a dungeon seed: -1, none - as vanilla).

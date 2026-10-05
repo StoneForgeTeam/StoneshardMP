@@ -5,6 +5,7 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- Cells and world-map tiles are StoneForge's `Cell` and `WorldTile` throughout, in place of `(x, y)` tuples: a player's state, the units' moves and rosters, following, the party frames' compass, and the shared world's tiles. (Packets are unchanged.)
 - **Time goes by at one player's pace.** Every player's move is a world turn, and a turn lets 30 seconds pass, so with
   more players the day went by that many times as fast. A move now lets 30 seconds pass over the number of players in
   the world: 15 with two, 10 with three. What's left of a second carries to the next move, so it still adds up

@@ -1,3 +1,4 @@
+using StoneForge;
 using StoneshardMP.Memory;
 
 namespace StoneshardMP.Net.Packets;
@@ -9,6 +10,9 @@ public readonly record struct UnitMovedPacket(long UnitId, short CellX, short Ce
     public const byte PacketId = 32;
 
     public byte Id => PacketId;
+
+    /// <summary>The cell it was moved to.</summary>
+    public Cell Cell => new(CellX, CellY);
 
     public void Write(ref SpanReadWrite writer)
     {

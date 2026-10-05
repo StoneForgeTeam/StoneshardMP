@@ -103,7 +103,7 @@ internal static class ContractData
     {
         if (List(1) is not { } contracts)
             return "";
-        string here = WorldMap.PlayerCell is var (x, y) ? $"{x}_{y}" : "";
+        string here = WorldMap.PlayerCell?.Tag ?? "";
         string line = "";
         for (int i = 0; i < contracts.Count; i++)
         {

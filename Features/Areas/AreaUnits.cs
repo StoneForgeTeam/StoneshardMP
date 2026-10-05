@@ -58,11 +58,11 @@ public sealed class AreaUnits
     // Client: which of our units are big (more than one cell - read once), and the units not yet bound with their object
     // and cell, worked out once a pass when a unit needs its twin.
     private readonly Dictionary<Instance, bool> _poly = new();
-    private Dictionary<(int Obj, int X, int Y), List<Instance>>? _unbound;
+    private Dictionary<(int Obj, Cell Cell), List<Instance>>? _unbound;
     // Client: copies our own actions moved (the cell, and until when the roster may still have them where they were),
     // and put effects on (until when the roster may not have them yet).
     private const long CatchUpMs = 1500;
-    private readonly Dictionary<Instance, (int X, int Y, long Until)> _movedByUs = new();
+    private readonly Dictionary<Instance, (Cell Cell, long Until)> _movedByUs = new();
     private readonly Dictionary<Instance, long> _effectsByUs = new();
 
     public AreaUnits(ModContext context, Session session, Func<int> playerObject)
@@ -98,7 +98,7 @@ public sealed class AreaUnits
 
     /// <summary>Client: our own action moved one of our copies of the host's units to this cell (the host's been told):
     /// it isn't put back where the roster has it until the roster's caught up, or a moment's passed.</summary>
-    public void Moved(Instance unit, int cellX, int cellY) => _movedByUs[unit.Persist()] = (cellX, cellY, Environment.TickCount64 + CatchUpMs);
+    public void Moved(Instance unit, Cell cell) => _movedByUs[unit.Persist()] = (cell, Environment.TickCount64 + CatchUpMs);
 
     /// <summary>Client: our own action put an effect on one of our copies (the host's been told): its effects aren't
     /// matched to the roster's for a moment, while the host's catch up.</summary>
@@ -260,11 +260,12 @@ public sealed class AreaUnits
     private void ApplyUnit(JsonObject u, Units.Grids grids)
     {
         long hostId = (long)Number(u["id"]);
-        int obj = Int(u["obj"]), x = Int(u["x"]), y = Int(u["y"]);
+        int obj = Int(u["obj"]);
+        var cell = new Cell(Int(u["x"]), Int(u["y"]));
         Instance unit = _bound.GetValueOrDefault(hostId);
         if (unit.IsNone || !unit.Exists)
         {
-            unit = Profiler.Measure(_context, "area units: bind", () => Bind(obj, x, y));
+            unit = Profiler.Measure(_context, "area units: bind", () => Bind(obj, cell));
             if (unit.IsNone || !unit.Exists)
                 return;
             _bound[hostId] = unit;
@@ -281,16 +282,16 @@ public sealed class AreaUnits
         bool hold = false;
         if (_movedByUs.TryGetValue(unit, out var moved))
         {
-            if ((moved.X == x && moved.Y == y) || now >= moved.Until)
+            if (moved.Cell == cell || now >= moved.Until)
                 _movedByUs.Remove(unit);
             else
                 hold = true;
         }
-        if (!hold && Units.CellOf(unit) != (x, y))
+        if (!hold && Units.CellOf(unit) != cell)
         {
             if (!_poly.TryGetValue(unit, out bool poly))
                 _poly[unit] = poly = unit.Get("is_poly_cell").AsBool;
-            Units.Move(unit, x, y, grids, poly);
+            Units.Move(unit, cell, grids, poly);
         }
         // Its effects as the host has them - when they've changed there, or once ours have been left alone long enough
         // for the host to have what we did.
@@ -350,7 +351,7 @@ public sealed class AreaUnits
 
     // One of the host's units we have none bound to: our twin (same object, same cell, never bound) - from a table of
     // our unbound units made once a pass - or a new one.
-    private Instance Bind(int obj, int x, int y)
+    private Instance Bind(int obj, Cell cell)
     {
         if (_unbound == null)
         {
@@ -360,14 +361,13 @@ public sealed class AreaUnits
             {
                 if (_everBound.Contains(local) || ObjectOf(local) == playerObject)
                     continue;
-                var (cx, cy) = Units.CellOf(local);
-                var key = (ObjectOf(local), cx, cy);
+                var key = (ObjectOf(local), Units.CellOf(local));
                 if (!_unbound.TryGetValue(key, out var list))
                     _unbound[key] = list = new();
                 list.Add(local);
             }
         }
-        if (_unbound.TryGetValue((obj, x, y), out var twins))
+        if (_unbound.TryGetValue((obj, cell), out var twins))
             while (twins.Count > 0)
             {
                 Instance twin = twins[^1];
@@ -375,7 +375,7 @@ public sealed class AreaUnits
                 if (!_everBound.Contains(twin) && twin.Exists)
                     return twin;
             }
-        return Units.Create(obj, x, y);
+        return Units.Create(obj, cell);
     }
 
     // A whole roster done: ours out of our turns - between turns only, the turn may be walking the list; only when a

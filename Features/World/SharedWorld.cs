@@ -25,11 +25,11 @@ internal static class SharedWorld
     /// <summary>In place of scr_globaltile_seed_validate: the game's own version, except that a world-map tile's
     /// layout seeds (first visit, or a respawn) come from the world seed instead of randomize() - so every game in the
     /// same world builds the same area there. The tile, when one of its seeds was set (to tell the others); null if not.</summary>
-    public static (int X, int Y)? TileSeedValidate(GmValue key, GmValue tileX, GmValue tileY)
+    public static WorldTile? TileSeedValidate(GmValue key, GmValue tileX, GmValue tileY)
     {
-        if (WorldMap.PlayerCell is not var (gridX, gridY))
+        if (WorldMap.PlayerCell is not { } here)
             return null;
-        var tile = new WorldTile(tileX.IsUndefined ? gridX : tileX.AsInt, tileY.IsUndefined ? gridY : tileY.AsInt);
+        var tile = new WorldTile(tileX.IsUndefined ? here.X : tileX.AsInt, tileY.IsUndefined ? here.Y : tileY.AsInt);
         string name = key.AsString;
         GmValue Generated() => tile.Get(name, TileLayer.Generated) is { IsUndefined: false } value ? value : -1;
         switch (name)
@@ -44,12 +44,12 @@ internal static class SharedWorld
                 if (Locations.Exists(location) && seed == -1)
                 {
                     tile[name] = Generated();
-                    return (tile.X, tile.Y);
+                    return tile;
                 }
                 if (seed == -1 || seed == -2)
                 {
                     tile[name] = TileSeed(name, tile, seed == -2);
-                    return (tile.X, tile.Y);
+                    return tile;
                 }
                 break;
             }
@@ -58,7 +58,7 @@ internal static class SharedWorld
                 if (tile.Seeds[name] == -1)
                 {
                     tile[name] = Generated();
-                    return (tile.X, tile.Y);
+                    return tile;
                 }
                 break;
         }
@@ -138,11 +138,10 @@ internal static class SharedWorld
     /// graphs, which rooms dropped what, the boss's name) as {m: their JSON}, its lists as {l: their JSON}. (Its
     /// contract_map is an index into the handed-out contracts, the same in every game: ContractSync.) "" outside a
     /// world.</summary>
-    public static string TileExport(int x, int y)
+    public static string TileExport(WorldTile tile)
     {
-        if (!WorldMap.Available || x < 0 || y < 0 || x >= WorldMap.Width || y >= WorldMap.Height)
+        if (!WorldMap.Available || tile.X < 0 || tile.Y < 0 || tile.X >= WorldMap.Width || tile.Y >= WorldMap.Height)
             return "";
-        WorldTile tile = WorldMap.Tile(x, y);
         var seeds = new JsonArray(TileSeeds.Names.Select(name => (JsonNode)tile.Seeds[name]).ToArray());
         JsonNode dungeon = -1;
         if (tile.Dungeon is { } found)
@@ -163,7 +162,7 @@ internal static class SharedWorld
         }
         return new JsonObject
         {
-            ["x"] = x, ["y"] = y, ["keys"] = new JsonArray(TileSeeds.Names.Select(k => (JsonNode)k).ToArray()),
+            ["x"] = tile.X, ["y"] = tile.Y, ["keys"] = new JsonArray(TileSeeds.Names.Select(k => (JsonNode)k).ToArray()),
             ["seeds"] = seeds, ["dungeon"] = dungeon,
         }.ToJsonString();
     }
@@ -173,14 +172,13 @@ internal static class SharedWorld
     /// saved graph. Not the tile we're standing on: it's built here already, and we'd take it on our next visit.</summary>
     public static void TileApply(string json)
     {
-        if (!Gm.InstanceExists(GameObjectId.o_player) || WorldMap.PlayerCell is not var (gridX, gridY))
+        if (!Gm.InstanceExists(GameObjectId.o_player) || WorldMap.PlayerCell is not { } here)
             return;
         if (JsonNode.Parse(json) is not JsonObject s || s["seeds"] is not JsonArray seeds || s["keys"] is not JsonArray keys)
             return;
-        int x = s["x"]!.GetValue<int>(), y = s["y"]!.GetValue<int>();
-        if ((x, y) == (gridX, gridY) || x < 0 || y < 0 || x >= WorldMap.Width || y >= WorldMap.Height)
+        var tile = new WorldTile(s["x"]!.GetValue<int>(), s["y"]!.GetValue<int>());
+        if (tile == here || tile.X < 0 || tile.Y < 0 || tile.X >= WorldMap.Width || tile.Y >= WorldMap.Height)
             return;
-        WorldTile tile = WorldMap.Tile(x, y);
         for (int i = 0; i < keys.Count && i < seeds.Count; i++)
             if (GmValue.FromJsonNode(seeds[i]) is { Kind: GmKind.Real } seed && seed.AsReal != -1)
                 tile[keys[i]!.GetValue<string>()] = seed;
@@ -192,15 +190,15 @@ internal static class SharedWorld
             if (value is JsonObject { } nested && nested["m"] is { } m)
             {
                 if (DsMap.FromJson(m.GetValue<string>()) is { } map)
-                    new WorldTile(x, y).SetDungeonMap(key, map);
+                    tile.SetDungeonMap(key, map);
             }
             else if (value is JsonObject { } listed && listed["l"] is { } l)
             {
                 if (DsList.FromJson(l.GetValue<string>()) is { } list)
-                    new WorldTile(x, y).SetDungeonList(key, list);
+                    tile.SetDungeonList(key, list);
             }
             else
-                new WorldTile(x, y).SetDungeonValue(key, GmValue.FromJsonNode(value));
+                tile.SetDungeonValue(key, GmValue.FromJsonNode(value));
         }
     }
 
@@ -208,7 +206,7 @@ internal static class SharedWorld
 
     /// <summary>Every location we have a stored state for (its tags), and every world-map tile the save keeps: what a
     /// player coming into our world is copied.</summary>
-    public static (List<(string Location, GmValue Room, GmValue Preset)> Locations, List<(int X, int Y)> Tiles) CopyList()
+    public static (List<(string Location, GmValue Room, GmValue Preset)> Locations, List<WorldTile> Tiles) CopyList()
     {
         var locations = new List<(string, GmValue, GmValue)>();
         foreach (string tag in StoneForge.Locations.Tags)
@@ -216,7 +214,7 @@ internal static class SharedWorld
                 foreach (GmValue room in location.Rooms)
                     if (location.Room(room) is { } r)
                         locations.AddRange(r.Presets.Select(preset => (tag, room, preset)));
-        var tiles = new List<(int, int)>();
+        var tiles = new List<WorldTile>();
         if (Game.Global["globalmapLocationsDataMap"].AsDsMap is { } map)
             foreach (GmValue tag in map.Keys)
             {
@@ -224,7 +222,7 @@ internal static class SharedWorld
                 int sep = text.IndexOf('_');
                 if (sep > 0 && int.TryParse(text[..sep], NumberStyles.Integer, CultureInfo.InvariantCulture, out int x)
                     && int.TryParse(text[(sep + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int y))
-                    tiles.Add((x, y));
+                    tiles.Add(new WorldTile(x, y));
             }
         return (locations, tiles);
     }

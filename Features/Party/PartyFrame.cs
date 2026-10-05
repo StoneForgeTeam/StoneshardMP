@@ -108,16 +108,16 @@ internal sealed class PartyFrame : UIElement
         string label;
         if (myInside == theirInside && myArea == theirArea)
         {
-            int dx = theirs.CellX - mine.CellX, dy = theirs.CellY - mine.CellY;
-            int moves = Math.Max(Math.Abs(dx), Math.Abs(dy));
+            Cell step = theirs.Cell - mine.Cell;
+            int moves = mine.Cell.DistanceTo(theirs.Cell);
             if (moves > 0)
-                direction = Direction(dx, dy);
+                direction = Direction(step.X, step.Y);
             label = moves.ToString();
         }
-        else if (myArea is var (mx, my) && theirArea is var (tx, ty) && (mx != tx || my != ty))
+        else if (myArea is { } from && theirArea is { } to && from != to)
         {
-            direction = Direction(tx - mx, ty - my);
-            label = Math.Max(Math.Abs(tx - mx), Math.Abs(ty - my)) + "a";
+            direction = Direction(to.X - from.X, to.Y - from.Y);
+            label = Math.Max(Math.Abs(to.X - from.X), Math.Abs(to.Y - from.Y)) + "a";
         }
         else
         {
@@ -126,8 +126,8 @@ internal sealed class PartyFrame : UIElement
         }
         if (direction is { } angle)
         {
-            (double X, double Y) At(double length, double degrees)
-                => (cx + length * Math.Cos(degrees * Math.PI / 180), cy - length * Math.Sin(degrees * Math.PI / 180));
+            Point At(double length, double degrees)
+                => new(cx + length * Math.Cos(degrees * Math.PI / 180), cy - length * Math.Sin(degrees * Math.PI / 180));
             var tip = At(8, angle);
             var left = At(4, angle + 140);
             var right = At(4, angle - 140);
@@ -144,14 +144,14 @@ internal sealed class PartyFrame : UIElement
     private static double Direction(double dx, double dy) => Math.Atan2(-dy, dx) * 180 / Math.PI;
 
     // A place (WorldMap.Place: "room#f2@12_7") as the room and floor, and the world-map area (none in the prologue).
-    private static (string Inside, (int X, int Y)? Area) Split(string place)
+    private static (string Inside, WorldTile? Area) Split(string place)
     {
         int at = place.LastIndexOf('@');
         if (at < 0)
             return (place, null);
         string[] cell = place[(at + 1)..].Split('_');
         return cell.Length == 2 && int.TryParse(cell[0], out int x) && int.TryParse(cell[1], out int y)
-            ? (place[..at], (x, y))
+            ? (place[..at], new WorldTile(x, y))
             : (place, null);
     }
 
