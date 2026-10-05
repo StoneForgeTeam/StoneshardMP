@@ -34,6 +34,9 @@ internal static class JoinSave
     {
         if (!HostInWorld() || SaveData.Map?.GetMap(PlayersKey) is not { } players || !players.Has(name))
             return "";
+        // (The world map's fog and paper are only written into the save data as the game saves: a world not saved since
+        // it was made has none, and the joining game's world map can't load it.)
+        WorldMap.Save();
         if (JsonNode.Parse(SaveData.ToJson()!) is not JsonObject world || JsonNode.Parse(players[name].AsString) is not JsonObject character)
             return "";
         var hostDialogue = (world["characterDataMap"] as JsonObject)?["Dialogue_Complete"] as JsonObject;

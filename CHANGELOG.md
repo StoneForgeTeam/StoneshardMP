@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a player joining a world the host hadn't saved since making it crashed while loading.** The world map's
+  fog is only written into the save data as the game saves, so the joining game got none and its world map failed to
+  load it. The host writes it in now (StoneForge's `WorldMap.Save`) before sending the save.
 - A door opened or shut goes to the others at once (StoneForge's `Doors.OnChanged`), where before each game compared
   its doors every few frames and could miss one opened and shut again in between. Saving a location as we leave it
   uses StoneForge's `Locations.OnSaved`.
