@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using StoneForge;
+using StoneshardMP.Features.Chests;
 
 namespace StoneshardMP.Features.Join;
 
@@ -9,7 +10,11 @@ namespace StoneshardMP.Features.Join;
 // or starting a character for it. (Legacy: scr_mp_join_*.)
 internal static class JoinSave
 {
-    // Where the host keeps the other players' characters, in its save data (saved with its world).
+    // Where the host keeps the other players' characters, in its save data (saved with its world): by world slot (1, 2...:
+    // WorldSlots - "<slot>" -> the character's JSON), and the name of who last played each. (Before world slots, by the
+    // player's name: PlayersKey - read for a slot with none yet, and moved into it as it's next kept.)
+    private const string SlotsKey = "mpSlotCharacters";
+    private const string SlotNamesKey = "mpSlotNames";
     private const string PlayersKey = "mpPlayersDataMap";
 
     // Client: the host's save we were sent, kept to load next.
@@ -27,17 +32,17 @@ internal static class JoinSave
             game["seed"] = seed;
     }
 
-    /// <summary>Host: the save a player loads to join - our world (the whole save data) with their character in
-    /// place of ours, as JSON; "" if we have no character for them yet. Their dialogue flags get ours added (story
-    /// progress: NPCs don't repeat what's done), and the other players' characters stay here.</summary>
-    public static string BuildSave(string name)
+    /// <summary>Host: the save a player loads to join - our world (the whole save data) with the character of their
+    /// world slot in place of ours, as JSON; "" if that slot has no character yet. Their dialogue flags get ours added
+    /// (story progress: NPCs don't repeat what's done), and the other players' characters stay here.</summary>
+    public static string BuildSave(int slot, string name)
     {
-        if (!HostInWorld() || SaveData.Map?.GetMap(PlayersKey) is not { } players || !players.Has(name))
+        if (!HostInWorld() || StoredCharacter(slot, name) is not { } stored)
             return "";
         // (The world map's fog and paper are only written into the save data as the game saves: a world not saved since
         // it was made has none, and the joining game's world map can't load it.)
         WorldMap.Save();
-        if (JsonNode.Parse(SaveData.ToJson()!) is not JsonObject world || JsonNode.Parse(players[name].AsString) is not JsonObject character)
+        if (JsonNode.Parse(SaveData.ToJson()!) is not JsonObject world || JsonNode.Parse(stored) is not JsonObject character)
             return "";
         var hostDialogue = (world["characterDataMap"] as JsonObject)?["Dialogue_Complete"] as JsonObject;
         foreach (string section in SaveData.CharacterSections)
@@ -52,6 +57,8 @@ internal static class JoinSave
                     dialogue[key] = said?.DeepClone();
         }
         world.Remove(PlayersKey);
+        world.Remove(SlotsKey);
+        Game.Log($"[StoneshardMP] Save for slot {slot}: {(world[PersonalStash.StashesKey] as JsonObject)?.Count ?? 0} stash(es) in it");
         return world.ToJsonString(GameJson);
     }
 
@@ -65,15 +72,95 @@ internal static class JoinSave
     /// keep. "" without save data.</summary>
     public static string CharacterJson() => SaveData.CharacterJson() ?? "";
 
-    /// <summary>Host: keep a player's character (the JSON of their sections) in our own save data - saved with our
-    /// world. false: we're not in a world to keep it in.</summary>
-    public static bool StoreCharacter(string name, string character)
+    /// <summary>Host: keep a player's character (the JSON of their sections) in their world slot, in our own save data -
+    /// saved with our world - and their name as who plays it. false: we're not in a world to keep it in.</summary>
+    public static bool StoreCharacter(int slot, string name, string character)
     {
         if (!HostInWorld())
             return false;
-        SaveData.ModMap(PlayersKey)[name] = character;
+        SaveData.ModMap(SlotsKey)[SlotKey(slot)] = character;
+        SaveData.ModMap(SlotNamesKey)[SlotKey(slot)] = name;
+        // (Kept by name before world slots: in its slot now.)
+        if (SaveData.Map?.GetMap(PlayersKey) is { } players && players.Has(name))
+            players.Remove(name);
         return true;
     }
+
+    /// <summary>Host, the save just read (before the game sets up from it): we play this world slot's character - ours
+    /// and its traded in the save data: its character becomes the save's own, ours is kept in its slot, and the stashes in
+    /// the chest by the bed go with them (PersonalStash). What happened, for the log.</summary>
+    public static string SwapHost(int slot, string hostName)
+    {
+        if (StoredCharacter(slot, "") is not { } stored)
+            return $"slot {slot} has no character in this save - playing our own";
+        if (SaveData.Map is not { } save || SaveData.CharacterJson() is not { } ours
+            || JsonNode.Parse(SaveData.ToJson()!) is not JsonObject world || JsonNode.Parse(stored) is not JsonObject character)
+            return $"couldn't read the save to trade with slot {slot} - playing our own";
+        foreach (string section in SaveData.CharacterSections)
+            if (character[section] is { } value)
+                world[section] = value.DeepClone();
+        string key = SlotKey(slot), was = SlotName(slot) ?? $"slot {slot}";
+        Section(world, SlotsKey)[key] = ours;
+        Section(world, SlotNamesKey)[key] = hostName;
+        // (The stashes: ours, slot 0's, and the slot's, traded.)
+        if (world[PersonalStash.StashesKey] is JsonObject stashes)
+        {
+            string mine = "0|", theirs = key + "|";
+            var moved = new List<(string Name, JsonNode? Items)>();
+            foreach (var (name, items) in stashes.ToList())
+            {
+                string? to = name.StartsWith(mine, System.StringComparison.Ordinal) ? theirs + name[mine.Length..]
+                    : name.StartsWith(theirs, System.StringComparison.Ordinal) ? mine + name[theirs.Length..] : null;
+                if (to == null)
+                    continue;
+                stashes.Remove(name);
+                moved.Add((to, items));
+            }
+            // (Put back once all are out: the two sets don't overwrite each other on the way.)
+            foreach (var (name, items) in moved)
+                stashes[name] = items;
+        }
+        if (DsMap.FromJson(world.ToJsonString(GameJson)) is not { } traded)
+            return $"couldn't make the traded save with slot {slot} - playing our own";
+        Game.Global["saveDataMap"] = traded;
+        save.Destroy();
+        return $"playing slot {slot}'s character ({was}'s); ours is kept in slot {slot}";
+    }
+
+    // A section of the save (JSON) that's an object, made if it's not there.
+    private static JsonObject Section(JsonObject world, string key)
+    {
+        if (world[key] is not JsonObject section)
+            world[key] = section = new JsonObject();
+        return section;
+    }
+
+    // A world slot's character: the one kept in it, else one kept by this player's name from before world slots; null
+    // if there's neither.
+    private static string? StoredCharacter(int slot, string name)
+    {
+        if (SaveData.Map?.GetMap(SlotsKey) is { } slots && slots[SlotKey(slot)] is { Kind: GmKind.String } character)
+            return character.AsString;
+        return SaveData.Map?.GetMap(PlayersKey) is { } players && players[name] is { Kind: GmKind.String } old ? old.AsString : null;
+    }
+
+    /// <summary>The characters kept in a save (its save data): each by its world slot - or, from before world slots, by
+    /// its player's name - and its JSON.</summary>
+    public static List<((int? Slot, string? Name) Key, string Json)> StoredCharacters(DsMap save)
+    {
+        var all = new List<((int? Slot, string? Name), string)>();
+        if (save.GetMap(SlotsKey) is { } slots)
+            foreach (GmValue key in slots.Keys)
+                if (int.TryParse(key.AsString, out int slot) && slots[key] is { Kind: GmKind.String } json)
+                    all.Add(((slot, null), json.AsString));
+        if (save.GetMap(PlayersKey) is { } players)
+            foreach (GmValue key in players.Keys)
+                if (players[key] is { Kind: GmKind.String } json)
+                    all.Add(((null, key.AsString), json.AsString));
+        return all;
+    }
+
+    private static string SlotKey(int slot) => slot.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // The character's sections the game keeps a live global of (what scr_savegame writes to), as list or map.
     private static readonly (string Section, bool List)[] LiveSections =
@@ -126,9 +213,21 @@ internal static class JoinSave
         }
     }
 
-    /// <summary>The players whose characters we keep in our world (none outside one).</summary>
+    /// <summary>The players whose characters we keep in our world - who last played each world slot, and any kept by
+    /// name from before (none outside one).</summary>
     public static string[] StoredPlayers()
-        => SaveData.Map?.GetMap(PlayersKey) is { } players ? players.Keys.Select(key => key.AsString).ToArray() : System.Array.Empty<string>();
+    {
+        var names = new List<string>();
+        if (SaveData.Map?.GetMap(SlotNamesKey) is { } slotNames)
+            names.AddRange(slotNames.Keys.Select(key => slotNames[key].AsString ?? ""));
+        if (SaveData.Map?.GetMap(PlayersKey) is { } players)
+            names.AddRange(players.Keys.Select(key => key.AsString));
+        return names.Where(name => name.Length > 0).Distinct().ToArray();
+    }
+
+    /// <summary>Who last played a world slot in our world (null: nobody, or we're not in one).</summary>
+    public static string? SlotName(int slot)
+        => SaveData.Map?.GetMap(SlotNamesKey) is { } names && names[SlotKey(slot)] is { Kind: GmKind.String } name ? name.AsString : null;
 
     /// <summary>Client: a calm moment to load the host's world - the main menu, or in game with nothing mid-way (no room
     /// change, fade, cutscene or conversation).</summary>

@@ -3,6 +3,42 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Shared chests.** Where players are together, chests, barrels, tombs, corpses and other containers have one set of
+  contents for everyone there (StoneForge's `Containers`). Before, each game kept its own, so two players could loot the
+  same chest and something stashed by one wasn't there for the other.
+  - A container someone has open is theirs until they close it. Another player who tries to open it is told who's
+    looking in it, in the game's log, and it stays shut for them.
+  - Closing one sends what's in it to the others, whose copy becomes that. One they'd never opened counts as opened,
+    with that loot, so it isn't rolled again.
+  - When players come together, the place's owner sends every container it has opened, since the others' copies may be
+    older. A container that's off screen gets its contents when it's next on screen.
+  - A player's own stash chest isn't shared live: each player has their own (below).
+- **World player slots** (as Divinity has them). The host's world keeps the other players' characters by slot (1, 2,
+  and so on) instead of by name, so two players with the same name don't share a character. Each player plays the slot
+  of the order they joined in. On the main menu, the host's player list shows each player's slot and has **Swap**,
+  which moves a player to the next slot, trading places with whoever has it. Swap works while the player is still
+  waiting to be let in, before the host is in its world. A character kept by name in an older save moves into its
+  player's slot the next time it's saved.
+  - The host can play another slot's character too. **Swap** on the host's own row picks the slot (0 is its own), on
+    the main menu before loading. The next save the host loads trades the two characters and their stashes in the save,
+    so the host plays that character and whoever plays that slot gets the host's. If the slot has no character in that
+    save, the host plays its own.
+  - Under each player in the list: their slot and its character's name and level ("slot 1: Arna, level 5"),
+    or "new character" if the slot has none. On the main menu that's from the save picked to play; in the host's world,
+    from the world as it is. The host sends the list to everyone when it changes, so clients see it too. Protocol 31.
+  - **Hosting, a save is picked before it's played.** Continue picks the last save played, and a save clicked in Load
+    Game's list is picked, not loaded. The player list says which save it is, and shows the slots and characters from
+    it while everyone chooses. **Play** then loads it. New Game still starts straight away, since a new world has no
+    characters to choose from.
+- **Each player has their own stash in the chest by the bed** (`o_player_chest`). The game keeps a chest's items with
+  its place, and places' saves go between games, so whoever left last decided what was in it: after a reload, only one
+  player's items were there. Each player's stash is now kept on its own in the host's world, by world slot, place and
+  chest. It's put in the chest just before that player opens it, and kept as theirs when they close it. A client's goes
+  to the host, and comes back with the host's world when the client joins. A stash from before this is the host's; a
+  client's starts empty.
+
 ## 0.2.0
 
 - **Fixed: a player joining a world the host hadn't saved since making it crashed while loading.** The world map's

@@ -8,7 +8,8 @@ namespace StoneshardMP.Features.Menu;
 // The Multiplayer screens of the main menu, made of its own buttons (StoneForge's MainMenu), as the game's Play screen
 // is - one for each state of the session, switched as it changes (the host leaving, a connection lost...):
 // - Multiplayer (after Play): Host Game, Join Game (its dialog: JoinDialog), Back.
-// - Hosting: the game's Continue and Load Game, New Game (straight into the Adventure), and Stop Hosting.
+// - Hosting: Play (once a save's picked), Continue and Load Game - which pick a save, not go into it (HostLobby): the
+//   players choose their slots first -, New Game (straight into the Adventure), and Stop Hosting.
 // - Joined: Leave Game only - a client plays the host's world, launched into it (or into making a character for it)
 //   when the host is in it (JoinManager).
 // The session's status shows under the menu meanwhile, and who's in the game at its left (PlayersPanel - the host
@@ -25,18 +26,24 @@ public sealed class MultiplayerMenu
     private readonly PlayersPanel _players;
     private readonly UILabel _status;
     private readonly Func<string?> _joinStatus;
+    private readonly HostLobby _lobby;
     private Screen _shown;
+    // (The picked save changed: the Hosting screen made again - from Tick, not inside the game's save menu. And whether the
+    // save menu was open last frame.)
+    private bool _remake, _saveMenuWasOpen;
 
     public MultiplayerMenu(ModContext context, Session session, MpSettings settings, Func<string> playerName,
-        JoinDialog join, Func<string?> joinStatus)
+        JoinDialog join, Func<string?> joinStatus, WorldSlots slots, SlotRoster roster, HostLobby lobby)
     {
+        _lobby = lobby;
+        lobby.Changed += () => _remake = true;
         _joinStatus = joinStatus;
         _context = context;
         _session = session;
         _settings = settings;
         _playerName = playerName;
         _join = join;
-        _players = context.UI.MainMenu.Add(new PlayersPanel(session, settings, playerName));
+        _players = context.UI.MainMenu.Add(new PlayersPanel(session, settings, playerName, slots, roster, lobby));
         // (Under the menu: the session's status, while the Multiplayer screens show or a session's on.)
         _status = context.UI.MainMenu.Add(new UILabel("", 0, 14) { Anchor = UIAnchor.Bottom, Width = 400, Align = Draw.AlignCenter, Visible = false });
         MainMenu.AddAfter(context, VanillaButton.Play, "Multiplayer", () => Show(ScreenFor(_session.Mode)));
@@ -46,6 +53,28 @@ public sealed class MultiplayerMenu
     // Each frame: the status line.
     public void Tick()
     {
+        // The save menu shut while we host (a save picked, or Back): the game goes back to its own play screen (New Game,
+        // Load Game, Back - the nav's user event 1, which mods' changes aren't on); back to the main list, our Hosting
+        // screen, instead (its user event 0).
+        bool saveMenuOpen = Gm.InMainMenu && Gm.InstanceExists(GameObjectId.o_saveMenu);
+        if (_saveMenuWasOpen && !saveMenuOpen && Gm.InMainMenu && _session.Mode == Session.SessionMode.Host)
+        {
+            foreach (Instance nav in Instances.All(GameObjectId.o_mainMenuNavContainer))
+                if (nav.Get("active").AsBool)
+                    Game.CallBuiltinAs("event_user", nav, nav, 0);
+            _remake = true;
+        }
+        _saveMenuWasOpen = saveMenuOpen;
+        if (_remake && Gm.InMainMenu && !saveMenuOpen)
+        {
+            _remake = false;
+            // (Hosting: its screen made again, Play on it now. Hosting but showing another: to it.)
+            if (_session.Mode == Session.SessionMode.Host)
+            {
+                _context.Log($"Lobby: Hosting screen made again ({(_lobby.Picked is { } picked ? "Play for " + picked.Name : "nothing picked")}; it was {_shown})");
+                Show(Screen.Hosting);
+            }
+        }
         _status.Visible = _shown != Screen.None || _session.Mode != Session.SessionMode.Idle;
         _status.Text = (_session.Mode == Session.SessionMode.Client ? _joinStatus() : null) ?? _session.Status;
         _status.Colour = _session.Connected ? Draw.Rgb(120, 200, 120) : Draw.Muted;
@@ -86,7 +115,11 @@ public sealed class MultiplayerMenu
                 MainMenu.AddButton(_context, "Back", Close);
                 break;
             case Screen.Hosting:
-                MainMenu.AddButton(_context, VanillaButton.Continue);
+                // (A save picked: Play goes into it, everyone's slots as chosen. Continue picks the last save played.)
+                if (_lobby.Picked != null)
+                    MainMenu.AddButton(_context, "Play", () => _lobby.Play());
+                if (SaveSlots.CurrentSave != null)
+                    MainMenu.AddButton(_context, "Continue", _lobby.PickLast);
                 // (A shared world: straight into the Adventure, no permadeath - the prologue is a world of its own. The
                 // players waiting make their characters alongside: JoinManager.)
                 MainMenu.AddButton(_context, "New Game", JoinSave.StartNew);

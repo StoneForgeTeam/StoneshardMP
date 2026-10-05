@@ -59,6 +59,9 @@ public static class PacketCodec
             DoorPacket.PacketId => DoorPacket.Read(ref reader),
             AreaOwnerPacket.PacketId => AreaOwnerPacket.Read(ref reader),
             MapMarkersPacket.PacketId => MapMarkersPacket.Read(ref reader),
+            ChestPacket.PacketId => ChestPacket.Read(ref reader),
+            StashPacket.PacketId => StashPacket.Read(ref reader),
+            SlotsPacket.PacketId => SlotsPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

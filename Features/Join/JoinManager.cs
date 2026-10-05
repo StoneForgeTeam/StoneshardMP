@@ -18,7 +18,9 @@ namespace StoneshardMP.Features.Join;
 // - A client that's in asks to join (JoinRequestPacket). The host answers once it's in a world - it pressed Continue
 //   or Load Game - or has begun a new one (New Game: its world's seed is made before its own character is): until
 //   then the client waits.
-// - The host has a character for that player: it sends its world (its save data) with that character in it
+// - Each player plays one of the world's player slots (WorldSlots: the order they joined in, unless the host swaps them
+//   on the main menu) - the host keeps characters by slot, not by name.
+// - The host has a character in that player's slot: it sends its world (its save data) with that character in it
 //   (JoinSave.BuildSave), and the client loads it (in place of a save of its own: scr_slotLoad).
 // - It hasn't: the client makes one - straight into the game's new game (Adventure: the class picked at Verren) on
 //   the host's world map (its seed, given as it's made: scr_characterMapInit). Its first save sends the character to
@@ -49,10 +51,13 @@ public sealed class JoinManager
     private readonly ModContext _context;
     private readonly Session _session;
     private readonly Func<string> _playerName;
-    // Host: who's asked to join (by slot), and whether they've been told to wait; characters sent before we were in a
-    // world to keep them in.
+    private readonly WorldSlots _slots;
+    // Host: who's asked to join (by session slot), and whether they've been told to wait; characters sent before we were
+    // in a world to keep them in (by world slot: who sent it, and it).
     private readonly Dictionary<int, (string Name, bool Told)> _requests = new();
-    private readonly Dictionary<string, string> _pendingCharacters = new();
+    private readonly Dictionary<int, (string Name, string Character)> _pendingCharacters = new();
+    // Client: the world slot we play (the host's reply says).
+    private int _worldSlot;
     private ClientState _state;
     private double _hostSeed = -1;
     private int _calm;
@@ -92,11 +97,14 @@ public sealed class JoinManager
     private static readonly TimeSpan TopUpWait = TimeSpan.FromSeconds(5);
     private bool _disconnecting;
 
-    public JoinManager(ModContext context, Session session, Func<string> playerName)
+    public JoinManager(ModContext context, Session session, Func<string> playerName, WorldSlots slots)
     {
         _context = context;
         _session = session;
         _playerName = playerName;
+        _slots = slots;
+        // (A client still waiting to be let in can be moved to another slot.)
+        slots.Waiting = slot => _requests.ContainsKey(slot);
         session.On<JoinRequestPacket>(OnRequest);
         session.On<JoinReplyPacket>(OnReply);
         session.On<JoinWorldPacket>(OnWorld);
@@ -119,6 +127,14 @@ public sealed class JoinManager
             if (_session.Mode == Session.SessionMode.Host)
                 HostLoading();
             return JoinSave.TakePending();
+        });
+        // A save of ours read: the host playing another slot's character (WorldSlots.HostSlot) trades it with ours first.
+        SaveData.OnLoaded(context, _ =>
+        {
+            if (_session.Mode != Session.SessionMode.Host || _slots.HostSlot == 0)
+                return;
+            _context.Log("Save loaded: " + JoinSave.SwapHost(_slots.HostSlot, _playerName()));
+            _slots.HostLoaded();
         });
         // A client's saves go to the host, not here.
         Scripts.scr_slotUpdate.Before(context, call => ClientSave());
@@ -154,6 +170,9 @@ public sealed class JoinManager
     public bool InSharedWorld => _session.Mode != Session.SessionMode.Client || ClientInWorld;
 
     private string HostName => _session.Players.FirstOrDefault(p => p.Slot == 0)?.Name ?? "the host";
+
+    /// <summary>The world slot we play: 0 for the host (or alone); a client's, as the host said (WorldSlots).</summary>
+    public int WorldSlot => _session.Mode == Session.SessionMode.Client ? _worldSlot : 0;
 
     public void Clear()
     {
@@ -266,15 +285,15 @@ public sealed class JoinManager
             {
                 // A new world of ours has nobody's character in it: they make theirs now, alongside us (unless they
                 // have - it's kept here until our world is ready, and they're let in then).
-                if (_hostNewWorld && !_pendingCharacters.ContainsKey(request.Name))
+                if (_hostNewWorld && !_pendingCharacters.ContainsKey(_slots.Of(slot)))
                 {
                     _requests.Remove(slot);
-                    _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, SharedWorld.WorldSeed()), to: slot);
+                    _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, SharedWorld.WorldSeed(), (byte)_slots.Of(slot)), to: slot);
                     _context.Log($"{request.Name} is making a new character alongside ours");
                 }
                 else if (!request.Told)
                 {
-                    _session.Send(new JoinReplyPacket(JoinReply.Wait, -1), to: slot);
+                    _session.Send(new JoinReplyPacket(JoinReply.Wait, -1, (byte)_slots.Of(slot)), to: slot);
                     _requests[slot] = (request.Name, true);
                 }
             }
@@ -282,10 +301,10 @@ public sealed class JoinManager
         }
         // Characters sent while we weren't in a world (made alongside our new game, or saved as we left): into the world
         // we're now in - they're newer than what it has.
-        foreach (var (name, character) in _pendingCharacters.ToList())
+        foreach (var (worldSlot, (name, character)) in _pendingCharacters.ToList())
         {
-            JoinSave.StoreCharacter(name, character);
-            _pendingCharacters.Remove(name);
+            JoinSave.StoreCharacter(worldSlot, name, character);
+            _pendingCharacters.Remove(worldSlot);
             _context.Log($"{name}'s character kept (held until we were back in our world): {JoinSave.Where(character)}");
         }
         // (A save being topped up: everyone's in - or the wait's up - and kept above: written again.)
@@ -294,17 +313,19 @@ public sealed class JoinManager
         foreach (var (slot, request) in _requests.ToList())
         {
             _requests.Remove(slot);
-            string save = JoinSave.BuildSave(request.Name);
+            int worldSlot = _slots.Of(slot);
+            string save = JoinSave.BuildSave(worldSlot, request.Name);
             if (save.Length == 0)
             {
-                _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, SharedWorld.WorldSeed()), to: slot);
-                _context.Log($"{request.Name} is making a new character for this world");
+                _session.Send(new JoinReplyPacket(JoinReply.MakeCharacter, SharedWorld.WorldSeed(), (byte)worldSlot), to: slot);
+                _context.Log($"{request.Name} is making a new character for this world, in slot {worldSlot}");
                 continue;
             }
             byte[] data = JoinCompression.Compress(save);
-            _session.Send(new JoinReplyPacket(JoinReply.WorldFollows, SharedWorld.WorldSeed()), to: slot);
+            _session.Send(new JoinReplyPacket(JoinReply.WorldFollows, SharedWorld.WorldSeed(), (byte)worldSlot), to: slot);
             _session.Send(new JoinWorldPacket(data), to: slot);
-            _context.Log($"{request.Name} is joining this world ({save.Length / 1024} KB of save, {data.Length / 1024} KB sent)");
+            string was = JoinSave.SlotName(worldSlot) is { } last && last != request.Name ? $" ({last}'s character)" : "";
+            _context.Log($"{request.Name} is joining this world as slot {worldSlot}{was} ({save.Length / 1024} KB of save, {data.Length / 1024} KB sent)");
         }
     }
 
@@ -325,12 +346,13 @@ public sealed class JoinManager
             return;
         }
         string character = JoinCompression.Decompress(packet.Character);
+        int worldSlot = _slots.Of(sender.Slot);
         // (Not in our world this moment - a save's room change under way hides the player for a few frames: held, and
         // kept as soon as we're back in it - HostTick.)
-        if (!JoinSave.StoreCharacter(packet.Name, character))
-            _pendingCharacters[packet.Name] = character;
+        if (!JoinSave.StoreCharacter(worldSlot, packet.Name, character))
+            _pendingCharacters[worldSlot] = (packet.Name, character);
         else
-            _context.Log($"{packet.Name}'s character kept: {JoinSave.Where(character)}");
+            _context.Log($"{packet.Name}'s character kept in slot {worldSlot}: {JoinSave.Where(character)}");
         // (A held Save & Exit: one more saved.)
         if (_exitWaiting.Remove(sender.Slot) && _exitWaiting.Count == 0)
             ExitNow();
@@ -484,6 +506,7 @@ public sealed class JoinManager
         if (_session.Mode != Session.SessionMode.Client || sender.Slot != 0)
             return;
         _hostSeed = packet.Seed;
+        _worldSlot = packet.WorldSlot;
         switch (packet.Reply)
         {
             case JoinReply.Wait:

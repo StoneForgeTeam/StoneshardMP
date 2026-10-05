@@ -6,6 +6,7 @@ using StoneshardMP.Features.Rounds;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Contracts;
 using StoneshardMP.Features.Debug;
+using StoneshardMP.Features.Chests;
 using StoneshardMP.Features.Doors;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
@@ -38,6 +39,10 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
+    private ChestSync _chests = null!;
+    private PersonalStash _stash = null!;
+    private WorldSlots _slots = null!;
+    private SlotRoster _roster = null!;
     private MapMarkerSync _markers = null!;
     private Follow _follow = null!;
     private MultiplayerMenu _menu = null!;
@@ -80,7 +85,13 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // The main menu's Multiplayer screens (host, join - its dialog -, the game's Play buttons meanwhile, who's in).
         var join = context.UI.MainMenu.Add(new JoinDialog(_session, settings, PlayerName));
         // The host keeps everyone's save: a client joins the host's world, or makes a character for it.
-        _join = new JoinManager(context, _session, PlayerName);
+        // Which of the world's player slots each player plays: the order they joined in, unless the host swaps them.
+        _slots = new WorldSlots(_session);
+        // Who plays which slot, and who that is - the host's, sent to everyone (the main menu's player list).
+        // Host: a save picked on the main menu, gone into with Play - the slots chosen in between.
+        var lobby = new HostLobby(context, _session);
+        _roster = new SlotRoster(_session, _slots, lobby);
+        _join = new JoinManager(context, _session, PlayerName, _slots);
         // One world for everyone in it: areas built alike, what's in them shared, the host's weather.
         _world = new WorldSync(context, _session, _join, _ownership);
         // A multiplayer world's saves are named for who plays in it.
@@ -89,13 +100,17 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _loot = new LootSync(context, _session, _ownership, () => _join.InSharedWorld);
         // Doors opened or shut where players are together: the same in every game there.
         _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
+        // Chests, barrels and tombs where players are together: one set of contents, one player in each at a time.
+        _chests = new ChestSync(context, _session, _ownership, () => _join.InSharedWorld);
+        // The chest by the bed: each player's own stash in it, kept in the host's world.
+        _stash = new PersonalStash(context, _session, () => _join.WorldSlot, _slots, () => _join.InSharedWorld);
         // One set of markers on the world map for everyone in the world.
         _markers = new MapMarkerSync(context, _session, () => _join.InSharedWorld);
         // One story: quest steps, reputation, dialogue and location flags, crime records; quest items held by anyone.
         _quests = new QuestSync(context, _session, _join);
         // One set of contracts: the host's, kept alike, with deadlines on the host's clock.
         _contracts = new ContractSync(context, _session, _join, _quests);
-        _menu = new MultiplayerMenu(context, _session, settings, PlayerName, join, () => _join.Status);
+        _menu = new MultiplayerMenu(context, _session, settings, PlayerName, join, () => _join.Status, _slots, _roster, lobby);
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
 
@@ -112,6 +127,10 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _rounds.Clear();
         _turnTime.Clear();
         _doors.Clear();
+        _chests.Clear();
+        _stash.Clear();
+        _slots.Clear();
+        _roster.Clear();
         _markers.Clear();
         _follow.Clear();
         _clock.Clear();
@@ -132,12 +151,15 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         if (Game.Running)
         {
             Profiler.Measure(_context, "menu", _menu.Tick);
+            Profiler.Measure(_context, "slots", _roster.Tick);
             Profiler.Measure(_context, "join", _join.Tick);
             Profiler.Measure(_context, "world", _world.Tick);
             // (Who runs our place, before anything that goes by it.)
             Profiler.Measure(_context, "ownership", _ownership.Tick);
             Profiler.Measure(_context, "loot", _loot.Tick);
             Profiler.Measure(_context, "doors", _doors.Tick);
+            Profiler.Measure(_context, "chests", _chests.Tick);
+            Profiler.Measure(_context, "stash", _stash.Tick);
             Profiler.Measure(_context, "map markers", _markers.Tick);
             Profiler.Measure(_context, "quests", _quests.Tick);
             Profiler.Measure(_context, "contracts", _contracts.Tick);
