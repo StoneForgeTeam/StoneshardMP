@@ -98,10 +98,19 @@ public sealed class WorldSync
         Scripts.scr_globaltile_dungeon_set.Before(context, dungeonSet);
         Scripts.scr_globaltile_dungeon_set_map.Before(context, dungeonSet);
         Scripts.scr_globaltile_dungeon_set_list.Before(context, dungeonSet);
-        // A floor's layout seed, and which floors are special: the vanilla rolls, drawn from the world seed's (then the
-        // game's random carries on, as it would have).
+        // A floor's layout seed: the vanilla roll, drawn from the world seed's - and the generator left as the script leaves
+        // it, seeded with the floor's seed (scr_dungeonFloorSeedSet), which the whole floor is then built from. (Put back
+        // to random afterwards, as WithSeed does, each game built the rest of the floor its own way: the same seed, a
+        // different floor.) Which floors are special: drawn from the world seed's too, then the game's random carries on.
         Scripts.scr_dungeonFloorSeedGenerate.Before(context, call =>
-            Seeded(call, Scripts.scr_dungeonFloorSeedGenerate, SharedWorld.DungeonSeed(1, WorldMap.DungeonFloor)));
+        {
+            long seed = SharedWorld.DungeonSeed(1, WorldMap.DungeonFloor);
+            if (seed < 0)
+                return false;
+            Game.CallBuiltin("random_set_seed", (double)seed);
+            call.Result = Scripts.scr_dungeonFloorSeedGenerate.CallOriginal(call);
+            return true;
+        });
         Scripts.scr_dungeonSpecialRoomInit.Before(context, call =>
             Seeded(call, Scripts.scr_dungeonSpecialRoomInit, SharedWorld.DungeonSeed(2, 0)));
         // A floor rejected: counted, for its next seed.
@@ -165,14 +174,17 @@ public sealed class WorldSync
 
     private void ClientTick()
     {
-        // In the host's world now: ask for everything it has.
-        bool inWorld = _join.ClientInWorld && Gm.InGame;
-        if (inWorld && !_wasInWorld)
+        // In the host's world now: ask for everything it has - once, as we come into it (not again at each room change: the
+        // game's between rooms for a moment then - and a copy of everything again brought back the host's older copies of
+        // the places we'd just been in).
+        if (!_join.ClientInWorld)
+            _wasInWorld = false;
+        else if (Gm.InGame && !_wasInWorld)
         {
+            _wasInWorld = true;
             _session.Send(new WorldDataPacket(WorldData.CopyRequest, SharedWorld.WorldSeed(), Array.Empty<byte>()), to: 0);
             _context.Log("In the host's world: asking for its copy of the world");
         }
-        _wasInWorld = inWorld;
     }
 
     // ---- locations ----

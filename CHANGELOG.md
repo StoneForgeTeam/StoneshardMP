@@ -5,11 +5,18 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: players on the same dungeon floor had different floors.** Each game worked out the same floor seed from the
+  world seed, and the game seeds its generator with it to build the floor. But the generator was then put back to
+  random once the seed script returned (StoneForge's `Game.WithSeed`), so the rest of the floor was each game's own.
+  It's left seeded now, as the GML version did, so every game builds the same floor.
 - **Fixed: NPCs doubling where players were together.** A follower applies the owner's units a few a frame. In a big
   place like Osbrook, the owner's next list came before it finished, and each new list started it over. So it never
   got to the end, where the units the owner didn't send are removed. Now a list that arrives mid-way waits its turn.
   Also, a unit with no twin on its exact cell is matched to the nearest one of the same kind within a few cells, instead
   of a new one being made beside it: an NPC that wandered a step in one game used to end up as two.
+- **Fixed: a client asked for the host's whole world again at every room change**, because the game is briefly between
+  rooms then. The host resent every place, and its older copies of places the client had just been in came back. It
+  asks once now, as it comes into the host's world.
 - **Shared breakables.** Where players are together, crates, barrels, furniture and everything else that can be broken
   have one health pool. Damage one player does comes off everyone's copy, so two players hitting the same crate add
   up, and once it breaks it breaks for everyone, with its own debris and noise. When players come together, the

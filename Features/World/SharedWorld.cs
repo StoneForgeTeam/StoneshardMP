@@ -101,7 +101,7 @@ internal static class SharedWorld
     }
 
     // Which floor build a retry count belongs to: the world-map cell, the floor and the in-game day.
-    private static string RetryKey(int floor) => $"{WorldMap.PlayerCell}_{floor}_{Day}";
+    private static string RetryKey(int floor) => (WorldMap.PlayerCell is var (x, y) ? $"{x}_{y}" : "none") + $"_{floor}_{Day}";
 
     // ---- locations ----
 
