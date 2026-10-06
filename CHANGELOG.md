@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Shared breakables.** Where players are together, crates, barrels, furniture and everything else that can be broken
+  have one health pool. Damage one player does comes off everyone's copy, so two players hitting the same crate add
+  up, and once it breaks it breaks for everyone, with its own debris and noise. When players come together, the
+  place's owner sends what's been damaged or broken there since it arrived. Something that's off screen gets the news
+  when it comes back on screen. Protocol 32.
 - **Shared chests.** Where players are together, chests, barrels, tombs, corpses and other containers have one set of
   contents for everyone there (StoneForge's `Containers`). Before, each game kept its own, so two players could loot the
   same chest and something stashed by one wasn't there for the other.

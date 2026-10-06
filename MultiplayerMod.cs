@@ -6,6 +6,7 @@ using StoneshardMP.Features.Rounds;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Contracts;
 using StoneshardMP.Features.Debug;
+using StoneshardMP.Features.Breakables;
 using StoneshardMP.Features.Chests;
 using StoneshardMP.Features.Doors;
 using StoneshardMP.Features.Effects;
@@ -40,6 +41,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
     private ChestSync _chests = null!;
+    private BreakableSync _breakables = null!;
     private PersonalStash _stash = null!;
     private WorldSlots _slots = null!;
     private SlotRoster _roster = null!;
@@ -103,6 +105,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // Chests, barrels and tombs where players are together: one set of contents, one player in each at a time.
         _chests = new ChestSync(context, _session, _ownership, () => _join.InSharedWorld);
         // The chest by the bed: each player's own stash in it, kept in the host's world.
+        // Crates, barrels and furniture where players are together: one health pool each, broken for everyone.
+        _breakables = new BreakableSync(context, _session, _ownership, () => _join.InSharedWorld);
         _stash = new PersonalStash(context, _session, () => _join.WorldSlot, _slots, () => _join.InSharedWorld);
         // One set of markers on the world map for everyone in the world.
         _markers = new MapMarkerSync(context, _session, () => _join.InSharedWorld);
@@ -128,6 +132,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _turnTime.Clear();
         _doors.Clear();
         _chests.Clear();
+        _breakables.Clear();
         _stash.Clear();
         _slots.Clear();
         _roster.Clear();
@@ -159,6 +164,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "loot", _loot.Tick);
             Profiler.Measure(_context, "doors", _doors.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
+            Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);
             Profiler.Measure(_context, "map markers", _markers.Tick);
             Profiler.Measure(_context, "quests", _quests.Tick);
