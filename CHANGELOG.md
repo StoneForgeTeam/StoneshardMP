@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: NPCs doubling where players were together.** A follower applies the owner's units a few a frame. In a big
+  place like Osbrook, the owner's next list came before it finished, and each new list started it over. So it never
+  got to the end, where the units the owner didn't send are removed. Now a list that arrives mid-way waits its turn.
+  Also, a unit with no twin on its exact cell is matched to the nearest one of the same kind within a few cells, instead
+  of a new one being made beside it: an NPC that wandered a step in one game used to end up as two.
 - **Shared breakables.** Where players are together, crates, barrels, furniture and everything else that can be broken
   have one health pool. Damage one player does comes off everyone's copy, so two players hitting the same crate add
   up, and once it breaks it breaks for everyone, with its own debris and noise. When players come together, the

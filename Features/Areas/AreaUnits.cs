@@ -53,10 +53,13 @@ public sealed class AreaUnits
     private readonly Dictionary<Instance, JsonObject> _applied = new();
     private readonly Dictionary<Instance, int> _objectOf = new();
     private int _turnsSize = -1;
-    // Follower: the roster being applied, a few units a frame (UnitsPerFrame) rather than all at once - the next one
-    // replaces it, and starts over; where it's got to, the units it's bound so far, and whether any is new.
+    // Follower: the roster being applied, a few units a frame (UnitsPerFrame) rather than all at once - one that comes
+    // meanwhile waits for it to finish (the latest one), so a pass always gets to its end, where what the owner didn't
+    // send is removed (a big place's roster takes longer than the owner takes to send the next: starting over each time,
+    // that never happened, and a twin made beside one of ours left both); where it's got to, the units it's bound so far,
+    // and whether any is new.
     private const int UnitsPerFrame = 12;
-    private JsonObject[]? _roster;
+    private JsonObject[]? _roster, _waiting;
     private int _next;
     private readonly HashSet<Instance> _pass = new();
     private bool _passBound;
@@ -92,6 +95,7 @@ public sealed class AreaUnits
         _objectOf.Clear();
         _turnsSize = -1;
         _roster = null;
+        _waiting = null;
         _pass.Clear();
         _poly.Clear();
         _unbound = null;
@@ -149,7 +153,9 @@ public sealed class AreaUnits
 
     public void Tick()
     {
-        // (Following: the roster we're applying, a few more units of it.)
+        // (Following: the roster we're applying, a few more units of it - or the one that came meanwhile, from its start.)
+        if (_roster == null && _waiting != null)
+            StartPass(_waiting);
         if (_roster != null && _ownership.Role == AreaRole.Follower)
             Profiler.Measure(_context, "area units applied", ApplySome);
         if (!_session.Connected || !Gm.InGame || _ownership.Role != AreaRole.Owner || _ownership.Place is not { } place
@@ -171,15 +177,23 @@ public sealed class AreaUnits
         if (OurPlayer.State()?.Place != packet.Place)
             return;
         NewPlace(packet.Place);
-        // (Taken in the next frames - the latest roster, from its start.)
+        // (Taken in the next frames, from its start - once the one being applied is done: the latest one waits.)
         if (packet.Snapshot.Length > 0 && JsonNode.Parse(packet.Snapshot) is JsonArray roster)
         {
-            _roster = roster.OfType<JsonObject>().ToArray();
-            _next = 0;
-            _pass.Clear();
-            _passBound = false;
-            _unbound = null;
+            _waiting = roster.OfType<JsonObject>().ToArray();
+            if (_roster == null)
+                StartPass(_waiting);
         }
+    }
+
+    private void StartPass(JsonObject[] roster)
+    {
+        _roster = roster;
+        _waiting = null;
+        _next = 0;
+        _pass.Clear();
+        _passBound = false;
+        _unbound = null;
     }
 
     // Our role in the place changed. No longer following (alone, or the owner now): our copies are ours to run again.
@@ -214,6 +228,7 @@ public sealed class AreaUnits
         _applied.Clear();
         _turnsSize = -1;
         _roster = null;
+        _waiting = null;
         _pass.Clear();
         _unbound = null;
         _movedByUs.Clear();
@@ -233,6 +248,7 @@ public sealed class AreaUnits
         _objectOf.Clear();
         _turnsSize = -1;
         _roster = null;
+        _waiting = null;
         _pass.Clear();
         _poly.Clear();
         _unbound = null;
@@ -391,8 +407,10 @@ public sealed class AreaUnits
                 effect.Instance.Destroy();
     }
 
-    // One of the owner's units we have none bound to: our twin (same object, same cell, never bound) - from a table of
-    // our unbound units made once a pass - or a new one.
+    // One of the owner's units we have none bound to: our twin (same object, never bound) on the same cell - or, if
+    // there's none, the nearest within TwinReach cells (one that's wandered a step or two here meanwhile: made anew beside
+    // it, the two stood side by side) - from a table of our unbound units made once a pass; or a new one.
+    private const int TwinReach = 4;
     private Instance Bind(int obj, Cell cell)
     {
         if (_unbound == null)
@@ -417,6 +435,21 @@ public sealed class AreaUnits
                 if (!_everBound.Contains(twin) && twin.Exists)
                     return twin;
             }
+        // (Nearest first, by cells: the greater of the two distances.)
+        (int Distance, Cell Cell, Instance Unit)? near = null;
+        foreach (var ((o, at), list) in _unbound)
+        {
+            if (o != obj || list.Count == 0)
+                continue;
+            int distance = Math.Max(Math.Abs(at.X - cell.X), Math.Abs(at.Y - cell.Y));
+            if (distance <= TwinReach && (near == null || distance < near.Value.Distance))
+                near = (distance, at, list[^1]);
+        }
+        if (near is var (_, nearCell, nearest) && nearest.Exists && !_everBound.Contains(nearest))
+        {
+            _unbound[(obj, nearCell)].Remove(nearest);
+            return nearest;
+        }
         return Units.Create(obj, cell);
     }
 
