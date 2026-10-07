@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Shared corpses.** The area owner's death corpses are copied to followers, including appearance, decay and
+  butchering loot. Follower-only death corpses are removed; room-placed corpses are left alone. Protocol 34.
+
 - **Shared trap discovery.** A trap spotted by any player becomes revealed to everyone in the same area. Discoveries
   catch up when another player arrives; off-screen traps are revealed when they reactivate, without triggering or disarming them.
   Protocol 33.
