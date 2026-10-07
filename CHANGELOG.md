@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Shared trap discovery.** A trap spotted by any player becomes revealed to everyone in the same area. Discoveries
+  catch up when another player arrives; off-screen traps are revealed when they reactivate, without triggering or disarming them.
+  Protocol 33.
+
 - **Fixed: players on the same dungeon floor had different floors.** Each game worked out the same floor seed from the
   world seed, and the game seeds its generator with it to build the floor. But the generator was then put back to
   random once the seed script returned (StoneForge's `Game.WithSeed`), so the rest of the floor was each game's own.

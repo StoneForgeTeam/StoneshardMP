@@ -63,6 +63,7 @@ public static class PacketCodec
             StashPacket.PacketId => StashPacket.Read(ref reader),
             SlotsPacket.PacketId => SlotsPacket.Read(ref reader),
             BreakablePacket.PacketId => BreakablePacket.Read(ref reader),
+            TrapDiscoveredPacket.PacketId => TrapDiscoveredPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");
