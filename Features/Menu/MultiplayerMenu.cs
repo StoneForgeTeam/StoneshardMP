@@ -77,7 +77,9 @@ public sealed class MultiplayerMenu
         _status.Visible = _shown != Screen.None || _session.Mode != Session.SessionMode.Idle;
         _status.Text = (_session.Mode == Session.SessionMode.Client ? _joinStatus() : null) ?? _session.Status;
         _status.Colour = _session.Connected ? Draw.Rgb(120, 200, 120) : Draw.Muted;
-        _players.Visible = _session.Connected;
+        // The vanilla save picker is modal. Our Draw GUI lobby would otherwise
+        // draw over it and its Swap/Kick buttons would intercept the picker.
+        _players.Visible = _session.Connected && !saveMenuOpen;
     }
 
     // The session changed: the screen showing follows it (hosting started or stopped, joined, dropped).

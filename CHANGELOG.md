@@ -5,6 +5,8 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- Keep the lobby players panel out of the way while the Load Game picker is open; restore it when the picker closes.
+
 - **Shared corpses.** The area owner's death corpses are copied to followers, including appearance, decay and
   butchering loot. Follower-only death corpses are removed; room-placed corpses are left alone. Protocol 34.
 
