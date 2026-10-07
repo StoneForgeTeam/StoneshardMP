@@ -511,7 +511,10 @@ public sealed class AreaUnits
         }
         // The unit's current animation is part of its state: idle / fight / work / sleep sprites may differ between two
         // games' spawns even when the object and AI state match.
-        if ((Changed("sprite") | Changed("lifeAnimation")) && Number(u["sprite"]) is var shown && IsAssetSprite((int)shown))
+        if (Number(u["sprite"]) is var shown && IsAssetSprite((int)shown)
+            && (Changed("sprite") || Changed("lifeAnimation")
+                || unit.Get("sprite_index").AsReal != shown || unit.Get("spr").AsReal != shown
+                || !unit.Get("is_life").Equals(GmValue.FromJsonNode(u["lifeAnimation"]))))
         {
             unit["sprite_index"] = shown;
             // (As scr_npc_change_animation: the sprite it renders, and whether it's in its normal unit animation - a
@@ -523,7 +526,7 @@ public sealed class AreaUnits
         }
         if (Changed("frame"))
             unit["image_index"] = Number(u["frame"]);
-        if (Changed("speed"))
+        if (Changed("speed") || unit.Get("image_speed").AsReal != Number(u["speed"]))
             unit["image_speed"] = Number(u["speed"]);
         if (Changed("angle"))
             unit["image_angle"] = Number(u["angle"]);

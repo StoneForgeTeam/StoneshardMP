@@ -335,6 +335,12 @@ public sealed class CombatSync
             return;
         }
         Units.Move(unit, move.Cell);
+        // scr_change_coordinat marks a forced move, but Units.Move deliberately
+        // only updates the grids. Interrupt work/sleep/custom animation here as
+        // the knockback did on the acting client, without replaying its damage.
+        unit["force_stop"] = true;
+        unit["is_moving"] = true;
+        Game.CallScript("scr_enemy_stop_animation", unit);
         _context.Log($"{from.Name} moved unit {move.UnitId} to {move.Cell}");
     }
 

@@ -5,6 +5,18 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- Apply forced-move animation interruption on the area owner, and repair follower sprite/speed divergence even
+  when the owner's last-sent animation is unchanged, so knocked-back NPCs agree about their work/idle pose.
+
+- Play the runic boulder dismissal animation when a synced copy is removed, without repeating caster buff or damage effects.
+
+- Fix spell replicas expiring after one turn: normalize event handles before checking replica identity. A stale
+  placed-object roster can no longer remove or strip the owner from the caster's live boulder or stone spikes.
+
+- **Shared placed objects.** Campfires, crafted tents/bedrolls, runic boulders and stone spikes follow the area
+  owner's roster. Followers send placements and removals; spell replicas leave caster effects and expiry to
+  the caster's game. Includes off-screen objects, arrival catch-up and ownership handoffs. Protocol 35.
+
 - Keep the lobby players panel out of the way while the Load Game picker is open; restore it when the picker closes.
 
 - **Shared corpses.** The area owner's death corpses are copied to followers, including appearance, decay and
