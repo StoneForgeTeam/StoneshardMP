@@ -199,10 +199,10 @@ public sealed class CorpseSync
         var before = globals.Select(n => Game.Global[n]).ToArray();
         try
         {
-            int obj = Game.CallBuiltin("asset_get_index", saved.Get("object_name", "N/A")).AsInt;
+            int obj = Gm.AssetGetIndex(saved.Get("object_name", "N/A").AsString);
             if (obj < 0 || !Game.CallBuiltin("object_exists", obj).AsBool
                 || (obj != (int)GameObjectId.o_abstract_corpse
-                    && !Game.CallBuiltin("object_is_ancestor", obj, (int)GameObjectId.o_abstract_corpse).AsBool))
+                    && !Gm.ObjectIsAncestor(obj, (int)GameObjectId.o_abstract_corpse)))
                 return default;
             Game.CallScript("scr_locationRoomEntityInitDataSet", default, "dynamic",
                 entry["tag"]!.GetValue<string>(), entry["preset"]!.GetValue<string>());

@@ -283,7 +283,7 @@ public sealed class PlaceableSync
 
     private void Create(PlacedObjectState state)
     {
-        int obj = Game.CallBuiltin("asset_get_index", state.Object).AsInt;
+        int obj = Gm.AssetGetIndex(state.Object);
         if (!state.Valid || obj < 0 || !Game.CallBuiltin("object_exists", obj).AsBool)
             return;
         // Create events set up collision/light/sound; later alarms see owner=noone
@@ -293,7 +293,7 @@ public sealed class PlaceableSync
         try
         {
             Game.Global["locationRoomEntityType"] = "dynamic";
-            made = Instance.Of(Game.CallBuiltin("instance_create_depth", state.X, state.Y, 0, obj)).Persist();
+            made = Gm.Create<GameInstance>(state.X, state.Y, 0, (GameObjectId)obj).Instance.Persist();
         }
         finally { Game.Global["locationRoomEntityType"] = previousType; }
         if (made.IsNone || !made.Exists)
@@ -335,8 +335,7 @@ public sealed class PlaceableSync
         Awake(item, () =>
         {
             if (showEnd)
-                Game.CallBuiltin("instance_create_depth", item.Get("x"), item.Get("y"), 0,
-                    (int)GameObjectId.o_runicboulder_end);
+                Gm.Create<GameInstance>(item.Get("x").AsReal, item.Get("y").AsReal, 0, GameObjectId.o_runicboulder_end);
             if (!item.Get("death_sound").IsUndefined)
                 item.Set("death_sound", -4);
             if (!item.Get("play_death").IsUndefined)

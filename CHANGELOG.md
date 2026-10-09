@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
+  Corpse and placed-object syncing use StoneForge's `Gm` wrappers in place of raw GameMaker calls.
+
 - Apply forced-move animation interruption on the area owner, and repair follower sprite/speed divergence even
   when the owner's last-sent animation is unchanged, so knocked-back NPCs agree about their work/idle pose.
 
