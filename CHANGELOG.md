@@ -75,6 +75,12 @@ releases them: the release workflow titles that section with the version, sets i
   faction's crime record (wanted or dead-or-alive, crime status, penalty, attacks counted) back to its last save's.
   Protocol 36.
 
+- **Only the host sleeps, and everyone sleeps with it.** A client's bed (and jail bed) only tells them the host is the
+  one who sleeps - the world's time is the host's. When the host sleeps, every client fades to black with it ("<host> is
+  sleeping...") and fades back in when the host wakes, at the host's clock: the hours slept pass for them too. A client
+  in the same place as the host's bed wakes with the same vigor (Freshness) the host's sleep gave it. A host's
+  fast travel sends its clock the same way, without the fade. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

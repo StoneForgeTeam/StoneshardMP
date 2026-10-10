@@ -49,6 +49,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private TalkSync _talk = null!;
     private DevTools _dev = null!;
     private DeathSync _death = null!;
+    private SleepSync _sleep = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -98,6 +99,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         context.UI.Hud.Add(new TurnOrder(_rounds, _session, () => _players.ObjectIndex));
         _clock = new WorldClock(context, _session, _ownership, () => _join.InSharedWorld, _ => _rounds.Active);
         // A move's time shared out: 30 seconds over the number of players in the world (a round's turn keeps its 30).
+        // Only the host sleeps; everyone fades out with it, and wakes at its clock.
+        _sleep = new SleepSync(context, _session, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
         _dump = new DebugDump(context, _session, _areaUnits);
         // Our name to the others: the setting, or the Steam name.
@@ -192,6 +195,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _groundEffects.Clear();
         _talk.Clear();
         _death.Clear();
+        _sleep.Clear();
         _chests.Clear();
         _breakables.Clear();
         _stash.Clear();
@@ -230,6 +234,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "ground effects", _groundEffects.Tick);
             Profiler.Measure(_context, "talk", _talk.Tick);
             Profiler.Measure(_context, "death", _death.Tick);
+            Profiler.Measure(_context, "sleep", _sleep.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);

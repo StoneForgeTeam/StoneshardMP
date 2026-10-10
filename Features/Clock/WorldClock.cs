@@ -144,7 +144,8 @@ public sealed class WorldClock
     // Whether our place's units are another's (AreaOwnership): we follow its owner.
     private bool Following => _ownership.Role == AreaRole.Follower;
 
-    private static void ApplyClock(string clock)
+    // The host's clock (GameClock.Snapshot) made ours.
+    internal static void ApplyClock(string clock)
     {
         string[] fields = clock.Split('|');
         if (fields.Length != 5 ||
