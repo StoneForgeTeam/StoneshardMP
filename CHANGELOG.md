@@ -92,6 +92,9 @@ releases them: the release workflow titles that section with the version, sets i
   and brightness, from the game's own light effects - goes with their party info, and their stand-in carries the same
   light, so it lights what's around them in everyone's game.
 
+- **Recipes and schematics are the party's.** One player learning one (reading it) teaches everyone in the world; a
+  player coming in later learns what the others know. Each game says who taught it what.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

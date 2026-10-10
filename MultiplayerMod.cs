@@ -17,6 +17,7 @@ using StoneshardMP.Features.Crimes;
 using StoneshardMP.Features.Talk;
 using StoneshardMP.Features.Dev;
 using StoneshardMP.Features.Death;
+using StoneshardMP.Features.Recipes;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -50,6 +51,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private DevTools _dev = null!;
     private DeathSync _death = null!;
     private SleepSync _sleep = null!;
+    private RecipeSync _recipes = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -101,6 +103,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // A move's time shared out: 30 seconds over the number of players in the world (a round's turn keeps its 30).
         // Only the host sleeps; everyone fades out with it, and wakes at its clock.
         _sleep = new SleepSync(context, _session, () => _join.InSharedWorld);
+        // Recipes and schematics are the party's: one player learning one teaches everyone.
+        _recipes = new RecipeSync(_session, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
         _dump = new DebugDump(context, _session, _areaUnits);
         // Our name to the others: the setting, or the Steam name.
@@ -196,6 +200,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _talk.Clear();
         _death.Clear();
         _sleep.Clear();
+        _recipes.Clear();
         _chests.Clear();
         _breakables.Clear();
         _stash.Clear();
@@ -235,6 +240,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "talk", _talk.Tick);
             Profiler.Measure(_context, "death", _death.Tick);
             Profiler.Measure(_context, "sleep", _sleep.Tick);
+            Profiler.Measure(_context, "recipes", _recipes.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);
