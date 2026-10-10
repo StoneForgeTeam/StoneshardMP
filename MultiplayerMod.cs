@@ -13,6 +13,7 @@ using StoneshardMP.Features.Traps;
 using StoneshardMP.Features.Corpses;
 using StoneshardMP.Features.Placeables;
 using StoneshardMP.Features.GroundEffects;
+using StoneshardMP.Features.Crimes;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -41,6 +42,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private AreaOwnership _ownership = null!;
     private AreaUnits _areaUnits = null!;
     private CombatSync _combat = null!;
+    private CrimeSync _crimes = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -80,6 +82,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _areaUnits = new AreaUnits(context, _session, _ownership, () => _players.ObjectIndex);
         // Combat where players are together: each game resolves its own character's fights, the owner's units the real ones.
         _combat = new CombatSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
+        _crimes = new CrimeSync(context, _session, _areaUnits, _ownership, () => _join.InSharedWorld);
         // One completed action is one world turn for everyone: a client's moves turn the host's world, the host's own
         // turn the clients' clocks (a place's owner moving its units, streamed to its followers by AreaUnits).
         // Shared turn-based rounds where players are together and anyone needs turns (in combat, bleeding out, on fire),

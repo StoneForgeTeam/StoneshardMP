@@ -11,6 +11,12 @@ releases them: the release workflow titles that section with the version, sets i
   a smoke cloud) is made on the owner too. Copies don't spread on their own: a cloud's spread comes from the owner's. A
   place's own (a dungeon's lava) is in every game already and isn't sent. Protocol 36.
 
+- **Crimes reach the owner.** A follower who hits one of the owner's town NPCs (a blow, an arrow, a thrown item)
+  commits the crime on the owner too: the NPC counts it toward its warning, then the faction's crime is set, the guards
+  are called and the town turns on the players, as in single player. The NPC's "stop that" warning is shown to the
+  follower who did it, not the owner, and fighting on from it counts. The follower's own game keeps its own crime record
+  (wanted, jail). The guards still head for the owner's player first. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
