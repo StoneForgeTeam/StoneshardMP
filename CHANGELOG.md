@@ -81,6 +81,9 @@ releases them: the release workflow titles that section with the version, sets i
   in the same place as the host's bed wakes with the same vigor (Freshness) the host's sleep gave it. A host's
   fast travel sends its clock the same way, without the fade. Protocol 36.
 
+- **The host's save puts everyone where the host saved**, as a save at a bed puts its player there: loading it, or
+  joining a world from it, every client starts at the host's spot, not wherever they stood as it was saved.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

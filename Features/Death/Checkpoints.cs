@@ -37,7 +37,10 @@ internal static class Checkpoints
     }
 
     /// <summary>The host saved: every slot's character as kept now becomes its checkpoint, placed where the host is (its
-    /// own character's location, as just saved) - and the host's own (slot 0) as it is. How many.</summary>
+    /// own character's location, as just saved) - and the host's own (slot 0) as it is. The kept characters are placed
+    /// there too, so the save has everyone where the host saved, as a save at a bed has its player: loading it, or
+    /// joining from it, everyone starts there. (Until each client's next update: a session going on keeps where they
+    /// are.) How many.</summary>
     public static int RecordAll()
     {
         if (SaveData.Map is not { } save || SaveData.CharacterJson() is not { Length: > 0 } host
@@ -50,6 +53,7 @@ internal static class Checkpoints
             if (slot is not { } worldSlot || worldSlot == 0 || PlacedAt(json, hostMap) is not { } placed)
                 continue;
             Set(worldSlot, placed);
+            JoinSave.ReplaceStored(worldSlot, placed);
             count++;
         }
         return count;

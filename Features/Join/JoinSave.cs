@@ -143,6 +143,15 @@ internal static class JoinSave
         return SaveData.Map?.GetMap(PlayersKey) is { } players && players[name] is { Kind: GmKind.String } old ? old.AsString : null;
     }
 
+    /// <summary>Host: a world slot's kept character replaced (who plays it unchanged) - false outside a world.</summary>
+    public static bool ReplaceStored(int slot, string character)
+    {
+        if (!SaveData.Available)
+            return false;
+        SaveData.ModMap(SlotsKey)[SlotKey(slot)] = character;
+        return true;
+    }
+
     /// <summary>Host: the character kept in a world slot (its JSON), or null if there's none.</summary>
     public static string? StoredCharacterOf(int slot) => StoredCharacter(slot, "");
 
