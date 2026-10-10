@@ -81,6 +81,9 @@ public static class PacketCodec
             RecipesPacket.PacketId => RecipesPacket.Read(ref reader),
             SummonsPacket.PacketId => SummonsPacket.Read(ref reader),
             SummonAttackedPacket.PacketId => SummonAttackedPacket.Read(ref reader),
+            CaravanDataPacket.PacketId => CaravanDataPacket.Read(ref reader),
+            CaravanStashUsePacket.PacketId => CaravanStashUsePacket.Read(ref reader),
+            CaravanMovedPacket.PacketId => CaravanMovedPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

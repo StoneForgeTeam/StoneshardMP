@@ -110,6 +110,13 @@ releases them: the release workflow titles that section with the version, sets i
   Now a move is a turn only in the place it happened; elsewhere only its share of the time passes, and the clock stays
   the same for everyone.
 
+- **One caravan for the whole party, the host's.** Its state - the tile it's on, its movement cooldown, upgrades,
+  followers (loyalty, perks), events, camp and appearance - is kept alike in every game: anyone's upgrade, recruit or
+  event reaches everyone. Its storage (all four tabs, and the fodder in it) too, one player in it at a time - anyone
+  else opening it is told who's using it. Only the host moves it (riding with it, or sending it by pigeon); when it
+  arrives, players at its old camp come along to the new one, and the travel time passes for everyone. (The host's
+  sleep fade no longer shows for the caravan's trips.) Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

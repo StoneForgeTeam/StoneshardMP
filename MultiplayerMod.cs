@@ -19,6 +19,7 @@ using StoneshardMP.Features.Dev;
 using StoneshardMP.Features.Death;
 using StoneshardMP.Features.Recipes;
 using StoneshardMP.Features.Summons;
+using StoneshardMP.Features.Caravan;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -54,6 +55,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private SleepSync _sleep = null!;
     private RecipeSync _recipes = null!;
     private SummonSync _summons = null!;
+    private CaravanSync _caravan = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -111,6 +113,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _recipes = new RecipeSync(_session, () => _join.InSharedWorld);
         // Summons are their caster's: run in the caster's game, a stand-in for each in the others'.
         _summons = new SummonSync(_session, _players, () => _join.InSharedWorld);
+        // One caravan, the host's: its state and storage kept alike, its storage one player at a time, moved by the host.
+        _caravan = new CaravanSync(context, _session, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
         // (A move in another place: only its time passes here, not a turn for our units.)
         _clock.PassTime = _turnTime.PassTurnTime;
@@ -210,6 +214,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _sleep.Clear();
         _recipes.Clear();
         _summons.Clear();
+        _caravan.Clear();
         _chests.Clear();
         _breakables.Clear();
         _stash.Clear();
@@ -251,6 +256,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "sleep", _sleep.Tick);
             Profiler.Measure(_context, "recipes", _recipes.Tick);
             Profiler.Measure(_context, "summons", _summons.Tick);
+            Profiler.Measure(_context, "caravan", _caravan.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);

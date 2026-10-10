@@ -38,9 +38,12 @@ public sealed class SleepSync
         _session = session;
         _inSharedWorld = inSharedWorld;
         session.On<SleepPacket>(Receive);
-        Scripts.scr_smoothSaveSleep.Before(context, _ =>
+        Scripts.scr_smoothSaveSleep.Before(context, call =>
         {
-            if (_session.Mode == Session.SessionMode.Host)
+            // (A sleep - a bed's types, 0-5 - not the caravan's travel, 13 and 14, which goes through it too: its time
+            // comes as the host's clock, without the fade.)
+            if (_session.Mode == Session.SessionMode.Host
+                && call.Args.Length >= 2 && call.Args[1].Kind == GmKind.Real && call.Args[1].AsReal is >= 0 and <= 5)
             {
                 _sleeping = true;
                 _sleptAt = OurPlayer.Place ?? "";
