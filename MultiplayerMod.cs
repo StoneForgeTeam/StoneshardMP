@@ -56,6 +56,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private RecipeSync _recipes = null!;
     private SummonSync _summons = null!;
     private CaravanSync _caravan = null!;
+    private NoiseSync _noise = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -97,6 +98,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _players.OwnsArea = () => _ownership.Role == AreaRole.Owner;
         // Combat where players are together: each game resolves its own character's fights, the owner's units the real ones.
         _combat = new CombatSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
+        // A follower's noise - steps, fights, spells - heard by the owner's units, from its stand-in.
+        _noise = new NoiseSync(context, _session, _ownership, _players, () => _join.InSharedWorld);
         _crimes = new CrimeSync(context, _session, _areaUnits, _ownership, () => _join.InSharedWorld);
         _talk = new TalkSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
         // One completed action is one world turn for everyone: a client's moves turn the host's world, the host's own

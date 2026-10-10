@@ -124,6 +124,12 @@ releases them: the release workflow titles that section with the version, sets i
   hit, with the kill if it was one. And the effects those put on the owner's units (a burn, a slow, a stun from a
   spell) go to the owner too, not only an attack's.
 
+- **The owner's enemies hear a follower.** A follower's noise - its steps, fights, breakages, spells - was only
+  heard in its own game, by copies with their AI off, so it woke and alerted nobody. Now its own noise is made on the
+  owner too, from its stand-in, so the owner's units turn, investigate and wake as they do for the owner. (Being seen
+  already carried over: the game's sight is vision range and line of sight, which the stand-in shares, and it carries
+  the follower's light.) Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
