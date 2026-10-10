@@ -17,6 +17,16 @@ releases them: the release workflow titles that section with the version, sets i
   follower who did it, not the owner, and fighting on from it counts. The follower's own game keeps its own crime record
   (wanted, jail). The guards still head for the owner's player first. Protocol 36.
 
+- **NPC conversations: one player talks or trades at a time, others listen in.** Talking to an NPC another player
+  is talking to opens a listener's window instead: the game's dialogue window showing the talker's conversation as
+  it goes - the NPC's line, the talker's last answer, and their answers greyed out - with [Stop listening] (or Esc).
+  It shows exactly what the talker's game shows, so the random greetings and answer variants, and answers that depend
+  on that player's quests and reputation, are theirs; the listener's game never starts the conversation itself, so
+  nothing is said, rolled or flagged there, and closing it takes no turn. It closes when the conversation ends. An NPC
+  someone is trading with can't be opened (you're told who's trading); two players starting at once, the first keeps
+  it. An NPC in a conversation or trade stays put on its turns. A speech cloud bobs over a player who's talking or
+  trading, and over their NPC. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

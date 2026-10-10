@@ -39,6 +39,8 @@ public sealed class PlayerManager
     private readonly Func<bool> _showNames;
     private readonly Func<bool> _inSharedWorld;
     private readonly Player _object;
+    // (The game's speech cloud sprite, looked up once.)
+    private int _cloud = -1;
     private readonly Dictionary<int, View> _views = new();
     private RemotePlayer? _mirror;
     private int _frame;
@@ -72,6 +74,10 @@ public sealed class PlayerManager
 
     /// <summary>The object other players' units are (o_stoneshardmp__player; -1 before the game has it).</summary>
     public int ObjectIndex => _object.Index;
+
+    /// <summary>What a player (by slot) is talking or trading with here - none if it's not one we know - or null if they
+    /// aren't (TalkSync): a speech cloud over them, and over it.</summary>
+    public Func<int, Instance?>? TalkingTo { get; set; }
 
     // Every frame (the mod's Tick).
     public void Tick()
@@ -239,6 +245,17 @@ public sealed class PlayerManager
         // Their name over them, in the world's font, with a shadow.
         if (_showNames())
             StoneForge.Draw.PlainText(view.VisX, view.VisY - 36, view.Player.Name, Aqua, StoneForge.Draw.AlignCenter, StoneForge.Draw.AlignBottom);
+        // Talking or trading: the game's speech cloud bobbing over them (over their name), and over their NPC.
+        if (TalkingTo?.Invoke(view.Player.Slot) is { } npc)
+        {
+            if (_cloud < 0)
+                _cloud = Gm.AssetGetIndex("s_dialogue_cloud");
+            int frame = (int)(Environment.TickCount64 / 140 % 6);
+            double bob = Math.Round(Math.Sin(Environment.TickCount64 / 300.0) * 1.5);
+            StoneForge.Draw.SpriteExt(_cloud, frame, view.VisX - 7, view.VisY - 50 + bob);
+            if (npc.Exists)
+                StoneForge.Draw.SpriteExt(_cloud, frame, npc.Get("x").AsReal - 7, npc.Get("bbox_top").AsReal - 2 + bob);
+        }
     }
 
     // Everything gone (the mod switched off): the players and their sprites.

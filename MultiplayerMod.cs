@@ -14,6 +14,7 @@ using StoneshardMP.Features.Corpses;
 using StoneshardMP.Features.Placeables;
 using StoneshardMP.Features.GroundEffects;
 using StoneshardMP.Features.Crimes;
+using StoneshardMP.Features.Talk;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -43,6 +44,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private AreaUnits _areaUnits = null!;
     private CombatSync _combat = null!;
     private CrimeSync _crimes = null!;
+    private TalkSync _talk = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -83,6 +85,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // Combat where players are together: each game resolves its own character's fights, the owner's units the real ones.
         _combat = new CombatSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
         _crimes = new CrimeSync(context, _session, _areaUnits, _ownership, () => _join.InSharedWorld);
+        _talk = new TalkSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
         // One completed action is one world turn for everyone: a client's moves turn the host's world, the host's own
         // turn the clients' clocks (a place's owner moving its units, streamed to its followers by AreaUnits).
         // Shared turn-based rounds where players are together and anyone needs turns (in combat, bleeding out, on fire),
@@ -150,6 +153,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _corpses.Clear();
         _placeables.Clear();
         _groundEffects.Clear();
+        _talk.Clear();
         _chests.Clear();
         _breakables.Clear();
         _stash.Clear();
@@ -186,6 +190,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "corpses", _corpses.Tick);
             Profiler.Measure(_context, "placeables", _placeables.Tick);
             Profiler.Measure(_context, "ground effects", _groundEffects.Tick);
+            Profiler.Measure(_context, "talk", _talk.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);
