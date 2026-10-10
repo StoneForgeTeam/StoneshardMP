@@ -146,6 +146,20 @@ public sealed class LootSync
     {
         if (++_frame % Interval != 0)
             return;
+        Step();
+    }
+
+    /// <summary>Now, not at the next tick: what we've just dropped (as our own drops - by our player) goes to the owner, or
+    /// as the owner what's new goes to the followers. For our player's death (DeathSync): once it's gone, nothing of
+    /// ours is sent.</summary>
+    public void Flush()
+    {
+        _dropUntil = Environment.TickCount64 + DropWindowMs;
+        Step();
+    }
+
+    private void Step()
+    {
         string? place = null;
         if (_session.Connected && Gm.InGame && _inSharedWorld() && !Rooms.IsChanging)
             place = OurPlayer.State()?.Place;

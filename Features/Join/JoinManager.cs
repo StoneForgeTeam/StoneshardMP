@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Death;
 using StoneshardMP.Features.World;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
@@ -96,6 +97,11 @@ public sealed class JoinManager
     private SaveFile? _topUpOf;
     private static readonly TimeSpan TopUpWait = TimeSpan.FromSeconds(5);
     private bool _disconnecting;
+    // Host, dead: coming back to our checkpoint - the players' characters asked for first (SaveRequestPacket), up to
+    // TopUpWait, so the world reloaded holds them as they are; then the load, which keeps them (HostLoading).
+    private bool _respawning, _respawnLoad;
+    private readonly HashSet<int> _respawnWaiting = new();
+    private DateTime _respawnDeadline;
 
     public JoinManager(ModContext context, Session session, Func<string> playerName, WorldSlots slots)
     {
@@ -112,6 +118,7 @@ public sealed class JoinManager
         session.On<SaveRequestPacket>(OnSaveRequest);
         session.On<HostLeftPacket>(OnHostLeft);
         session.On<WorldReloadPacket>(OnWorldReload);
+        session.On<RespawnPacket>(OnRespawn);
         session.Changed += OnSessionChanged;
         session.PlayerLeft += player =>
         {
@@ -131,10 +138,16 @@ public sealed class JoinManager
         // A save of ours read: the host playing another slot's character (WorldSlots.HostSlot) trades it with ours first.
         SaveData.OnLoaded(context, _ =>
         {
-            if (_session.Mode != Session.SessionMode.Host || _slots.HostSlot == 0)
+            if (_session.Mode != Session.SessionMode.Host)
                 return;
-            _context.Log("Save loaded: " + JoinSave.SwapHost(_slots.HostSlot, _playerName()));
-            _slots.HostLoaded();
+            if (_slots.HostSlot != 0)
+            {
+                _context.Log("Save loaded: " + JoinSave.SwapHost(_slots.HostSlot, _playerName()));
+                _slots.HostLoaded();
+            }
+            // (Our checkpoint: the character this save has for us - the last save is what we come back to.)
+            if (SaveData.CharacterJson() is { Length: > 0 } ours)
+                Checkpoints.Set(0, ours);
         });
         // A client's saves go to the host, not here.
         Scripts.scr_slotUpdate.Before(context, call => ClientSave());
@@ -233,10 +246,65 @@ public sealed class JoinManager
                 Ask();
         }
         if (_session.Mode == Session.SessionMode.Host)
+        {
+            if (_respawning && (_respawnWaiting.Count == 0 || DateTime.UtcNow >= _respawnDeadline))
+                HostRespawnLoad();
             HostTick();
+        }
         else if (_session.Mode == Session.SessionMode.Client)
             ClientTick();
     }
+
+    /// <summary>Host, dead: back to our checkpoint - our character as at our last save, where we saved - with the world
+    /// as it is now: everyone's characters asked for, then the world reloaded in place with ours swapped in (everyone
+    /// reloads into it, as they are). false: we've no checkpoint (never saved).</summary>
+    public bool HostRespawn()
+    {
+        if (_session.Mode != Session.SessionMode.Host || Checkpoints.Of(0) is null || _respawning)
+            return false;
+        _respawning = true;
+        _respawnWaiting.Clear();
+        foreach (var player in _session.Players)
+            if (player.State != null)
+                _respawnWaiting.Add(player.Slot);
+        _respawnDeadline = DateTime.UtcNow + TopUpWait;
+        if (_respawnWaiting.Count > 0)
+            _session.Send(new SaveRequestPacket());
+        StoneForge.Blackout.Show("Returning to your last save...");
+        _context.Log($"Respawning: asking {_respawnWaiting.Count} player(s) for their characters first");
+        return true;
+    }
+
+    private void HostRespawnLoad()
+    {
+        _respawning = false;
+        if (Checkpoints.Of(0) is not { } checkpoint || JoinSave.WorldWith(checkpoint) is not { } world || !JoinSave.SetPendingOwn(world))
+        {
+            StoneForge.Blackout.Hide();
+            _context.Log("Respawn failed: couldn't make our world with our checkpoint");
+            return;
+        }
+        _respawnLoad = true;
+        if (!JoinSave.StartLoadInPlace())
+        {
+            _respawnLoad = false;
+            StoneForge.Blackout.Hide();
+            _context.Log("Respawn failed: the load didn't start");
+            return;
+        }
+        _context.Log($"Respawning at our checkpoint ({Checkpoints.Where(checkpoint)}), the world as it is");
+    }
+
+    /// <summary>Host, dead: out to the main menu without saving - the world stays as our last save left it.</summary>
+    public void HostDisconnect()
+    {
+        _disconnecting = true;
+        Rooms.ToMainMenu(save: false);
+    }
+
+    /// <summary>The game's save menu (Load), as the death screen's own Load opens it.</summary>
+    public static void OpenLoadMenu()
+        => Game.CallScript("scr_guiCreateContainer", default, Game.Global["guiBaseContainerVisible"], (int)GameObjectId.o_saveMenu);
 
     // ---- host ----
 
@@ -275,6 +343,8 @@ public sealed class JoinManager
         {
             _context.Log($"Save top-up: {_topUpWaiting.Count} player(s) didn't send their character in time");
             _topUpWaiting.Clear();
+            // (Written again anyway: the checkpoints - with the characters we have for them.)
+            _topUpGot = true;
         }
         // (Back on the main menu: no new world begun any more.)
         if (Gm.InMainMenu && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger))
@@ -324,6 +394,10 @@ public sealed class JoinManager
             byte[] data = JoinCompression.Compress(save);
             _session.Send(new JoinReplyPacket(JoinReply.WorldFollows, SharedWorld.WorldSeed(), (byte)worldSlot), to: slot);
             _session.Send(new JoinWorldPacket(data), to: slot);
+            // (Their checkpoint - what they come back as if they die: the character they join with, till we save.)
+            if (JoinSave.StoredCharacterOf(worldSlot) is { } joinedAs)
+                Checkpoints.EnsureFor(worldSlot, joinedAs);
+            SendCheckpoint(slot);
             string was = JoinSave.SlotName(worldSlot) is { } last && last != request.Name ? $" ({last}'s character)" : "";
             _context.Log($"{request.Name} is joining this world as slot {worldSlot}{was} ({save.Length / 1024} KB of save, {data.Length / 1024} KB sent)");
         }
@@ -353,6 +427,7 @@ public sealed class JoinManager
             _pendingCharacters[worldSlot] = (packet.Name, character);
         else
             _context.Log($"{packet.Name}'s character kept in slot {worldSlot}: {JoinSave.Where(character)}");
+        _respawnWaiting.Remove(sender.Slot);
         // (A held Save & Exit: one more saved.)
         if (_exitWaiting.Remove(sender.Slot) && _exitWaiting.Count == 0)
             ExitNow();
@@ -374,7 +449,12 @@ public sealed class JoinManager
             if (player.State != null)
                 _topUpWaiting.Add(player.Slot);
         if (_topUpWaiting.Count == 0)
+        {
+            // (No one to ask: the checkpoints from the characters we keep, and the save written again with them.)
+            _context.Log($"Checkpoints: {Checkpoints.RecordAll()} recorded at {saved.Slot.Name}/{saved.Name}");
+            StoneForge.SaveData.WriteTo(saved);
             return;
+        }
         _topUpOf = saved;
         _topUpGot = false;
         _topUpDeadline = DateTime.UtcNow + TopUpWait;
@@ -390,8 +470,59 @@ public sealed class JoinManager
         if (!_topUpGot || !JoinSave.HostInWorld() || _topUpOf is not { } save || SaveSlots.CurrentSave != save)
             return;
         _topUpGot = false;
+        // Everyone's checkpoint: their character as now, where we saved - written with the save, and sent to each.
+        int recorded = Checkpoints.RecordAll();
         StoneForge.SaveData.WriteTo(save);
-        _context.Log($"Save {save.Slot.Name}/{save.Name} topped up with everyone's characters as they are now");
+        foreach (var player in _session.Players)
+            SendCheckpoint(player.Slot);
+        _context.Log($"Save {save.Slot.Name}/{save.Name} topped up with everyone's characters as they are now; {recorded} checkpoints");
+    }
+
+    // Host: a player's checkpoint items, to them (what they've picked up since is dropped where they die).
+    private void SendCheckpoint(int slot)
+    {
+        string? checkpoint = Checkpoints.Of(_slots.Of(slot));
+        if (checkpoint == null)
+            return;
+        _session.Send(new CheckpointPacket(Checkpoints.Where(checkpoint), JoinCompression.Compress(Checkpoints.InventoryOf(checkpoint))), to: slot);
+    }
+
+    // Host: a player died - their slot's character becomes its checkpoint, for the world they load next (now, or when
+    // they next join).
+    private void OnRespawn(RemotePlayer sender, RespawnPacket packet)
+    {
+        if (_session.Mode != Session.SessionMode.Host)
+            return;
+        int worldSlot = _slots.Of(sender.Slot);
+        string? checkpoint = Checkpoints.Of(worldSlot);
+        if (checkpoint == null || !JoinSave.StoreCharacter(worldSlot, sender.Name, checkpoint))
+        {
+            _context.Log($"{sender.Name} died, but slot {worldSlot} has no checkpoint here - they come back as last kept");
+            return;
+        }
+        _context.Log($"{sender.Name} died: slot {worldSlot} back to its checkpoint ({Checkpoints.Where(checkpoint)}, "
+            + $"{Checkpoints.ItemCount(checkpoint)} items){(packet.Rejoin ? ", reloading now" : ", for when they next join")}");
+    }
+
+    /// <summary>Client, dead: back to our checkpoint - the host's world loaded in place with our character as it was at the
+    /// host's last save (Rejoin: the death screen's Respawn), or out to the main menu, coming back as that next time.</summary>
+    public void Respawn(bool rejoin)
+    {
+        if (_session.Mode != Session.SessionMode.Client)
+            return;
+        _session.Send(new RespawnPacket(rejoin), to: 0);
+        if (!rejoin)
+        {
+            _disconnecting = true;
+            Rooms.ToMainMenu(save: false);
+            return;
+        }
+        _reloading = true;
+        _calm = 0;
+        _saveNow = false;
+        Status = $"Returning to {HostName}'s last save...";
+        Blackout();
+        Ask();
     }
 
     // The Esc menu: Disconnect in place of Save & Exit for a client playing the host's world (it keeps no saves of the
@@ -419,7 +550,10 @@ public sealed class JoinManager
     {
         _hostLoading = true;
         _hostLoadCalm = 0;
-        _pendingCharacters.Clear();
+        // (Our respawn: the characters just asked for are the ones to keep - into the world once it's up, HostTick.)
+        if (!_respawnLoad)
+            _pendingCharacters.Clear();
+        _respawnLoad = false;
         _exitWaiting.Clear();
         _topUpWaiting.Clear();
         _topUpGot = false;
@@ -634,7 +768,8 @@ public sealed class JoinManager
         {
             case ClientState.Received:
                 // (Reloading behind our black screen - which the game counts as busy - only a room change to wait out.)
-                _calm = (_reloading ? Gm.InGame && !Rooms.IsChanging : JoinSave.Calm()) ? _calm + 1 : 0;
+                // (Dead - no player - is in game too.)
+                _calm = (_reloading ? !Gm.InMainMenu && !Rooms.IsChanging : JoinSave.Calm()) ? _calm + 1 : 0;
                 if (_calm >= CalmFrames && JoinSave.StartLoad())
                 {
                     _state = ClientState.Loading;

@@ -48,6 +48,20 @@ releases them: the release workflow titles that section with the version, sets i
   that as a lost copy and sent the boulder back, whole. Now the owner tells the caster, whose boulder breaks as the
   game breaks one (its end animation, the caster's Runic Power put right). The same for stone spikes.
 
+- **Dying in the host's world sends a client back to the last save - the host's.** Each time the host saves, every
+  player's character as it is then becomes their checkpoint, placed where the host saved (kept in the host's save; a
+  player not saved yet has the character they joined with). When a client dies, the game's death plays, and everything
+  they picked up since the checkpoint - in their bag or worn - drops where they fell, for anyone to pick up: quest items
+  and keys stay in the world, and nothing they still had is doubled. Amounts count: a stack (arrows, coins) drops only
+  what's more than the checkpoint had, and a bag (a moneybag's gold, a backpack) drops with only what's new in it. Worn
+  cursed gear drops too. The death screen offers only Respawn (back as
+  their checkpoint, at the host's save, the world loaded in place) and Disconnect (back as their checkpoint next time).
+  The world itself doesn't go back.
+  - **The host dies the same way**, against its own checkpoint (its last save): what it picked up since drops, and its
+    death screen has Respawn (the world as it is now reloaded in place with the host as it was at its last save; every
+    client's character is asked for first, so they come back as they are), Load (the game's save menu - everyone loads
+    it too) and Disconnect (stop hosting without saving). Respawn needs the world to have been saved once. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

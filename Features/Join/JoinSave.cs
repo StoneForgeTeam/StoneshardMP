@@ -143,6 +143,9 @@ internal static class JoinSave
         return SaveData.Map?.GetMap(PlayersKey) is { } players && players[name] is { Kind: GmKind.String } old ? old.AsString : null;
     }
 
+    /// <summary>Host: the character kept in a world slot (its JSON), or null if there's none.</summary>
+    public static string? StoredCharacterOf(int slot) => StoredCharacter(slot, "");
+
     /// <summary>The characters kept in a save (its save data): each by its world slot - or, from before world slots, by
     /// its player's name - and its JSON.</summary>
     public static List<((int? Slot, string? Name) Key, string Json)> StoredCharacters(DsMap save)
@@ -307,6 +310,41 @@ internal static class JoinSave
             slots["lastSave"] = "N/A";
         }
         return true;
+    }
+
+    /// <summary>Host: our world as it is now with this character (a checkpoint's JSON) as ours - for coming back to it when
+    /// we die (DeathSync). null if it can't be made.</summary>
+    public static string? WorldWith(string character)
+    {
+        if (!SaveData.Available)
+            return null;
+        WorldMap.Save();
+        if (JsonNode.Parse(SaveData.ToJson()!) is not JsonObject world || JsonNode.Parse(character) is not JsonObject ours)
+            return null;
+        foreach (string section in SaveData.CharacterSections)
+            if (ours[section] is { } value)
+                world[section] = value.DeepClone();
+        return world.ToJsonString(GameJson);
+    }
+
+    /// <summary>Host: a save of our own world, made here (WorldWith), kept to load next (TakePending) - not tagged as
+    /// someone else's world.</summary>
+    public static bool SetPendingOwn(string save)
+    {
+        _pending?.Destroy();
+        _pending = DsMap.FromJson(save);
+        return _pending is { };
+    }
+
+    /// <summary>Host: load the pending save (SetPendingOwn) in place - as the save menu loads one, leaving the game first -
+    /// keeping which save folder is ours, so our next save goes where the last did.</summary>
+    public static bool StartLoadInPlace()
+    {
+        if (Rooms.IsChanging)
+            return false;
+        using GmArray events = GmArray.From(new GmValue[] { 14, 2 });
+        GmValue changer = Game.CallScript("scr_smoothRoomChange", default, -4, events);
+        return !(changer.Kind == GmKind.Real && changer.AsReal == -4);
     }
 
     /// <summary>Client, from the main menu: start a new character as New Game -> Adventure does (the class picked at

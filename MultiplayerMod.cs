@@ -16,6 +16,7 @@ using StoneshardMP.Features.GroundEffects;
 using StoneshardMP.Features.Crimes;
 using StoneshardMP.Features.Talk;
 using StoneshardMP.Features.Dev;
+using StoneshardMP.Features.Death;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -47,6 +48,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private CrimeSync _crimes = null!;
     private TalkSync _talk = null!;
     private DevTools _dev = null!;
+    private DeathSync _death = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -116,6 +118,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         new SaveNames(context, _session, PlayerName);
         // Live ground loot where players are together: the place's owner's is the real one.
         _loot = new LootSync(context, _session, _ownership, () => _join.InSharedWorld);
+        // A client dying: back to its checkpoint (the host's last save), what it picked up since dropped where it fell.
+        _death = new DeathSync(context, _session, _join, _ownership, _loot);
         // Doors opened or shut where players are together: the same in every game there.
         _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
         _traps = new TrapSync(_session, () => _join.InSharedWorld);
@@ -187,6 +191,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _placeables.Clear();
         _groundEffects.Clear();
         _talk.Clear();
+        _death.Clear();
         _chests.Clear();
         _breakables.Clear();
         _stash.Clear();
@@ -224,6 +229,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "placeables", _placeables.Tick);
             Profiler.Measure(_context, "ground effects", _groundEffects.Tick);
             Profiler.Measure(_context, "talk", _talk.Tick);
+            Profiler.Measure(_context, "death", _death.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);
