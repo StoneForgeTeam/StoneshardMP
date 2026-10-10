@@ -28,6 +28,10 @@ public sealed class PlaceableSync
     private Dictionary<string, (Instance Instance, PlacedObjectState State)> _seen = new();
     private readonly Dictionary<string, long> _pending = new();
     private readonly Dictionary<string, long> _taken = new();
+    // Owner: copies we took away ourselves (the rest that go were broken in our game). Follower: our spells the owner
+    // said were broken, and when - not sent back to it as lost.
+    private readonly HashSet<Instance> _removedByUs = new();
+    private readonly Dictionary<string, long> _broken = new();
     private Dictionary<string, PlacedObjectState>? _snapshot;
     private string? _place;
     private int _owner = -1;
@@ -63,6 +67,8 @@ public sealed class PlaceableSync
         _casters.Clear();
         _pending.Clear();
         _taken.Clear();
+        _removedByUs.Clear();
+        _broken.Clear();
         _snapshot = null;
         _last = _others = "";
         _sent = _asked = 0;
@@ -113,6 +119,16 @@ public sealed class PlaceableSync
         var now = Read();
         if (_ownership.Role == AreaRole.Owner)
         {
+            // A follower's spell broken here - an NPC smashed our copy of their boulder - is broken in their game too: as
+            // a lost copy, they'd only send it back.
+            foreach (var (key, entry) in _seen)
+            {
+                if (now.ContainsKey(key) || !entry.Instance.IsGone || _removedByUs.Contains(entry.Instance) || !_copies.Contains(entry.Instance)
+                    || !entry.State.Spell || entry.State.Caster == _session.Slot || !_ownership.Others.Contains(entry.State.Caster))
+                    continue;
+                _session.Send(new PlaceableChangePacket(_place!, PlaceableChangeKind.Broken, entry.State), entry.State.Caster);
+            }
+            _removedByUs.RemoveWhere(i => i.IsGone);
             // A follower's spell source left the area: its replicas cannot live
             // forever waiting for a removal from a caster who has moved on.
             foreach (var entry in now.Values.ToList())
@@ -234,7 +250,8 @@ public sealed class PlaceableSync
                     _copies.Add(entry.Instance);
                 Update(entry.Instance, wanted);
             }
-            else if (entry.State.Spell && !_copies.Contains(entry.Instance) && entry.State.Caster == _session.Slot)
+            else if (entry.State.Spell && !_copies.Contains(entry.Instance) && entry.State.Caster == _session.Slot
+                && !(_broken.TryGetValue(key, out long broke) && time - broke < 3000))
             {
                 // Its lifetime belongs to this caster, not an older owner
                 // snapshot. Ask the owner to restore a lost replica instead.
@@ -259,6 +276,11 @@ public sealed class PlaceableSync
 
     private void ReceiveChange(RemotePlayer from, PlaceableChangePacket packet)
     {
+        if (packet.Kind == PlaceableChangeKind.Broken)
+        {
+            ReceiveBroken(from, packet);
+            return;
+        }
         if (!Ready || _ownership.Role != AreaRole.Owner || packet.Place != _ownership.Place || !_ownership.Others.Contains(from.Slot))
             return;
         Prepare();
@@ -283,6 +305,26 @@ public sealed class PlaceableSync
                 Remove(entry.Instance);
         }
         _owed = true;
+    }
+
+    // Follower: the owner's copy of our spell was broken - ours breaks as the game breaks it (a boulder: its user event 3,
+    // the dismissal, with its end animation and the caster's buff put right; anything else destroyed).
+    private void ReceiveBroken(RemotePlayer from, PlaceableChangePacket packet)
+    {
+        if (!Ready || _ownership.Role != AreaRole.Follower || from.Slot != _ownership.Owner || packet.Place != _ownership.Place)
+            return;
+        if (!Read().TryGetValue(packet.Object.Key, out var entry) || _copies.Contains(entry.Instance))
+            return;
+        _broken[packet.Object.Key] = Environment.TickCount64;
+        if (entry.Instance.IsCulled)
+            Game.CallBuiltin("instance_activate_object", entry.Instance);
+        if (entry.Instance.Get("object_index").AsInt == (int)GameObjectId.o_runic_boulder)
+        {
+            entry.Instance.Set("HP", 0);
+            Game.CallBuiltinAs("event_user", entry.Instance, entry.Instance, 3);
+        }
+        else
+            entry.Instance.Destroy();
     }
 
     private void Create(PlacedObjectState state)
@@ -350,6 +392,7 @@ public sealed class PlaceableSync
         });
         // Run Destroy for collision, wallgrid, sound and light cleanup, including
         // the culling controller's bookkeeping for off-screen objects.
+        _removedByUs.Add(item);
         item.Destroy();
         _copies.Remove(item);
     }

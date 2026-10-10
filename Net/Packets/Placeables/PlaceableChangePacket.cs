@@ -2,7 +2,8 @@ using StoneshardMP.Memory;
 
 namespace StoneshardMP.Net.Packets;
 
-// Follower -> owner: newly placed or removed. Request asks for the full roster.
+// Follower -> owner: newly placed or removed. Request asks for the full roster. Owner -> the caster: Broken - the owner's
+// copy of their spell was broken (an NPC smashed the boulder), so the real one breaks too.
 public readonly record struct PlaceableChangePacket(
     string Place, PlaceableChangeKind Kind, PlacedObjectState Object) : IPacket
 {
@@ -40,4 +41,5 @@ public enum PlaceableChangeKind : byte
     Added,
     Removed,
     Request,
+    Broken,
 }

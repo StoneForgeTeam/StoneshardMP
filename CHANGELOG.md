@@ -44,6 +44,10 @@ releases them: the release workflow titles that section with the version, sets i
   players (`is_player_enemy`, what the game goes by to attack an NPC on a click rather than talk to it) is copied with
   the owner's units now, so followers get the attack cursor and can fight it.
 
+- **Fixed: NPCs couldn't break a follower's runic boulder.** They broke the owner's copy, but the caster's game took
+  that as a lost copy and sent the boulder back, whole. Now the owner tells the caster, whose boulder breaks as the
+  game breaks one (its end animation, the caster's Runic Power put right). The same for stone spikes.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
