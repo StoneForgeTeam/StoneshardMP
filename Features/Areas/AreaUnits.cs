@@ -395,6 +395,10 @@ public sealed class AreaUnits
             else
                 hold = true;
         }
+        // (Never onto our own player: in our game we're there - the owner's unit took the cell before it knew. It stays
+        // where it was here; the owner moves it off ours - PlayerManager - and its next roster puts it there.)
+        if (!hold && OurPlayer.State()?.Cell == cell)
+            hold = true;
         if (!hold && Units.CellOf(unit) != cell)
         {
             if (!_poly.TryGetValue(unit, out bool poly))

@@ -89,6 +89,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // Who runs each place players share: whoever got there first; the others follow (units, loot, fights, rounds).
         _ownership = new AreaOwnership(context, _session, () => _join.InSharedWorld);
         _areaUnits = new AreaUnits(context, _session, _ownership, () => _players.ObjectIndex);
+        // (Running a place, our units step off a cell another player's on.)
+        _players.OwnsArea = () => _ownership.Role == AreaRole.Owner;
         // Combat where players are together: each game resolves its own character's fights, the owner's units the real ones.
         _combat = new CombatSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
         _crimes = new CrimeSync(context, _session, _areaUnits, _ownership, () => _join.InSharedWorld);

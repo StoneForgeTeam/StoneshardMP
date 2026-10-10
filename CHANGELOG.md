@@ -95,6 +95,10 @@ releases them: the release workflow titles that section with the version, sets i
 - **Recipes and schematics are the party's.** One player learning one (reading it) teaches everyone in the world; a
   player coming in later learns what the others know. Each game says who taught it what.
 
+- **Fixed: enemies could end up on a player's tile.** The owner's turn could walk a unit into the cell a follower had
+  just stepped into, before it knew. Now the owner moves its unit to a free cell beside it, and a follower never puts
+  one of the owner's units on its own player's cell meanwhile.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

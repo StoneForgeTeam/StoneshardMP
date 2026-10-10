@@ -82,6 +82,10 @@ public sealed class PlayerManager
     /// aren't (TalkSync): a speech cloud over them, and over it.</summary>
     public Func<int, Instance?>? TalkingTo { get; set; }
 
+    /// <summary>Whether we run the place we're in (AreaOwnership): our units are the real ones, ours to move off a cell
+    /// another player's on.</summary>
+    public Func<bool> OwnsArea { get; set; } = () => false;
+
     // Every frame (the mod's Tick).
     public void Tick()
     {
@@ -192,6 +196,10 @@ public sealed class PlayerManager
         // walking unit clears the cell it leaves as it starts, whoever's come onto it since (it's drawn from VisX / VisY).
         if (Units.CanTake(self, state.Cell))
             Units.Move(self, state.Cell, snap: true);
+        // Running the place, and one of our units is on the cell they're on: they were there first (their game moved
+        // them, then told us; our turn moved the unit there meanwhile) - it steps aside, and our next roster tells them.
+        else if (OwnsArea())
+            MakeWay(state.Cell);
         // No turns: it has no AI, and its player's game runs them (o_enemy's Create put it in our player's list of units
         // to run each turn; between turns only - never while the turn walks the list).
         Instance me = self.Persist();
@@ -260,6 +268,26 @@ public sealed class PlayerManager
             StoneForge.Draw.SpriteExt(_cloud, frame, view.VisX - 7, view.VisY - 50 + bob);
             if (npc.Exists)
                 StoneForge.Draw.SpriteExt(_cloud, frame, npc.Get("x").AsReal - 7, npc.Get("bbox_top").AsReal - 2 + bob);
+        }
+    }
+
+    // One of our area's units (not a player's stand-in, not our own player) off a cell: onto a free one beside it, nearest
+    // first. (A big unit - more than one cell - stays: its cells move as one.)
+    private void MakeWay(Cell cell)
+    {
+        Instance unit = Units.At(cell);
+        if (unit.IsNone || !unit.Exists || unit.Get("is_poly_cell").AsBool)
+            return;
+        int obj = unit.Get("object_index").AsInt;
+        if (obj == _object.Index || !Gm.ObjectIsAncestor(obj, (int)GameObjectId.o_enemy))
+            return;
+        foreach (Cell aside in cell.Neighbours)
+        {
+            if (aside.X < 0 || aside.Y < 0 || !Units.CanTake(unit, aside))
+                continue;
+            Units.Move(unit, aside, snap: true);
+            _context.Log($"Moved a {Gm.ObjectGetName(obj)} off {cell}, another player's cell, to {aside}");
+            return;
         }
     }
 
