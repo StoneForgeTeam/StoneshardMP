@@ -88,6 +88,10 @@ releases them: the release workflow titles that section with the version, sets i
   already sprung - is now disarmed in every game there (shown spent, off the marks grid), as discoveries were already
   shared; a player arriving later is told too.
 
+- **Fixed: one player's torch or lantern didn't light the others' screens.** Each player's light - its radius, colour
+  and brightness, from the game's own light effects - goes with their party info, and their stand-in carries the same
+  light, so it lights what's around them in everyone's game.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

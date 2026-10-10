@@ -141,7 +141,7 @@ public sealed class PartyFrames
         {
             GmValue head = StoneForge.Player.Attribute("Head");
             return new PartyInfo(StoneForge.Player.Level, head.Kind == GmKind.String ? head.AsString : "", (float)StoneForge.Player.HealthCap,
-                (float)StoneForge.Player.EnergyCap, StoneForge.Player.InCombat, Effects(player));
+                (float)StoneForge.Player.EnergyCap, StoneForge.Player.InCombat, Effects(player), PlayerLight.Of(player));
         }
         catch (Exception e)
         {

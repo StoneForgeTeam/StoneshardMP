@@ -24,6 +24,9 @@ public sealed class PlayerManager
         public int BuiltVersion = -1;
         public float VisX, VisY;
         public bool Placed;
+        // The light on their stand-in (an on-unit light effect), and which light it is (PlayerLight).
+        public Instance LightEffect;
+        public PlayerLight Light;
     }
 
     // (A player's object goes when nothing's been heard of where they are for this long.)
@@ -208,6 +211,8 @@ public sealed class PlayerManager
         self["max_mp"] = ProxyVitalMaximum;
         self["MP"] = ProxyVital(state.Energy, state.MaxEnergy);
         ApplyProfile(self, view.Player.Profile);
+        // The light they carry, lighting what's around them here as it does in their game.
+        PlayerLight.Apply(self, ref view.LightEffect, ref view.Light, view.Player.Party?.Light ?? default);
         self["depth"] = state.Depth;
     }
 
