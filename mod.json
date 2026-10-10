@@ -6,5 +6,6 @@
   "description": "Co-op multiplayer for Stoneshard: up to 8 players in one world, over LiteNetLib.",
   "stoneforge": "latest",
   "trusted": true,
-  "contributors": ["76561198039768949"]
+  "contributors": [ "76561198039768949" ],
+  "github": "StoneForgeTeam/StoneshardMP"
 }
