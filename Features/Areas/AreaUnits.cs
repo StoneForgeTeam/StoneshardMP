@@ -272,6 +272,7 @@ public sealed class AreaUnits
     {
         int playerObject = _playerObject();
         var units = new JsonArray();
+        var indicators = Indicators();
         foreach (Instance unit in Instances.All(GameObjectId.o_enemy))
         {
             int obj = unit.Get("object_index").AsInt;
@@ -295,9 +296,47 @@ public sealed class AreaUnits
                 ["alpha"] = unit.Get("image_alpha").ToJsonNode(), ["look"] = look,
                 ["npcName"] = unit.Get("name").ToJsonNode(), ["lifeAnimation"] = unit.Get("is_life").ToJsonNode(),
                 ["fx"] = EffectsOf(unit),
+                ["ind"] = indicators.TryGetValue(unit.Persist(), out var indicator) ? indicator : null,
             });
         }
         return units.ToJsonString();
+    }
+
+    // Owner: the icon over each unit showing its state, if it has one (o_unit_state_indicator's kinds: fleeing - the
+    // white flag -, alerted, threatening, suspicious) - its object's name, and how it's shown. A follower's copies have
+    // their AI off, so the game's states never put one over them (scr_stateFlee, scr_stateAttack...): it's copied. (Not
+    // the speech cloud of the owner's own conversation: that's the owner's.)
+    private static Dictionary<Instance, JsonObject> Indicators()
+    {
+        var result = new Dictionary<Instance, JsonObject>();
+        foreach (Instance indicator in Instances.All(GameObjectId.o_unit_state_indicator))
+        {
+            int obj = indicator.Get("object_index").AsInt;
+            if (obj == (int)GameObjectId.o_unit_state_indicator_dialog || Instance.Of(indicator.Get("owner")) is not { IsNone: false } owner)
+                continue;
+            result[owner.Persist()] = new JsonObject
+            {
+                ["obj"] = Gm.ObjectGetName(obj),
+                ["prey"] = indicator.Get("is_prey_animal").ToJsonNode(),
+                ["force"] = indicator.Get("isVisibleForce").ToJsonNode(),
+            };
+        }
+        return result;
+    }
+
+    // Follower: a copy's state icon made the owner's: the one it had taken away, the owner's put over it.
+    private static void SetIndicator(Instance unit, JsonObject? wanted)
+    {
+        Game.CallScript("scr_stateIndicatorDestroy", default, unit);
+        if (wanted?["obj"]?.GetValue<string>() is not { } name || Gm.AssetGetIndex(name) is var obj && obj < 0)
+            return;
+        Instance made = Instance.Of(Game.CallScript("scr_stateIndicatorCreate", default, obj, unit));
+        if (!made.Exists)
+            return;
+        if (wanted["prey"] is { } prey)
+            made["is_prey_animal"] = GmValue.FromJsonNode(prey);
+        if (wanted["force"] is { } force)
+            made["isVisibleForce"] = GmValue.FromJsonNode(force);
     }
 
     // Follower: the owner's roster made ours, UnitsPerFrame units a frame - each of its units bound to our twin (same
@@ -543,6 +582,8 @@ public sealed class AreaUnits
             unit["image_angle"] = Number(u["angle"]);
         if (Changed("alpha"))
             unit["image_alpha"] = Number(u["alpha"]);
+        if (Changed("ind"))
+            SetIndicator(unit, u["ind"] as JsonObject);
     }
 
     private bool IsAssetSprite(int sprite)

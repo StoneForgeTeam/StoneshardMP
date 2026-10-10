@@ -36,6 +36,10 @@ releases them: the release workflow titles that section with the version, sets i
   the debug dump, starting the place's syncing over, teleporting (to the mouse, to a player) and passing a turn.
   Every tab can be copied to the clipboard. Two packets (50, 51) for the desync check; protocol 36.
 
+- **Fixed: the white flag over a fleeing unit only showed in the owner's game.** The icons the game puts over a unit
+  for its state - the flag when it flees, the "!" when it's alerted, threatening, suspicious - come from its AI, which
+  is off for a follower's copies. They're copied with the owner's units now.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
