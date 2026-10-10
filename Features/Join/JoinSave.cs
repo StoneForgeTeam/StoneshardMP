@@ -344,7 +344,13 @@ internal static class JoinSave
             return false;
         using GmArray events = GmArray.From(new GmValue[] { 14, 2 });
         GmValue changer = Game.CallScript("scr_smoothRoomChange", default, -4, events);
-        return !(changer.Kind == GmKind.Real && changer.AsReal == -4);
+        if (changer.Kind == GmKind.Real && changer.AsReal == -4)
+            return false;
+        // (The load reads a save only when none is loaded - o_smoothRoomChanger's user event 2: with one, it sets the game
+        // up again from the save data it has, which leaving the game has just destroyed. Which save folder is ours is
+        // kept: the load goes through scr_slotLoad, which takes the pending one.)
+        Game.Global["slotLoaded"] = false;
+        return true;
     }
 
     /// <summary>Client, from the main menu: start a new character as New Game -> Adventure does (the class picked at
