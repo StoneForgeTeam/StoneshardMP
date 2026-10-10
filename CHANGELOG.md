@@ -62,6 +62,13 @@ releases them: the release workflow titles that section with the version, sets i
     client's character is asked for first, so they come back as they are), Load (the game's save menu - everyone loads
     it too) and Disconnect (stop hosting without saving). Respawn needs the world to have been saved once. Protocol 36.
 
+- **A better-looking lobby.** The main menu's player list is a lobby in the middle of the screen: a card for each player
+  with the portrait of the character they'll play (its avatar, as the save menu shows it - dim for a new character),
+  their name, that character's name, level and class, its world slot and their ping - the host's card first. The host
+  sends each slot's avatar and class with the list, so clients see them too.
+  Swap is a dropdown now: the host picks which slot's character each player plays, each slot named by its character -
+  slot 0 too, the host's own (the host takes the client's, as when it picks another slot for itself).
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

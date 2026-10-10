@@ -13,7 +13,8 @@ namespace StoneshardMP.Features.Join;
 // world yet) - not one that's been sent its character, nor into such a one's slot: what they play is decided then. For
 // this session; joining again, it's the order again.
 // The host can pick another slot too (HostSlot), on the main menu: the save it loads next has the host's character and
-// that slot's traded (JoinSave.SwapHost) - the host plays that one, and whoever plays the slot gets the host's.
+// that slot's traded (JoinSave.SwapHost) - the host plays that one, and whoever plays the slot gets the host's. So a
+// client given slot 0 (Pick) is that trade: the host takes the client's slot, and the client the host's character.
 public sealed class WorldSlots
 {
     private readonly Session _session;
@@ -52,6 +53,56 @@ public sealed class WorldSlots
     {
         HostSlot = 0;
         Changed?.Invoke();
+    }
+
+    /// <summary>Which slot's character a player plays, as the lobby shows it: the host's pick (HostSlot); a client's
+    /// world slot - or 0 when the host's taking theirs (the client gets the host's character).</summary>
+    public int Plays(int sessionSlot)
+    {
+        if (sessionSlot == 0)
+            return HostSlot;
+        int world = Of(sessionSlot);
+        return HostSlot != 0 && world == HostSlot ? 0 : world;
+    }
+
+    /// <summary>Host: a player (by session slot) is to play this slot's character - the lobby's dropdown. The host: its
+    /// pick, for the save it loads next. A client (still waiting to be let in): slot 0 is the host's character, the host
+    /// taking theirs; another moves them there, trading with whoever has it (not one already let in). Whether it was
+    /// done.</summary>
+    public bool Pick(int sessionSlot, int target)
+    {
+        int count = Math.Max(1, _session.Limit);
+        if (target < 0 || target >= count)
+            return false;
+        if (sessionSlot == 0)
+        {
+            HostSlot = target;
+            Changed?.Invoke();
+            return true;
+        }
+        if (!CanSwap(sessionSlot))
+            return false;
+        int from = Of(sessionSlot);
+        if (target == 0)
+        {
+            HostSlot = from;
+            Changed?.Invoke();
+            return true;
+        }
+        // (Off the host's character first, if they had it.)
+        if (HostSlot == from)
+            HostSlot = 0;
+        if (target != from)
+        {
+            int holder = HolderOf(target);
+            if (holder >= 0 && Settled(holder))
+                return false;
+            // (A slot nobody here plays is its session slot's: whoever joins as that one later takes the slot left.)
+            Set(sessionSlot, target);
+            Set(holder >= 0 ? holder : target, from);
+        }
+        Changed?.Invoke();
+        return true;
     }
 
     /// <summary>Someone's slot changed (a swap).</summary>
