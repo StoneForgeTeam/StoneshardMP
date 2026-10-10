@@ -44,6 +44,7 @@ public sealed class DeathSync
     private readonly AreaOwnership _ownership;
     private readonly LootSync _loot;
     private readonly DeathScreen _screen;
+    private readonly DeathCalm _calm;
     private string? _checkpointItems;
     private string _checkpointWhere = "";
 
@@ -55,6 +56,7 @@ public sealed class DeathSync
         _ownership = ownership;
         _loot = loot;
         session.On<CheckpointPacket>(ReceiveCheckpoint);
+        _calm = new DeathCalm(context, session, ownership);
         Player.OnDying(context, () =>
         {
             Died();
@@ -161,6 +163,9 @@ public sealed class DeathSync
         }
         _context.Log($"Died: dropped {drops.Count} item(s) picked up since the checkpoint"
             + (drops.Count > 0 ? ": " + string.Join(", ", drops.Select(d => d.What)) : ""));
+        // The hostility we leave behind ended, as a reload would: our place calmed down, the faction's crime record back
+        // to the host's last save (DeathCalm) - before the place is saved, below.
+        _calm.Died();
         // (To the place's other players now - and, running it ourselves, into its save, for the host.)
         _loot.Flush();
         if (_ownership.Role != AreaRole.Follower)

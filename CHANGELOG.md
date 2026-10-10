@@ -69,6 +69,12 @@ releases them: the release workflow titles that section with the version, sets i
   Swap is a dropdown now: the host picks which slot's character each player plays, each slot named by its character -
   slot 0 too, the host's own (the host takes the client's, as when it picks another slot for itself).
 
+- **Fixed: a town stayed hostile after a player died there.** In the game, dying reloads the save, from before the
+  trouble. Now a death calms the place it happened in (the game's own scr_villagePanicOff: its NPCs neutral again, the
+  players off their enemy lists - on whoever runs it, and from there everyone's copies), and the host puts that
+  faction's crime record (wanted or dead-or-alive, crime status, penalty, attacks counted) back to its last save's.
+  Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
