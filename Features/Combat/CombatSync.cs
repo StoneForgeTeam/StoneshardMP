@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
@@ -17,6 +18,9 @@ using StoneshardMP.Net.Packets;
 [assembly: HookScript(nameof(Scripts.scr_effect_update))]
 // (A knockback - o_knockback's, from an attack or a skill: ours when its owner is our player.)
 [assembly: HookScript(nameof(Scripts.scr_knockback))]
+// Damage dealt any way but an attack - a skill's or spell's (scr_skill_damage, scr_damage_with_calc), a summon's, a
+// throw's - all comes off a unit's health here: a follower's own, to one of the owner's units, goes to the owner.
+[assembly: HookScript(nameof(Scripts.scr_simple_damage))]
 
 namespace StoneshardMP.Features.Combat;
 
@@ -42,7 +46,11 @@ namespace StoneshardMP.Features.Combat;
 // - Kills: XP is shared. When a unit any player took part in dies on the owner, every player in that place within 20
 //   tiles gets its XP - a follower's game works it out from its copy of the unit as the game does (o_enemy's Destroy), and
 //   the owner's comes from the game's own death code.
-// (Still to come: skills' and spells' damage, players knocked out.)
+// - Skills' and spells' damage: whatever a follower's own doing takes off one of the owner's units by the game's damage
+//   (scr_simple_damage - where every skill, spell, summon and thrown hit ends; an attack's own hit is counted above) - its
+//   source our player, our summon, or anything of theirs (the spell, the skill, the projectile: its owner) - goes to the
+//   owner as a hit, as an attack's does. The effects such things put on it go too: theirs, not only an attack's.
+// (Still to come: players knocked out.)
 public sealed class CombatSync
 {
     // (How near a kill a player gets its share of the XP, in tiles - the game's own reach for its player.)
@@ -65,6 +73,9 @@ public sealed class CombatSync
     // Follower: our player's own action under way - its attack, or a knockback it owns (each pushed as whether it's ours:
     // they nest) - while what it does to the owner's units is ours to send.
     private readonly Stack<bool> _actions = new();
+    // Follower: damage being dealt (scr_simple_damage) to one of the owner's units by something of ours - each with its
+    // health before - or null, any other.
+    private readonly Stack<(Instance Target, long HostId, double Health)?> _damages = new();
     private int _ourActions;
 
     public CombatSync(ModContext context, Session session, AreaUnits areaUnits, AreaOwnership ownership, PlayerManager players,
@@ -115,6 +126,17 @@ public sealed class CombatSync
             _refreshing++;
             return false;
         });
+        // (A skill's, spell's, summon's or throw's damage to one of the owner's units: ours, to the owner.)
+        Scripts.scr_simple_damage.Before(context, call =>
+        {
+            _damages.Push(DamageStarted(call));
+            return false;
+        });
+        Scripts.scr_simple_damage.After(context, _ =>
+        {
+            if (_damages.Count > 0 && _damages.Pop() is { } damage)
+                Finished(damage);
+        });
         Scripts.scr_effect_update.After(context, call =>
         {
             _refreshing = Math.Max(0, _refreshing - 1);
@@ -136,6 +158,7 @@ public sealed class CombatSync
         _refreshing = 0;
         _actions.Clear();
         _ourActions = 0;
+        _damages.Clear();
     }
 
     // Whether we run the place we're in with others (our units are the real ones), or follow whoever does (ours are copies).
@@ -158,6 +181,35 @@ public sealed class CombatSync
     }
 
     // Whether an instance is our own player's character.
+    // Damage starting (scr_simple_damage(target, amount), called as what deals it): one of the owner's units, dealt by
+    // something of ours - not inside an attack on it already measured (its hit is the attack's).
+    private (Instance, long, double)? DamageStarted(ScriptCall call)
+    {
+        if (!Following || !_inSharedWorld() || call.Args.Length < 2 || Ours(call.Args[0]) is not var (target, hostId))
+            return null;
+        if (_attacks.Any(a => a is { } attack && attack.Target.Equals(target)))
+            return null;
+        if (_ourActions == 0 && !IsOursDeep(call.Self))
+            return null;
+        return (target, hostId, target.Get("HP").AsReal);
+    }
+
+    // Whether something's ours: our player, our summon, or what one of them owns - a spell, a skill, a projectile (its
+    // owner, or its owner's owner).
+    internal static bool IsOursDeep(Instance thing)
+    {
+        for (int depth = 0; depth < 3 && !thing.IsNone && thing.Exists; depth++)
+        {
+            if (IsOurPlayer(thing))
+                return true;
+            GmValue owner = thing.Get("owner");
+            if (owner.IsUndefined)
+                return false;
+            thing = Instance.Of(owner);
+        }
+        return false;
+    }
+
     private static bool IsOurPlayer(Instance unit)
         => !unit.IsNone && unit.Exists && (OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist())
             // (Our summon's doing is ours, as our player's is: its caster's game runs it - SummonSync.)
@@ -315,7 +367,8 @@ public sealed class CombatSync
     {
         if (_refreshing > 0 || call.Args.Length < 3 || Instance.Of(call.Result).IsNone)
             return;
-        bool ourOwn = call.Args.Length > 3 && IsOurPlayer(Instance.Of(call.Args[3]));
+        // (Ours: inside our action, or given by something of ours - our player, our summon, their spell or skill.)
+        bool ourOwn = (call.Args.Length > 3 && IsOursDeep(Instance.Of(call.Args[3]))) || IsOursDeep(call.Self);
         if ((_ourActions == 0 && !ourOwn) || Ours(call.Args[2]) is not var (copy, hostId))
             return;
         string name = Gm.ObjectGetName(call.Args[0].AsInt);
@@ -327,7 +380,7 @@ public sealed class CombatSync
     // made it): the owner does the same to the real one.
     private void EffectRefreshed(ScriptCall call)
     {
-        if (_ourActions == 0 || call.Args.Length < 3 || Ours(call.Args[1]) is not var (copy, hostId))
+        if ((_ourActions == 0 && !IsOursDeep(call.Self)) || call.Args.Length < 3 || Ours(call.Args[1]) is not var (copy, hostId))
             return;
         string name = Gm.ObjectGetName(call.Args[0].AsInt);
         double stacks = call.Args.Length > 3 && !call.Args[3].IsUndefined ? call.Args[3].AsReal : 1;

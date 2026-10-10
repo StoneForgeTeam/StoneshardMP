@@ -117,6 +117,13 @@ releases them: the release workflow titles that section with the version, sets i
   arrives, players at its old camp come along to the new one, and the travel time passes for everyone. (The host's
   sleep fade no longer shows for the caravan's trips.) Protocol 36.
 
+- **A follower's skills and spells hurt the owner's enemies.** Only an attack's hit reached the owner before: a
+  Fireball, a weapon skill's extra damage, a summon's spell or a throw only hurt the follower's copy, and the owner's
+  next roster put it back. Now whatever a follower's own doing takes off one of the owner's units - its player, its
+  summon, or their spell, skill or projectile, through the game's damage (scr_simple_damage) - goes to the owner as a
+  hit, with the kill if it was one. And the effects those put on the owner's units (a burn, a slow, a stun from a
+  spell) go to the owner too, not only an attack's.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
