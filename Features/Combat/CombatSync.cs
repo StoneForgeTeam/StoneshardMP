@@ -112,6 +112,15 @@ public sealed class CombatSync
             return false;
         });
         Scripts.scr_knockback.After(context, _ => End());
+        // (A thrown net landing - ours: the net it puts on its target is ours. The game makes the net the target's own
+        // effect, so it's known by this.)
+        context.OnCode("gml_Object_o_net_throw_Alarm_0",
+            before: (net, _) =>
+            {
+                Begin(!net.IsNone && IsOursDeep(net));
+                return false;
+            },
+            after: (_, _) => End());
         // (A unit's death: o_enemy's Destroy, its children's too - they inherit it.)
         context.OnCode("gml_Object_o_enemy_Destroy_0", before: (self, _) =>
         {

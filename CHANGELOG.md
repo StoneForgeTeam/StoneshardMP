@@ -155,6 +155,9 @@ releases them: the release workflow titles that section with the version, sets i
   setting, re-arming, disarming or picking one up does the same on the owner. Players' traps never hurt a player, their
   own setter included. Protocol 36.
 
+- **A follower's hunting net holds the owner's enemies.** The game makes a net the target's own effect rather than
+  the thrower's, so a follower's net only held the copy in its own game. Now it's put on the real enemy. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
