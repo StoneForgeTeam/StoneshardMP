@@ -84,6 +84,10 @@ releases them: the release workflow titles that section with the version, sets i
 - **The host's save puts everyone where the host saved**, as a save at a bed puts its player there: loading it, or
   joining a world from it, every client starts at the host's spot, not wherever they stood as it was saved.
 
+- **Fixed: a trap one player disarmed could still be triggered by another.** A spent trap - disarmed by anyone, or
+  already sprung - is now disarmed in every game there (shown spent, off the marks grid), as discoveries were already
+  shared; a player arriving later is told too.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

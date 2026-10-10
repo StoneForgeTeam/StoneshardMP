@@ -8,14 +8,19 @@ using StoneshardMP.Net.Packets;
 
 namespace StoneshardMP.Features.Traps;
 
-// Discovery is a union, not an owner snapshot: any player can spot a trap.
-// Keep discoveries for this room, including traps currently culled or not yet created.
+// Traps where players are together - a union, not an owner snapshot: any player can spot a trap, and any can spend one.
+// - Discovered: spotted by anyone, revealed in every game there.
+// - Spent: disarmed by anyone (o_trap's alarm 2), or sprung (its animation's end) - is_disarm, in the game's own terms -
+//   is harmless in every game there: disarmed, shown spent, off the marks grid (as the game's disarm leaves it). Before,
+//   a trap one player disarmed was still live in the other's game.
+// Kept for this room, including traps currently culled or not yet created; everyone sends theirs when someone arrives.
 public sealed class TrapSync
 {
     private const int Interval = 6;
     private readonly Session _session;
     private readonly Func<bool> _inSharedWorld;
     private readonly HashSet<string> _discovered = new();
+    private readonly HashSet<string> _disarmed = new();
     private string? _place;
     private string _others = "";
     private int _frame;
@@ -33,6 +38,7 @@ public sealed class TrapSync
         _others = "";
         _frame = 0;
         _discovered.Clear();
+        _disarmed.Clear();
     }
 
     public void Tick()
@@ -55,6 +61,14 @@ public sealed class TrapSync
         foreach (Instance trap in Instances.All(GameObjectId.o_trap))
         {
             string key = KeyOf(trap);
+            // Spent: ours to tell, or another's to make so here.
+            if (trap.Get("is_disarm").AsBool)
+            {
+                if (_disarmed.Add(key) && !fresh && others.Length > 0)
+                    _session.Send(new TrapDiscoveredPacket(place!, key, true));
+            }
+            else if (_disarmed.Contains(key))
+                Disarm(trap);
             if (_discovered.Contains(key))
             {
                 Reveal(trap);
@@ -64,13 +78,15 @@ public sealed class TrapSync
                 continue;
             _discovered.Add(key);
             if (!fresh && others.Length > 0)
-                _session.Send(new TrapDiscoveredPacket(place!, key));
+                _session.Send(new TrapDiscoveredPacket(place!, key, false));
         }
-        // Everyone sends their discoveries when someone arrives: the owner may not have spotted them.
+        // Everyone sends what they know when someone arrives: the owner may not have spotted or spent them.
         if (fresh && others.Length > 0)
         {
             foreach (string key in _discovered)
-                _session.Send(new TrapDiscoveredPacket(place!, key));
+                _session.Send(new TrapDiscoveredPacket(place!, key, false));
+            foreach (string key in _disarmed)
+                _session.Send(new TrapDiscoveredPacket(place!, key, true));
         }
     }
 
@@ -94,12 +110,17 @@ public sealed class TrapSync
             return;
         Enter(place!);
         _discovered.Add(packet.Key);
+        if (packet.Disarmed)
+            _disarmed.Add(packet.Key);
         // Culled instances cannot have their variables written. Their keys remain
-        // in _discovered and Tick applies discovery when they reactivate.
+        // in the sets and Tick applies them when they reactivate.
         foreach (Instance trap in Instances.All(GameObjectId.o_trap))
         {
-            if (KeyOf(trap) == packet.Key)
-                Reveal(trap);
+            if (KeyOf(trap) != packet.Key)
+                continue;
+            Reveal(trap);
+            if (packet.Disarmed)
+                Disarm(trap);
         }
     }
 
@@ -110,6 +131,20 @@ public sealed class TrapSync
         trap.Set("locate", true);
         if (!trap.Get("is_spawner").AsBool)
             trap.Set("visible", true);
+    }
+
+    // Spent here as another game spent it - as o_trap's alarm 2 leaves a disarmed one, without its roll, sound or speech:
+    // disarmed, its last frame (user event 9 shows a spent trap so), and off the marks grid, which steers units around it.
+    private static void Disarm(Instance trap)
+    {
+        if (trap.Get("is_disarm").AsBool)
+            return;
+        trap.Set("is_disarm", true);
+        trap.Set("image_speed", 0);
+        Game.CallBuiltinAs("event_user", trap, trap, 9);
+        if (Instances.All(GameObjectId.o_controller).FirstOrDefault() is { IsNone: false } controller
+            && controller.Get("markgrid").Kind == GmKind.Real)
+            Game.CallBuiltin("ds_grid_set", controller.Get("markgrid"), trap.Get("grid_x"), trap.Get("grid_y"), -4);
     }
 
     private static string KeyOf(Instance trap)
