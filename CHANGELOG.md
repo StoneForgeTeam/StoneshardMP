@@ -130,6 +130,13 @@ releases them: the release workflow titles that section with the version, sets i
   already carried over: the game's sight is vision range and line of sight, which the stand-in shares, and it carries
   the follower's light.) Protocol 36.
 
+- **One stock per trader for the whole party.** Each game kept its own goods and gold for every trader, so an item
+  one player bought was still for sale to the other (one-of-a-kind items included), and selling didn't use up the
+  trader's gold for anyone else. Now, when a trade ends, the trader's stock, its gold, the unique items already bought
+  from it and its restock state go to everyone, and every game uses them instead of its own. For a trader in a town
+  you haven't been to since, the stock is kept until you arrive, so the trader doesn't roll new stock of its own.
+  Restocks follow the shared clock. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
