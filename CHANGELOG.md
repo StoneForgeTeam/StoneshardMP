@@ -137,6 +137,12 @@ releases them: the release workflow titles that section with the version, sets i
   you haven't been to since, the stock is kept until you arrive, so the trader doesn't roll new stock of its own.
   Restocks follow the shared clock. Protocol 36.
 
+- **Shared cooking pots** (from the GML version). Campfires, firepits, hearths and the caravan's pot keep what's in
+  their pot the way a chest does, and now they're shared like chests: one player cooks at a fire at a time (anyone else
+  is told who's cooking), and what they leave in the pot - or taking the pot away - reaches the others when the window
+  closes. Lighting or putting out a fire shows for everyone at once. The caravan camp's foraging harvest and chicken
+  coop were already shared as part of the caravan, so what one player gathers there is gone for everyone. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

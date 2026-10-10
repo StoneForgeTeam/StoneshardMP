@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
@@ -21,6 +22,10 @@ namespace StoneshardMP.Features.Chests;
 // Containers are matched by object and position (every game builds a place alike). One off screen when its contents
 // come gets them when it's next on. Two opening the same one at once: the last to close it decides what's in it.
 // Where nobody else is, nothing's shared: leaving, the place's save is (WorldSync).
+// Fires to cook at - campfires, firepits, hearths, the caravan's pot (o_campfire_parent) - are kept the same way: a fire
+// keeps what's in its cooking pot in itself as a container does (its loot_list, saved from the cooking window as it
+// closes), so one cook at a time, and what they left goes to the others - with whether the pot's still there (taken
+// out, the fire's drawn without it) and whether it's lit (lighting or putting it out goes at once).
 public sealed class ChestSync
 {
     // (Every this many frames.)
@@ -73,6 +78,28 @@ public sealed class ChestSync
         // player has open.
         foreach (string obj in OpenEvents)
             context.OnCode($"gml_Object_{obj}_Other_13", before: (container, _) => InUseByAnother(container));
+        // A fire's cooking window: opening it (the fire's user event 0, lit) not while another player's cooking at it;
+        // its pot's contents loaded into it (ours open); saved back as it closes (ours closed). Lit or put out: at once.
+        context.OnCode("gml_Object_o_campfire_parent_Other_10",
+            before: (fire, _) => !fire.IsNone && fire.Get("is_fire").AsBool && InUseByAnother(fire));
+        context.OnCode("gml_Object_o_craftingFoodMenu_Other_11", after: (menu, _) =>
+        {
+            if (!menu.IsNone && Instance.Of(menu.Get("parent")) is { IsNone: false } fire && IsFire(fire))
+                Opened(fire);
+        });
+        var closing = new Stack<Instance>();
+        context.OnCode("gml_Object_o_craftingMenu_Other_25",
+            before: (menu, _) =>
+            {
+                closing.Push(menu.IsNone ? default : Instance.Of(menu.Get("parent")));
+                return false;
+            },
+            after: (_, _) =>
+            {
+                if (closing.Count > 0 && closing.Pop() is { IsNone: false } fire && fire.Exists && IsFire(fire))
+                    Closed(fire);
+            });
+        context.OnCode("gml_Object_o_campfire_parent_Other_12", after: (fire, _) => Lit(fire));
     }
 
     public void Clear()
@@ -119,7 +146,7 @@ public sealed class ChestSync
         int sent = 0, applied = 0;
         foreach (Instance container in All())
         {
-            if (Containers.IsOpen(container))
+            if (IsOpen(container))
                 continue;
             string key = KeyOf(container);
             if (_pending.Remove(key, out string? json))
@@ -129,7 +156,7 @@ public sealed class ChestSync
                 continue;
             }
             // (The owner's: each container it has opened, as it first sees it - one it hasn't is as every game rolls it.)
-            if (owner && _sent.Add(key) && Containers.HasBeenOpened(container) && Containers.ContentsJson(container) is { } contents)
+            if (owner && _sent.Add(key) && (IsFire(container) || Containers.HasBeenOpened(container)) && ContentsOf(container) is { } contents)
             {
                 Send(ChestKind.Contents, key, contents);
                 sent++;
@@ -154,9 +181,10 @@ public sealed class ChestSync
         return true;
     }
 
-    private void Opened(OpenContainer open)
+    private void Opened(OpenContainer open) => Opened(open.Container);
+
+    private void Opened(Instance container)
     {
-        Instance container = open.Container;
         if (_place == null || container.IsNone || !Shared(container))
             return;
         _session.Send(new ChestPacket(_place, KeyOf(container), ChestKind.Opened, Array.Empty<byte>()));
@@ -181,7 +209,7 @@ public sealed class ChestSync
             Instance container = _closed[i];
             if (!container.Exists)
                 _closed.RemoveAt(i);
-            else if (Containers.ContentsJson(container) is { } contents)
+            else if (ContentsOf(container) is { } contents)
             {
                 _closed.RemoveAt(i);
                 Send(ChestKind.Closed, KeyOf(container), contents);
@@ -189,15 +217,78 @@ public sealed class ChestSync
         }
     }
 
+    // A fire lit or put out (by us): how it is now, to the others at once.
+    private void Lit(Instance fire)
+    {
+        if (_applying || _place == null || fire.IsNone || OurPlayer.State()?.Place != _place || !Shared(fire) || IsOpen(fire))
+            return;
+        if (ContentsOf(fire) is { } contents)
+            Send(ChestKind.Contents, KeyOf(fire), contents);
+    }
+
+    // What's in a container, as the others are sent it (null: can't be read now - open). A fire's: its pot's contents,
+    // whether the pot's there (which of its looks it has: 0, with it), and whether it's lit.
+    private static string? ContentsOf(Instance container)
+    {
+        if (IsOpen(container) || Containers.ContentsJson(container) is not { } items)
+            return null;
+        if (!IsFire(container))
+            return items;
+        return new JsonObject
+        {
+            ["items"] = JsonNode.Parse(items),
+            ["look"] = PotLook(container),
+            ["lit"] = container.Get("image_speed").AsReal != 0,
+        }.ToJsonString();
+    }
+
+    // Which of a fire's looks it has (sprite_array: 0 with its pot, 1 without; -1, none).
+    private static int PotLook(Instance fire)
+    {
+        using GmArray? looks = fire.Get("sprite_array").AsArray;
+        for (int i = 0; looks != null && i < looks.Length; i++)
+            if (looks[i].AsReal == fire.Get("sprite_index").AsReal)
+                return i;
+        return -1;
+    }
+
     private void Apply(Instance container, string json)
     {
         _applying = true;
         try
         {
-            if (!Containers.SetContents(container, json))
+            if (IsFire(container))
+                ApplyFire(container, json);
+            else if (!Containers.SetContents(container, json))
                 _context.Log($"Containers here: couldn't make {KeyOf(container)} as the others have it");
         }
         finally { _applying = false; }
+    }
+
+    // A fire as another game has it: its pot's contents, its look (the pot there or not), lit or out.
+    private void ApplyFire(Instance fire, string json)
+    {
+        if (JsonNode.Parse(json) is not JsonObject state || state["items"] is not JsonArray items
+            || !Containers.SetContents(fire, items.ToJsonString()))
+        {
+            _context.Log($"Containers here: couldn't make {KeyOf(fire)} as the others have it");
+            return;
+        }
+        int look = state["look"]?.GetValue<int>() ?? -1;
+        using (GmArray? looks = fire.Get("sprite_array").AsArray)
+            if (looks != null && look >= 0 && look < looks.Length && fire.Get("sprite_index").AsReal != looks[look].AsReal)
+            {
+                fire["sprite_index"] = looks[look];
+                Game.CallScript("scr_set_hl", fire);
+            }
+        bool lit = state["lit"]?.GetValue<bool>() ?? false;
+        if (lit != (fire.Get("image_speed").AsReal != 0))
+        {
+            // (Its step does the rest: light, sound, smoke - as lighting it does.)
+            fire["image_speed"] = lit ? 0.8 : 0;
+            if (!lit)
+                fire["image_index"] = 0;
+        }
     }
 
     // ---- network ----
@@ -220,15 +311,26 @@ public sealed class ChestSync
             _inUse.Remove(packet.Key);
         string json = JoinCompression.Decompress(packet.Data);
         Instance found = All().FirstOrDefault(c => KeyOf(c) == packet.Key);
-        if (found.IsNone || Containers.IsOpen(found))
+        if (found.IsNone || IsOpen(found))
             _pending[packet.Key] = json;
         else
             Apply(found, json);
     }
 
-    // The shared containers on screen here: both kinds.
+    // The shared containers on screen here: both kinds, and fires to cook at.
     private static IEnumerable<Instance> All()
-        => Instances.All(GameObjectId.c_container).Concat(Instances.All(GameObjectId.c_abstract_chest)).Where(Shared);
+        => Instances.All(GameObjectId.c_container).Concat(Instances.All(GameObjectId.c_abstract_chest))
+            .Concat(Instances.All(GameObjectId.o_campfire_parent).Where(f => !f.Get("persistent").AsBool)).Where(Shared);
+
+    // A fire to cook at (its pot's contents its loot_list).
+    private static bool IsFire(Instance container)
+        => Gm.ObjectIsAncestor(container.Get("object_index").AsInt, (int)GameObjectId.o_campfire_parent)
+            || container.Get("object_index").AsInt == (int)GameObjectId.o_campfire_parent;
+
+    // Open here: its window (a container's), or its cooking window (a fire's: its pot's contents are in it till it closes).
+    private static bool IsOpen(Instance container)
+        => Containers.IsOpen(container)
+            || (IsFire(container) && Instances.All(GameObjectId.o_craftingMenu).Any(m => Instance.Of(m.Get("parent")).Equals(container)));
 
     // A container in the world (its own loot list) - not a bag the player carries, nor a player's own stash (each
     // player's: o_player_chest).
