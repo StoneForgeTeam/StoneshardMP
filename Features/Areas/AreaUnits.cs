@@ -290,7 +290,7 @@ public sealed class AreaUnits
             {
                 ["id"] = syncId, ["obj"] = obj, ["x"] = x, ["y"] = y, ["hp"] = unit.Get("HP").ToJsonNode(),
                 ["state"] = unit.Get("state").AsString, ["sleeping"] = unit.Get("is_sleeping").ToJsonNode(),
-                ["neutral"] = unit.Get("is_neutral").ToJsonNode(), ["flip"] = unit.Get("image_xscale").AsReal < 0,
+                ["neutral"] = unit.Get("is_neutral").ToJsonNode(), ["playerEnemy"] = unit.Get("is_player_enemy").ToJsonNode(), ["flip"] = unit.Get("image_xscale").AsReal < 0,
                 ["sprite"] = unit.Get("sprite_index").ToJsonNode(), ["frame"] = unit.Get("image_index").ToJsonNode(),
                 ["speed"] = unit.Get("image_speed").ToJsonNode(), ["angle"] = unit.Get("image_angle").ToJsonNode(),
                 ["alpha"] = unit.Get("image_alpha").ToJsonNode(), ["look"] = look,
@@ -548,6 +548,10 @@ public sealed class AreaUnits
             unit["is_sleeping"] = GmValue.FromJsonNode(u["sleeping"]);
         if (Changed("neutral"))
             unit["is_neutral"] = GmValue.FromJsonNode(u["neutral"]);
+        // (Whether an NPC is hostile to the players - what the game goes by to attack it, not talk to it, on a click and
+        // in the cursor.)
+        if (Changed("playerEnemy") && u["playerEnemy"] is { } playerEnemy && !unit.Get("is_player_enemy").IsUndefined)
+            unit["is_player_enemy"] = GmValue.FromJsonNode(playerEnemy);
         if (Changed("look") && u["look"] is JsonObject look)
             foreach (var (key, value) in look)
                 if (!unit.Get(key).IsUndefined && Number(value) is var sprite && (sprite < 0 || IsAssetSprite((int)sprite)))

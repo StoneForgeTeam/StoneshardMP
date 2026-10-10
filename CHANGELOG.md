@@ -40,6 +40,10 @@ releases them: the release workflow titles that section with the version, sets i
   for its state - the flag when it flees, the "!" when it's alerted, threatening, suspicious - come from its AI, which
   is off for a follower's copies. They're copied with the owner's units now.
 
+- **Fixed: a town NPC turned hostile could still only be talked to in a follower's game.** Its hostility to the
+  players (`is_player_enemy`, what the game goes by to attack an NPC on a click rather than talk to it) is copied with
+  the owner's units now, so followers get the attack cursor and can fight it.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
