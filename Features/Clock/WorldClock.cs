@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using StoneshardMP.Net.Packets;
 using StoneForge;
 using StoneshardMP.Features.Areas;
@@ -13,6 +14,9 @@ namespace StoneshardMP.Features.Clock;
 // has already advanced through its normal action, while every other player performs one safe idle turn - but a
 // client following a place's owner (AreaOwnership) doesn't: its units there are the owner's (AreaUnits - their AI off,
 // out of its turn loop), moved by the owner's turn and streamed to it, so it only takes the host's clock.
+// Only where it happened: a move by a player in another place doesn't give our place's units a turn - fighting in the
+// inn, another player walking outside didn't stop moving the inn's units. Here it's only time passing (TurnTime's share
+// of a turn, PassTime), and the clock as the host has it.
 public sealed class WorldClock
 {
     private readonly Session _session;
@@ -30,6 +34,18 @@ public sealed class WorldClock
     private int _idleTurns;
 
     private readonly ModContext _context;
+
+    /// <summary>A move elsewhere's time passing here, and nothing else (TurnTime.PassTurnTime).</summary>
+    public Action? PassTime { get; set; }
+
+    // Whether a player (by slot - ours too) is in the place we're in: their move is a turn here.
+    private bool Here(int slot)
+    {
+        if (slot == _session.Slot)
+            return true;
+        string? ours = StoneshardMP.Features.Players.OurPlayer.Place, theirs = _session.Players.FirstOrDefault(p => p.Slot == slot)?.State?.Place;
+        return ours != null && theirs != null && ours == theirs;
+    }
 
     public WorldClock(ModContext context, Session session, AreaOwnership ownership, Func<bool> inSharedWorld,
         Func<int, bool> inRound)
@@ -86,7 +102,11 @@ public sealed class WorldClock
                 // (In a round, the enemies move once everyone's acted - the round's turn - not after each action.)
                 if (_inRound(source))
                     continue;
-                GameClock.Tick(_context);
+                // (Somewhere else: its time passes here, but our place's units don't act for it.)
+                if (Here(source))
+                    GameClock.Tick(_context);
+                else
+                    PassTime?.Invoke();
                 Publish(source, GameClock.Turns());
             }
             return;
@@ -136,7 +156,8 @@ public sealed class WorldClock
         // one idle turn, including NPC/unit processing, when their own game is in a safe state - unless this game
         // follows its place's owner (the owner's turn moved its units, and they come from it), or there's a round here
         // (its units move once a round).
-        if (source != _session.Slot && !Following && !_inRound(source))
+        // (And only for a move in our place: one elsewhere is only the clock, below.)
+        if (source != _session.Slot && !Following && !_inRound(source) && Here(source))
             _idleTurns++;
         ApplyClock(clock);
     }

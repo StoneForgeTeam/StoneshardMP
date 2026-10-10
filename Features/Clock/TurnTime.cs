@@ -15,6 +15,8 @@ namespace StoneshardMP.Features.Clock;
 // of a second carries to the next turn (the game keeps whole seconds), so time still adds up exactly.
 // Not in a round (TurnRounds): there everyone acts and then the world takes one turn - the round's - which keeps its 30.
 // Only a turn's own time: sleeping, travelling and the rest let their time pass as ever.
+// A move somewhere else - by a player in another place - is only that time passing here (PassTurnTime): not a world
+// turn where we are, whose units don't act for it (WorldClock).
 public sealed class TurnTime
 {
     private const double SecondsPerTurn = 30;
@@ -54,6 +56,19 @@ public sealed class TurnTime
     {
         _turns = 0;
         _carried = 0;
+    }
+
+    /// <summary>A move elsewhere: its share of a turn's time passes here, and nothing else - no world turn, no units' turns
+    /// (scr_timeUpdate, as the turn's own would).</summary>
+    public void PassTurnTime()
+    {
+        if (!_session.Connected || !_inSharedWorld())
+            return;
+        double share = SecondsPerTurn / Math.Max(1, Players) + _carried;
+        double whole = Math.Floor(share);
+        _carried = share - whole;
+        if (whole > 0)
+            Game.CallScript("scr_timeUpdate", default, whole);
     }
 
     // A world turn's own time (its 30 seconds, nothing else) in a world shared with others, out of a round: its share,

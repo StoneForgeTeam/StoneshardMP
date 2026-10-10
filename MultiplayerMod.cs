@@ -112,6 +112,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // Summons are their caster's: run in the caster's game, a stand-in for each in the others'.
         _summons = new SummonSync(_session, _players, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
+        // (A move in another place: only its time passes here, not a turn for our units.)
+        _clock.PassTime = _turnTime.PassTurnTime;
         _dump = new DebugDump(context, _session, _areaUnits);
         // Our name to the others: the setting, or the Steam name.
         string PlayerName() => settings.Name.Value.Trim() is { Length: > 0 } name ? name : SteamName();

@@ -105,6 +105,11 @@ releases them: the release workflow titles that section with the version, sets i
   phantasm showed only particles elsewhere. Its hits go to the owner as its caster's do, and the owner's units
   attacking its stand-in are played out against the real one in the caster's game. Protocol 36.
 
+- **Fixed: a player's moves in another place moved the units where you are.** Every player's move was a world turn
+  in every game, units and all - fighting in the inn, another player walking outside kept the inn's enemies moving.
+  Now a move is a turn only in the place it happened; elsewhere only its share of the time passes, and the clock stays
+  the same for everyone.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
