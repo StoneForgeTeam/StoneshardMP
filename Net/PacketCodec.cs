@@ -87,6 +87,8 @@ public static class PacketCodec
             NoisePacket.PacketId => NoisePacket.Read(ref reader),
             TraderPacket.PacketId => TraderPacket.Read(ref reader),
             GatherPacket.PacketId => GatherPacket.Read(ref reader),
+            PlacedTrapsPacket.PacketId => PlacedTrapsPacket.Read(ref reader),
+            PlacedTrapChangePacket.PacketId => PlacedTrapChangePacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

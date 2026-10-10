@@ -14,6 +14,7 @@ namespace StoneshardMP.Features.Traps;
 //   is harmless in every game there: disarmed, shown spent, off the marks grid (as the game's disarm leaves it). Before,
 //   a trap one player disarmed was still live in the other's game.
 // Kept for this room, including traps currently culled or not yet created; everyone sends theirs when someone arrives.
+// (Traps players set - their faction's - are PlacedTrapSync's: re-armed, they'd be spent again here.)
 public sealed class TrapSync
 {
     private const int Interval = 6;
@@ -60,6 +61,8 @@ public sealed class TrapSync
 
         foreach (Instance trap in Instances.All(GameObjectId.o_trap))
         {
+            if (IsPlayers(trap))
+                continue;
             string key = KeyOf(trap);
             // Spent: ours to tell, or another's to make so here.
             if (trap.Get("is_disarm").AsBool)
@@ -116,7 +119,7 @@ public sealed class TrapSync
         // in the sets and Tick applies them when they reactivate.
         foreach (Instance trap in Instances.All(GameObjectId.o_trap))
         {
-            if (KeyOf(trap) != packet.Key)
+            if (KeyOf(trap) != packet.Key || IsPlayers(trap))
                 continue;
             Reveal(trap);
             if (packet.Disarmed)
@@ -146,6 +149,9 @@ public sealed class TrapSync
             && controller.Get("markgrid").Kind == GmKind.Real)
             Game.CallBuiltin("ds_grid_set", controller.Get("markgrid"), trap.Get("grid_x"), trap.Get("grid_y"), -4);
     }
+
+    private static bool IsPlayers(Instance trap)
+        => trap.Get("faction_key") is { Kind: GmKind.String } faction && faction.AsString == "Player";
 
     private static string KeyOf(Instance trap)
         => $"{Gm.ObjectGetName(trap.Get("object_index").AsInt)}_{Math.Floor(trap.Get("x").AsReal)}_{Math.Floor(trap.Get("y").AsReal)}";

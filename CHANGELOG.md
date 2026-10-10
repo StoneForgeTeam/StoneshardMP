@@ -149,6 +149,12 @@ releases them: the release workflow titles that section with the version, sets i
   once, and when players come together, whoever runs the place sends what's left, so anything already picked is gone
   for the newcomer too. Protocol 36.
 
+- **Claw traps and caltrops are shared, and they only catch enemies.** A trap a player set down (or caltrops they
+  threw) only existed in their own game, so a follower's trap caught nothing and nobody else could see it. Now the
+  place owner's game has the real ones and everyone sees them: set, sprung, re-armed, used up or picked up. A follower
+  setting, re-arming, disarming or picking one up does the same on the owner. Players' traps never hurt a player, their
+  own setter included. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

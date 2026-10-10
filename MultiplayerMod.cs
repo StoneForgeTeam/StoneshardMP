@@ -64,6 +64,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
     private TrapSync _traps = null!;
+    private PlacedTrapSync _placedTraps = null!;
     private CorpseSync _corpses = null!;
     private PlaceableSync _placeables = null!;
     private GroundEffectSync _groundEffects = null!;
@@ -153,6 +154,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // Doors opened or shut where players are together: the same in every game there.
         _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
         _traps = new TrapSync(_session, () => _join.InSharedWorld);
+        // Traps players set - claw traps, caltrops: the place owner's, in everyone's game; they catch enemies only.
+        _placedTraps = new PlacedTrapSync(context, _session, _ownership, _players, () => _join.InSharedWorld);
         _corpses = new CorpseSync(_session, _ownership, () => _join.InSharedWorld);
         _placeables = new PlaceableSync(context, _session, _ownership, () => _join.InSharedWorld);
         _groundEffects = new GroundEffectSync(context, _session, _ownership, () => _join.InSharedWorld);
@@ -198,6 +201,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
                 _chests.Clear();
                 _breakables.Clear();
                 _traps.Clear();
+                _placedTraps.Clear();
                 _doors.Clear();
             },
         });
@@ -218,6 +222,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _turnTime.Clear();
         _doors.Clear();
         _traps.Clear();
+        _placedTraps.Clear();
         _corpses.Clear();
         _placeables.Clear();
         _groundEffects.Clear();
@@ -263,6 +268,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "gather", _gather.Tick);
             Profiler.Measure(_context, "doors", _doors.Tick);
             Profiler.Measure(_context, "traps", _traps.Tick);
+            Profiler.Measure(_context, "placed traps", _placedTraps.Tick);
             Profiler.Measure(_context, "corpses", _corpses.Tick);
             Profiler.Measure(_context, "placeables", _placeables.Tick);
             Profiler.Measure(_context, "ground effects", _groundEffects.Tick);
