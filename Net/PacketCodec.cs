@@ -67,6 +67,8 @@ public static class PacketCodec
             CorpsesPacket.PacketId => CorpsesPacket.Read(ref reader),
             PlaceablesPacket.PacketId => PlaceablesPacket.Read(ref reader),
             PlaceableChangePacket.PacketId => PlaceableChangePacket.Read(ref reader),
+            GroundEffectsPacket.PacketId => GroundEffectsPacket.Read(ref reader),
+            GroundEffectChangePacket.PacketId => GroundEffectChangePacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

@@ -3,6 +3,14 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Shared ground effects.** Where players are together, fire, acid, smoke and poison clouds, blood and lava follow the
+  area owner's: what's missing in a follower's game is made, what the owner hasn't got is taken away, and each takes the
+  owner's turns left, so it ends when the owner's does. What a follower's own player makes (a fire bomb, an acid flask,
+  a smoke cloud) is made on the owner too. Copies don't spread on their own: a cloud's spread comes from the owner's. A
+  place's own (a dungeon's lava) is in every game already and isn't sent. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
