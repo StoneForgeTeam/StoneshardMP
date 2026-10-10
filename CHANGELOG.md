@@ -143,6 +143,12 @@ releases them: the release workflow titles that section with the version, sets i
   closes. Lighting or putting out a fire shows for everyone at once. The caravan camp's foraging harvest and chicken
   coop were already shared as part of the caravan, so what one player gathers there is gone for everyone. Protocol 36.
 
+- **Gathering is shared where players are together.** Herbs, mushrooms, sticks, stones and the other things a place
+  starts with lying around, and berry bushes and nests, were each player's own until the place's save was passed on, so
+  two players could pick the same plant. Now picking one removes it (or leaves the bush bare) in everyone's game at
+  once, and when players come together, whoever runs the place sends what's left, so anything already picked is gone
+  for the newcomer too. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

@@ -21,6 +21,7 @@ using StoneshardMP.Features.Recipes;
 using StoneshardMP.Features.Summons;
 using StoneshardMP.Features.Caravan;
 using StoneshardMP.Features.Trade;
+using StoneshardMP.Features.Gathering;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -79,6 +80,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private JoinManager _join = null!;
     private WorldSync _world = null!;
     private LootSync _loot = null!;
+    private GatherSync _gather = null!;
     private QuestSync _quests = null!;
     private ContractSync _contracts = null!;
 
@@ -144,6 +146,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         new SaveNames(context, _session, PlayerName);
         // Live ground loot where players are together: the place's owner's is the real one.
         _loot = new LootSync(context, _session, _ownership, () => _join.InSharedWorld);
+        // What a place is built with to be picked - herbs, mushrooms, sticks, berry bushes: picked once for everyone.
+        _gather = new GatherSync(context, _session, _ownership, () => _join.InSharedWorld);
         // A client dying: back to its checkpoint (the host's last save), what it picked up since dropped where it fell.
         _death = new DeathSync(context, _session, _join, _ownership, _loot);
         // Doors opened or shut where players are together: the same in every game there.
@@ -187,6 +191,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             {
                 _areaUnits.Clear();
                 _loot.Clear();
+                _gather.Clear();
                 _corpses.Clear();
                 _placeables.Clear();
                 _groundEffects.Clear();
@@ -234,6 +239,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _join.Clear();
         _world.Clear();
         _loot.Clear();
+        _gather.Clear();
         _quests.Clear();
         _contracts.Clear();
     }
@@ -254,6 +260,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             // (Who runs our place, before anything that goes by it.)
             Profiler.Measure(_context, "ownership", _ownership.Tick);
             Profiler.Measure(_context, "loot", _loot.Tick);
+            Profiler.Measure(_context, "gather", _gather.Tick);
             Profiler.Measure(_context, "doors", _doors.Tick);
             Profiler.Measure(_context, "traps", _traps.Tick);
             Profiler.Measure(_context, "corpses", _corpses.Tick);
