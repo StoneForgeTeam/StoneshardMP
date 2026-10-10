@@ -30,8 +30,13 @@ public sealed class DebugDump
 
     public void Tick()
     {
-        if (!(Keyboard.Down(Keyboard.Control) && Keyboard.Down(Keyboard.Shift) && Keyboard.Pressed('D')) || !Gm.InGame)
-            return;
+        if (Keyboard.Down(Keyboard.Control) && Keyboard.Down(Keyboard.Shift) && Keyboard.Pressed('D') && Gm.InGame)
+            Write();
+    }
+
+    /// <summary>The dump, written now (the dev tools' button, or Ctrl+Shift+D).</summary>
+    public void Write()
+    {
         try
         {
             string role = _session.Mode switch

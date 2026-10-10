@@ -90,6 +90,10 @@ public sealed class GroundEffectSync
         context.OnCode("gml_Object_c_skill_aura_smoke_Alarm_2", before: (self, _) => _copies.Contains(self.Persist()));
     }
 
+    /// <summary>Dev tools: a line on where it's got to.</summary>
+    public string DevSummary => $"copies {_copies.Count}, ours unsent {_ours.Count}, pending {_pending.Count}, owner list "
+        + (_snapshot == null ? "none yet" : _snapshot.Count.ToString()) + (_worldTurn > 0 ? ", in a world turn" : "");
+
     public void Clear()
     {
         _place = null;

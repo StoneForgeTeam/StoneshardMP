@@ -50,6 +50,10 @@ public sealed class PlaceableSync
         context.OnCode("gml_Object_o_runic_boulder_Alarm_1", before: (self, _) => _copies.Contains(self.Persist()));
     }
 
+    /// <summary>Dev tools: a line on where it's got to.</summary>
+    public string DevSummary => $"seen {_seen.Count}, copies {_copies.Count}, pending {_pending.Count}, taken {_taken.Count}, owner list "
+        + (_snapshot == null ? "none yet" : _snapshot.Count.ToString());
+
     public void Clear()
     {
         _place = null;

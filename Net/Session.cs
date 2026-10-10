@@ -120,6 +120,7 @@ public sealed class Session : INetEventListener
         var gone = _players.Values.ToList();
         _players.Clear();
         _peers.Clear();
+        _delayed.Clear();
         _kicked.Clear();
         Mode = SessionMode.Idle;
         Slot = -1;
@@ -134,6 +135,11 @@ public sealed class Session : INetEventListener
         if (_net == null)
             return;
         _net.PollEvents();
+        // (Packets held back by a simulated delay, once they're due.)
+        long now = Environment.TickCount64;
+        while (_delayed.Count > 0 && _delayed.Peek().Due <= now)
+            _delayed.Dequeue().Send();
+        NetStats.Roll();
         foreach (var (slot, peer) in _peers)
             if (_players.TryGetValue(slot, out var player))
                 player.Ping = peer.RoundTripTime;
@@ -144,6 +150,25 @@ public sealed class Session : INetEventListener
     {
         if (_net == null || !Connected) return;
         byte[] data = PacketCodec.Encode(packet, Slot, to);
+        NetStats.Sent(typeof(T).Name, data.Length, to);
+        if (SimulatedDelayMs > 0)
+        {
+            // (Dev tools: every packet we send held back a while, in order.)
+            _delayed.Enqueue((Environment.TickCount64 + SimulatedDelayMs, () => Transmit(data, to, delivery)));
+            return;
+        }
+        Transmit(data, to, delivery);
+    }
+
+    /// <summary>Dev tools: how long every packet we send is held back before it goes (0: not), to try the game on a slow
+    /// connection - both ways, if each player sets it.</summary>
+    public int SimulatedDelayMs { get; set; }
+
+    private readonly Queue<(long Due, Action Send)> _delayed = new();
+
+    private void Transmit(byte[] data, int to, DeliveryMethod delivery)
+    {
+        if (_net == null || !Connected) return;
         if (Mode == SessionMode.Client)
         {
             if (_peers.TryGetValue(0, out var host)) host.Send(data, delivery);
@@ -270,6 +295,7 @@ public sealed class Session : INetEventListener
         {
             byte[] bytes = reader.GetRemainingBytes();
             IPacket packet = PacketCodec.Decode(bytes, out byte from, out byte to);
+            NetStats.Received(packet.GetType().Name, bytes.Length, Mode == SessionMode.Host && peer.Tag is int sender ? sender : from);
             if (Mode == SessionMode.Host)
             {
                 if (peer.Tag is not int slot) return;

@@ -72,6 +72,8 @@ public static class PacketCodec
             AssaultPacket.PacketId => AssaultPacket.Read(ref reader),
             AssaultWarningPacket.PacketId => AssaultWarningPacket.Read(ref reader),
             TalkPacket.PacketId => TalkPacket.Read(ref reader),
+            UnitsViewRequestPacket.PacketId => UnitsViewRequestPacket.Read(ref reader),
+            UnitsViewPacket.PacketId => UnitsViewPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

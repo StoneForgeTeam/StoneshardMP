@@ -74,6 +74,10 @@ public sealed class TalkSync
         context.OnCode("gml_Object_o_NPC_Other_10", before: (self, _) => Together && InTalk(self.Persist()));
     }
 
+    /// <summary>Dev tools: a line on where it's got to.</summary>
+    public string DevSummary => (_listenSlot >= 0 ? $"listening to #{_listenSlot}; " : _ourNpc.IsNone ? "" : $"talking to {IdOf(_ourNpc)}; ")
+        + (_remote.Count == 0 ? "no one else" : string.Join(", ", _remote.Select(r => $"#{r.Key} {r.Value.Talk.Kind} {r.Value.Talk.NpcName} ({r.Value.Talk.NpcId})")));
+
     public void Clear()
     {
         _remote.Clear();

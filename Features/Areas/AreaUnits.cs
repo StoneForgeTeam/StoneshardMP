@@ -107,6 +107,17 @@ public sealed class AreaUnits
     /// what that does to them isn't ours to send the owner.</summary>
     public bool Applying { get; private set; }
 
+    /// <summary>Dev tools - owner: our units with their sync ids.</summary>
+    public IEnumerable<(long Id, Instance Unit)> Synced => _syncIds.Select(p => (p.Value, p.Key)).ToList();
+
+    /// <summary>Dev tools - follower: our copies, by the owner's sync id they're bound to.</summary>
+    public IEnumerable<(long Id, Instance Unit)> Bound => _bound.Select(p => (p.Key, p.Value)).ToList();
+
+    /// <summary>Dev tools: a line on where it's got to.</summary>
+    public string DevSummary => $"synced {_syncIds.Count}, bound {_bound.Count}, in roster {_current.Count}, ever bound {_everBound.Count}"
+        + (_roster != null ? $", applying {_next}/{_roster.Length}" : "") + (_waiting != null ? ", one waiting" : "")
+        + $", moved by us {_movedByUs.Count}, effects by us {_effectsByUs.Count}";
+
     /// <summary>Follower: our own action moved one of our copies of the owner's units to this cell (the owner's been told):
     /// it isn't put back where the roster has it until the roster's caught up, or a moment's passed.</summary>
     public void Moved(Instance unit, Cell cell) => _movedByUs[unit.Persist()] = (cell, Environment.TickCount64 + CatchUpMs);

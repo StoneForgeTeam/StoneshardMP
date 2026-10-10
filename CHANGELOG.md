@@ -27,6 +27,15 @@ releases them: the release workflow titles that section with the version, sets i
   it. An NPC in a conversation or trade stays put on its turns. A speech cloud bobs over a player who's talking or
   trading, and over their NPC. Protocol 36.
 
+- **Dev tools for the mod's contributors** (`mod.json`'s `contributors`): Ctrl+Shift+M opens a window, on the menu
+  and in the game, with tabs for the session (players, versions, pings, places, how fresh their state is), the area
+  (its owner and followers, and what each feature is holding), the unit under the mouse (object, cell, health, AI
+  state, sync ids, the ground effects and items on its cell), network traffic (totals, rate, the biggest packet types,
+  the latest packets, and a simulated delay on what we send), a desync check (our units against the other games'
+  here, differences listed and marked on the map), a log, and tools: sync ids over units, the cell under the mouse,
+  the debug dump, starting the place's syncing over, teleporting (to the mouse, to a player) and passing a turn.
+  Every tab can be copied to the clipboard. Two packets (50, 51) for the desync check; protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.

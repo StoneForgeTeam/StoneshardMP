@@ -15,6 +15,7 @@ using StoneshardMP.Features.Placeables;
 using StoneshardMP.Features.GroundEffects;
 using StoneshardMP.Features.Crimes;
 using StoneshardMP.Features.Talk;
+using StoneshardMP.Features.Dev;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -45,6 +46,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private CombatSync _combat = null!;
     private CrimeSync _crimes = null!;
     private TalkSync _talk = null!;
+    private DevTools _dev = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -133,6 +135,37 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // One set of contracts: the host's, kept alike, with deadlines on the host's clock.
         _contracts = new ContractSync(context, _session, _join, _quests);
         _menu = new MultiplayerMenu(context, _session, settings, PlayerName, join, () => _join.Status, _slots, _roster, lobby);
+        // Dev tools for the mod's contributors (mod.json): Ctrl+Shift+M.
+        _dev = new DevTools(context, new DevHooks
+        {
+            Session = _session,
+            Ownership = _ownership,
+            AreaUnits = _areaUnits,
+            Players = _players,
+            InSharedWorld = () => _join.InSharedWorld,
+            Dump = _dump.Write,
+            Features = new (string, Func<string>)[]
+            {
+                ("units", () => _areaUnits.DevSummary),
+                ("placeables", () => _placeables.DevSummary),
+                ("ground effects", () => _groundEffects.DevSummary),
+                ("talk", () => _talk.DevSummary),
+                ("rounds", () => _rounds.Active ? "a round is on" : "no round"),
+            },
+            // (What each keeps for the place we're in: dropped, so each starts over and asks the owner again.)
+            Resync = () =>
+            {
+                _areaUnits.Clear();
+                _loot.Clear();
+                _corpses.Clear();
+                _placeables.Clear();
+                _groundEffects.Clear();
+                _chests.Clear();
+                _breakables.Clear();
+                _traps.Clear();
+                _doors.Clear();
+            },
+        });
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
     }
 
@@ -204,6 +237,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "rounds", _rounds.Tick);
             Profiler.Measure(_context, "clock", _clock.Tick);
             Profiler.Measure(_context, "dump", _dump.Tick);
+            Profiler.Measure(_context, "dev tools", _dev.Tick);
         }
     }
 
