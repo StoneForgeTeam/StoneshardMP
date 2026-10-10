@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
+using StoneshardMP.Features.Summons;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
 
@@ -123,6 +124,7 @@ public sealed class CombatSync
         session.On<UnitEffectPacket>(ReceiveEffect);
         session.On<UnitHitPacket>(ReceiveHit);
         session.On<EnemyAttackPacket>(ReceiveAttack);
+        session.On<SummonAttackedPacket>(ReceiveSummonAttack);
         session.On<UnitKilledPacket>(ReceiveKill);
     }
 
@@ -157,7 +159,9 @@ public sealed class CombatSync
 
     // Whether an instance is our own player's character.
     private static bool IsOurPlayer(Instance unit)
-        => !unit.IsNone && unit.Exists && OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist());
+        => !unit.IsNone && unit.Exists && (OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist())
+            // (Our summon's doing is ours, as our player's is: its caster's game runs it - SummonSync.)
+            || SummonSync.IsOurs(unit));
 
     // ---- a follower's attacks ----
 
@@ -236,7 +240,11 @@ public sealed class CombatSync
         GmValue slot = target.Get("mp_slot");
         if (slot.IsUndefined || _areaUnits.SyncIdOf(attacker) is not { } unitId)
             return true;
-        _session.Send(new EnemyAttackPacket(unitId), slot.AsInt);
+        // (A summon's stand-in: its caster's game has the real one.)
+        if (target.Get("mp_summon") is { Kind: GmKind.Real } summon)
+            _session.Send(new SummonAttackedPacket(unitId, (long)summon.AsReal), slot.AsInt);
+        else
+            _session.Send(new EnemyAttackPacket(unitId), slot.AsInt);
         return true;
     }
 
@@ -254,6 +262,19 @@ public sealed class CombatSync
         }
         _hostsAttack++;
         try { StoneForge.Combat.Attack(unit, player, forced: true); }
+        finally { _hostsAttack--; }
+    }
+
+    // Caster: one of the owner's units attacks our summon - our copy of it attacks the real summon, as it attacks us.
+    private void ReceiveSummonAttack(RemotePlayer from, SummonAttackedPacket attack)
+    {
+        if (!Following || from.Slot != _ownership.Owner || !_inSharedWorld() || !Gm.InGame)
+            return;
+        Instance unit = _areaUnits.LocalOf(attack.UnitId), summon = Instance.FromId((int)attack.SummonId);
+        if (unit.IsNone || !summon.Exists || !SummonSync.IsOurs(summon))
+            return;
+        _hostsAttack++;
+        try { StoneForge.Combat.Attack(unit, summon, forced: true); }
         finally { _hostsAttack--; }
     }
 

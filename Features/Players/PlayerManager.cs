@@ -86,6 +86,26 @@ public sealed class PlayerManager
     /// another player's on.</summary>
     public Func<bool> OwnsArea { get; set; } = () => false;
 
+    /// <summary>A summon's stand-in - the same object, marked mp_summon (SummonSync) - stepped and drawn by SummonSync.</summary>
+    public Action<Instance>? SummonStep { get; set; }
+    public Action<Instance>? SummonDraw { get; set; }
+
+    /// <summary>A new stand-in in a cell, for a summon (SummonSync marks it); none before the game has our object.</summary>
+    public Instance CreateProxy(Cell cell)
+        => _object.Index < 0 ? default : _object.Create(cell.X * 26 + 13, cell.Y * 26 + 13, -(cell.Y * 26 + 13)).Persist();
+
+    /// <summary>A player's character sprite as their stand-in shows it now (-1: none) - what an Astral Phantasm of theirs,
+    /// a copy of it, is drawn from.</summary>
+    public int? LookOf(int slot)
+    {
+        if (!_views.TryGetValue(slot, out var view) || view.Sprites is not { IsDisposed: false } sprites || sprites.All.Count == 0)
+            return null;
+        int row = view.Player.State is { } state ? Math.Clamp((int)state.Row, 0, sprites.All.Count - 1) : 0;
+        return sprites.All[row];
+    }
+
+    private static bool IsSummon(Instance self) => !self["mp_summon"].IsUndefined;
+
     // Every frame (the mod's Tick).
     public void Tick()
     {
@@ -176,6 +196,11 @@ public sealed class PlayerManager
     // A player's Step: follows their state - smoothly for small moves, at once for jumps.
     internal void Step(Instance self)
     {
+        if (IsSummon(self))
+        {
+            SummonStep?.Invoke(self);
+            return;
+        }
         if (ViewOf(self) is not { Player.State: { } state } view)
             return;
         if (!view.Placed || Math.Abs(view.VisX - state.X) + Math.Abs(view.VisY - state.Y) > 104)
@@ -227,6 +252,8 @@ public sealed class PlayerManager
     // A player's Draw Begin: its sprites built again when their look has changed.
     internal void Build(Instance self)
     {
+        if (IsSummon(self))
+            return;
         if (ViewOf(self) is not { } view || view.BuiltVersion == view.Player.LookVersion || view.Player.Look.Length == 0)
             return;
         view.BuiltVersion = view.Player.LookVersion;
@@ -243,6 +270,11 @@ public sealed class PlayerManager
     // A player's Draw: their shadow, their look, a name tag.
     internal void Draw(Instance self)
     {
+        if (IsSummon(self))
+        {
+            SummonDraw?.Invoke(self);
+            return;
+        }
         if (ViewOf(self) is not { Player.State: { } state, Sprites: { IsDisposed: false } sprites } view || !state.Visible)
             return;
         // (The row their game draws them from: o_player's pick of its five.)

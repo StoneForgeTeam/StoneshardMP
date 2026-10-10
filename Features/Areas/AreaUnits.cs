@@ -6,6 +6,7 @@ using LiteNetLib;
 using StoneshardMP.Net.Packets;
 using StoneForge;
 using StoneshardMP.Features.Players;
+using StoneshardMP.Features.Summons;
 using StoneshardMP.Net;
 
 namespace StoneshardMP.Features.Areas;
@@ -276,7 +277,8 @@ public sealed class AreaUnits
         foreach (Instance unit in Instances.All(GameObjectId.o_enemy))
         {
             int obj = unit.Get("object_index").AsInt;
-            if (obj == playerObject)
+            // (Another player's stand-in, or a player's summon: its caster's game runs it - SummonSync.)
+            if (obj == playerObject || SummonSync.IsPlayers(unit))
                 continue;
             var look = new JsonObject();
             foreach (string key in LookKeys)
@@ -520,7 +522,9 @@ public sealed class AreaUnits
             _turnsSize = Units.TurnsCount();
         }
         int playerObject = _playerObject();
-        foreach (Instance gone in Instances.All(GameObjectId.o_enemy).Where(unit => !_current.Contains(unit) && ObjectOf(unit) != playerObject))
+        // (Not a player's stand-in, nor our player's summon: ours - SummonSync.)
+        foreach (Instance gone in Instances.All(GameObjectId.o_enemy).Where(unit => !_current.Contains(unit) && ObjectOf(unit) != playerObject
+            && !SummonSync.IsOurs(unit)))
         {
             Units.Remove(gone);
             _applied.Remove(gone);

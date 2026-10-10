@@ -99,6 +99,12 @@ releases them: the release workflow titles that section with the version, sets i
   just stepped into, before it knew. Now the owner moves its unit to a free cell beside it, and a follower never puts
   one of the owner's units on its own player's cell meanwhile.
 
+- **Summons belong to their caster.** An Astral Phantasm, a Mana Crystal: the caster's game runs it, and everyone
+  else shows a stand-in for it - its own sprite, or, for a phantasm (a copy of its caster made in their game only),
+  the caster's look in arcane violet. Before, a follower's summon was taken out of its own game, and an owner's
+  phantasm showed only particles elsewhere. Its hits go to the owner as its caster's do, and the owner's units
+  attacking its stand-in are played out against the real one in the caster's game. Protocol 36.
+
 ## 0.3.0
 
 - Built against StoneForge 0.9.0. `mod.json` lists the mod's contributors, for StoneForge's development tools.
