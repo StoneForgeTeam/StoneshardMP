@@ -13,6 +13,7 @@ using StoneshardMP.Features.Traps;
 using StoneshardMP.Features.Corpses;
 using StoneshardMP.Features.Placeables;
 using StoneshardMP.Features.GroundEffects;
+using StoneshardMP.Features.Bombs;
 using StoneshardMP.Features.Crimes;
 using StoneshardMP.Features.Talk;
 using StoneshardMP.Features.Dev;
@@ -68,6 +69,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private CorpseSync _corpses = null!;
     private PlaceableSync _placeables = null!;
     private GroundEffectSync _groundEffects = null!;
+    private BombSync _bombs = null!;
     private ChestSync _chests = null!;
     private BreakableSync _breakables = null!;
     private PersonalStash _stash = null!;
@@ -159,6 +161,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _corpses = new CorpseSync(_session, _ownership, () => _join.InSharedWorld);
         _placeables = new PlaceableSync(context, _session, _ownership, () => _join.InSharedWorld);
         _groundEffects = new GroundEffectSync(context, _session, _ownership, () => _join.InSharedWorld);
+        // Thrown bombs where players are together: their burst seen and heard by all, a jar's swarm the owner's.
+        _bombs = new BombSync(context, _session, _ownership, () => _join.InSharedWorld);
         // Chests, barrels and tombs where players are together: one set of contents, one player in each at a time.
         _chests = new ChestSync(context, _session, _ownership, () => _join.InSharedWorld);
         // The chest by the bed: each player's own stash in it, kept in the host's world.
@@ -186,6 +190,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
                 ("units", () => _areaUnits.DevSummary),
                 ("placeables", () => _placeables.DevSummary),
                 ("ground effects", () => _groundEffects.DevSummary),
+                ("bombs", () => _bombs.DevSummary),
                 ("talk", () => _talk.DevSummary),
                 ("rounds", () => _rounds.Active ? "a round is on" : "no round"),
             },
@@ -226,6 +231,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _corpses.Clear();
         _placeables.Clear();
         _groundEffects.Clear();
+        _bombs.Clear();
         _talk.Clear();
         _death.Clear();
         _sleep.Clear();

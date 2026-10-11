@@ -5,6 +5,14 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Thrown bombs where players are together.** A Smoke Bomb, Nistrian Flame Flask, Spider Blood Flask or Deathstinger
+  Jar bursts in its thrower's game; the others only saw the bottle vanish. Now their games show and sound the burst where
+  it landed - the smoke's puff, the acid's splash, the flame flask's sparks, scorch and hole, the breaking glass - for
+  show only: the smoke, fire and acid pool it leaves already come with the ground effects, and its hit with combat.
+  **Fixed: a follower's Deathstinger Jar let its swarm out in the follower's game alone,** where it was then taken away
+  as a unit the area's owner hadn't got. The owner lets the swarm out in the same cell now, and everyone gets it with
+  the owner's units. Two packets (67, 68); protocol 37.
+
 - **Shared ground effects.** Where players are together, fire, acid, smoke and poison clouds, blood and lava follow the
   area owner's: what's missing in a follower's game is made, what the owner hasn't got is taken away, and each takes the
   owner's turns left, so it ends when the owner's does. What a follower's own player makes (a fire bomb, an acid flask,
