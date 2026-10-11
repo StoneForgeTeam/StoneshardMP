@@ -3,6 +3,16 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Your saves are protected**, with StoneForge 0.9.4 or newer (StoneForge does it): every save the game writes over
+  or deletes is backed up first (`%LOCALAPPDATA%\StoneShard\StoneForge\save-backups`, the newest 20 per character),
+  and after a mod's error the save being played is kept and you're asked whether to leave without saving.
+
+- **Saves are checked before they're written.** Item lists that point at nothing - in containers, fires' cooking
+  pots and corpses, here or in any place's saved state - are taken out before the game saves, so a save can't keep
+  what crashed the cooking window or loaded as the wrong items. What's taken out is logged.
+
 ## 0.4.1
 
 - **Steam invites join.** Accepting a friend's invite in Steam - their lobby invite (Invite Friends), Steam's own

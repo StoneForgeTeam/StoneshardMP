@@ -148,6 +148,9 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _world = new WorldSync(context, _session, _join, _ownership);
         // A multiplayer world's saves are named for who plays in it.
         new SaveNames(context, _session, PlayerName);
+        // Before each save, what we know can go wrong put right. (Backing saves up, and asking about one after an error,
+        // are StoneForge's.)
+        new SaveCheck(context);
         // Live ground loot where players are together: the place's owner's is the real one.
         _loot = new LootSync(context, _session, _ownership, () => _join.InSharedWorld);
         // What a place is built with to be picked - herbs, mushrooms, sticks, berry bushes: picked once for everyone.

@@ -28,12 +28,62 @@ internal static class ItemLists
     public static void GuardLoading(ModContext context)
         => Scripts.scr_loadContainerContent.Before(context, call =>
         {
-            if (call.Args.Length > 0 && DsList.From(call.Args[0]) is { Exists: true } list)
-                for (int i = list.Count - 1; i >= 0; i--)
-                    if (!IsItem(list[i]))
-                        list.RemoveAt(i);
+            if (call.Args.Length > 0)
+                CleanList(call.Args[0]);
             return false;
         });
+
+    /// <summary>A container's or corpse's live list of items (its loot_list...) with what isn't one of this game's items
+    /// taken out; how many were.</summary>
+    public static int CleanList(GmValue list)
+    {
+        if (DsList.From(list) is not { Exists: true } items)
+            return 0;
+        int removed = 0;
+        for (int i = items.Count - 1; i >= 0; i--)
+            if (!IsItem(items[i]))
+            {
+                items.RemoveAt(i);
+                removed++;
+            }
+        return removed;
+    }
+
+    /// <summary>A saved state's JSON (a location's entities, a corpse) with the numbers in its item lists that aren't one
+    /// of this game's items taken out; how many were (0: the JSON as it was).</summary>
+    public static (string Json, int Removed) Clean(string json)
+    {
+        if (!Keys.Any(key => json.Contains('"' + key + '"')) || JsonNode.Parse(json) is not { } root)
+            return (json, 0);
+        int removed = Clean(root);
+        return removed > 0 ? (root.ToJsonString(), removed) : (json, 0);
+    }
+
+    private static int Clean(JsonNode? node)
+    {
+        int removed = 0;
+        if (node is JsonObject map)
+        {
+            foreach (var (key, value) in map.ToList())
+            {
+                if (Keys.Contains(key) && value is JsonArray items)
+                {
+                    for (int i = items.Count - 1; i >= 0; i--)
+                        if (items[i] is JsonValue number && number.TryGetValue(out double id) && !IsItem(id))
+                        {
+                            items.RemoveAt(i);
+                            removed++;
+                        }
+                }
+                else
+                    removed += Clean(value);
+            }
+        }
+        else if (node is JsonArray array)
+            foreach (JsonNode? item in array)
+                removed += Clean(item);
+        return removed;
+    }
 
     // (An item as the game keeps one: a list of its own, first its object's or weapon's name - or its object's number,
     // which the loader takes too.)

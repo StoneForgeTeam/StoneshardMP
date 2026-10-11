@@ -42,6 +42,16 @@ CHANGELOG.md for what works so far.
 - **Settings** (your name, the join address, name tags, party frames, the port and player limit) are on StoneshardMP's
   page in the Mods window.
 
+## Save backups
+
+StoneForge backs up every save the game writes over or deletes, to
+`%LOCALAPPDATA%\StoneShard\StoneForge\save-backups\<character>\<time>_<save>` (the newest 20 per character); the
+game's own saves are in `%LOCALAPPDATA%\StoneShard\characters_v1\<character>\<save>`. To restore one, close the game
+and copy the backup's folder into its character's folder there, renamed to the save's own name (`autosave_1`), replacing
+the one that went wrong. After a mod's error, StoneForge also keeps the save being played (`before-error_...`, never
+deleted) and asks whether to leave without saving. Before every save, StoneshardMP takes out broken item lists in
+containers, cooking pots and corpses (and logs it), so a save can't keep them.
+
 To test with two games on one PC, add `steam_appid.txt` (containing `625960`) to the game folder, then start the
 game twice.
 
