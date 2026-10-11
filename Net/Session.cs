@@ -19,7 +19,7 @@ namespace StoneshardMP.Net;
 public sealed class Session : INetEventListener
 {
     // What's sent between games: raise it whenever that changes, so mismatched games refuse each other.
-    public const ushort Protocol = 39;
+    public const ushort Protocol = 40;
     public const byte Everyone = 255;
     public const int MaxPlayers = 8;
     // (The connection request's key: only StoneshardMP games answer each other.)
@@ -219,7 +219,8 @@ public sealed class Session : INetEventListener
     {
         // (Long enough for a game frozen a while - a big save loading - not to look gone.)
         DisconnectTimeout = 30000,
-        UpdateTime = 15,
+        // (How often its thread sends what's queued: often, so a packet doesn't wait - it was 15.)
+        UpdateTime = 5,
         AutoRecycle = true,
         IPv6Enabled = false,
     };

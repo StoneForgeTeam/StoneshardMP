@@ -3,6 +3,17 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Lower ping through Steam, and other players no longer teleport.**
+  - Steam connections now use Steam's newer networking (Valve's relay network, or straight between the PCs when
+    Steam can manage it) in place of its old peer-to-peer, whose relays could add a lot of ping.
+  - The tunnel no longer waits ~15 ms at each end before passing a packet on (Windows' coarse timer), and packets go
+    out every 5 ms instead of 15.
+  - Other players are drawn a tenth of a second behind, gliding between the positions they've had, so late packets
+    followed by a burst look like a steady walk instead of stopping and jumping. Real jumps (doors) still snap.
+  - Dev tools' steam line shows each Steam player's ping and whether the link is relayed or direct. Protocol 40.
+
 ## 0.4.2
 
 - **Your saves are protected**, with StoneForge 0.9.4 or newer (StoneForge does it): every save the game writes over

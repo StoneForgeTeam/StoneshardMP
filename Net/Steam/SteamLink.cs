@@ -48,10 +48,24 @@ internal sealed class SteamLink
     public string Summary => _state switch
     {
         State.Idle => "off",
-        State.Hosting => $"hosting lobby {_lobby}, {_tunnel?.Players ?? 0} by Steam, sent {_tunnel?.Sent ?? 0} B, received {_tunnel?.Received ?? 0} B",
-        State.Joined => $"joined lobby {_lobby}, sent {_tunnel?.Sent ?? 0} B, received {_tunnel?.Received ?? 0} B",
+        State.Hosting => $"hosting lobby {_lobby}, {_tunnel?.Players ?? 0} by Steam, sent {_tunnel?.Sent ?? 0} B, received {_tunnel?.Received ?? 0} B{Links()}",
+        State.Joined => $"joined lobby {_lobby}, sent {_tunnel?.Sent ?? 0} B, received {_tunnel?.Received ?? 0} B{Links()}",
         _ => _state.ToString().ToLowerInvariant(),
     };
+
+    // (Each Steam player's link: who, Steam's ping to them, and whether it goes by Valve's relays or straight there.)
+    private string Links()
+    {
+        if (_tunnel == null)
+            return "";
+        var links = _tunnel.Peers.Select(peer =>
+        {
+            var (ping, relayed) = SteamApi.Link(peer);
+            string name = SteamApi.FriendName(peer);
+            return $"{(name.Length > 0 ? name : peer.ToString())} {(ping >= 0 ? ping + " ms" : "?")} {(relayed ? "relayed" : "direct")}";
+        }).ToList();
+        return links.Count > 0 ? "; " + string.Join(", ", links) : "";
+    }
 
     /// <summary>Hosting: a lobby for our LiteNetLib on <paramref name="port"/>.</summary>
     public void Host(int port, int limit, string name)

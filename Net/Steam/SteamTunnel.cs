@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace StoneshardMP.Net.Steam;
 
-// LiteNetLib over Steam: its UDP datagrams carried as Steam peer-to-peer packets (through NATs, by Valve's relays when
-// there's no direct way), so LiteNetLib keeps doing all it does - reliability, order, pings, timeouts - and only the
-// address it talks to changes: one on this machine.
+// LiteNetLib over Steam: its UDP datagrams carried as Steam messages (ISteamNetworkingMessages: straight between the
+// two PCs where Steam can punch through, else by Valve's relay network), so LiteNetLib keeps doing all it does -
+// reliability, order, pings, timeouts - and only the address it talks to changes: one on this machine.
 // - A client's: a socket on 127.0.0.1 stands in for the host. Our LiteNetLib connects to it; what it sends goes to the
 //   host's Steam id, and what comes from the host goes back to it.
 // - The host's: a socket on 127.0.0.1 for each player who comes by Steam, so the host's LiteNetLib (on its usual port)
@@ -18,6 +19,8 @@ namespace StoneshardMP.Net.Steam;
 // A Steam session opens when one side sends first; the host can't wait for that (accepting a stranger's is a callback,
 // which only the game's extension gets), so it greets each member as they come into its lobby (Greet), which opens it.
 // The packets are moved on a thread of the tunnel's own, as LiteNetLib's are: a frame's wait would slow every reply.
+// Idle, it waits a millisecond - which Windows makes 15 unless asked for its finer timer (timeBeginPeriod, while the
+// tunnel runs): 15 ms at each end, both ways, was most of what the tunnel added to the ping.
 internal sealed class SteamTunnel : IDisposable
 {
     private const int DataChannel = 5, GreetChannel = 6;
@@ -36,6 +39,10 @@ internal sealed class SteamTunnel : IDisposable
     private volatile bool _running = true;
     private readonly byte[] _buffer = new byte[64 * 1024];
 
+    [DllImport("winmm.dll")] private static extern uint timeBeginPeriod(uint period);
+    [DllImport("winmm.dll")] private static extern uint timeEndPeriod(uint period);
+    private bool _finerTimer;
+
     private SteamTunnel(ulong host, int hostPort, bool client)
     {
         _host = host;
@@ -46,6 +53,8 @@ internal sealed class SteamTunnel : IDisposable
             Port = ((IPEndPoint)_client.LocalEndPoint!).Port;
         }
         SteamApi.AllowRelay();
+        try { _finerTimer = timeBeginPeriod(1) == 0; }
+        catch (Exception) { }
         _thread = new Thread(Run) { IsBackground = true, Name = "StoneshardMP Steam tunnel" };
         _thread.Start();
     }
@@ -60,6 +69,9 @@ internal sealed class SteamTunnel : IDisposable
     public int Port { get; }
 
     public int Players { get; private set; }
+
+    /// <summary>The Steam players the tunnel's for - the host, or the lobby's members.</summary>
+    public IEnumerable<ulong> Peers => _host != 0 ? new[] { _host } : _members;
     public long Sent, Received;
 
     /// <summary>Host, on the game's thread: who's in our lobby - each greeted once, opening their session.</summary>
@@ -72,7 +84,7 @@ internal sealed class SteamTunnel : IDisposable
             if (!_greeted.Add(member))
                 continue;
             SteamApi.Accept(member);
-            SteamApi.Send(member, new byte[] { 1 }, 1, GreetChannel);
+            SteamApi.Send(member, new byte[] { 1 }, 1, GreetChannel, sure: true);
         }
         _greeted.IntersectWith(set);
     }
@@ -81,6 +93,12 @@ internal sealed class SteamTunnel : IDisposable
     {
         _running = false;
         _thread.Join(500);
+        if (_finerTimer)
+        {
+            try { timeEndPeriod(1); }
+            catch (Exception) { }
+            _finerTimer = false;
+        }
         _client?.Dispose();
         foreach (var (remote, entry) in _remotes)
         {

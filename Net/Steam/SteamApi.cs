@@ -12,9 +12,6 @@ namespace StoneshardMP.Net.Steam;
 internal static class SteamApi
 {
     private const string Dll = "steam_api64";
-    // (ISteamNetworking's send types: unreliable up to 1200 bytes; reliable up to 1 MB.)
-    public const int SendUnreliable = 0, SendReliable = 2;
-    public const int UnreliableMax = 1200;
     // (Lobby types.)
     public const int LobbyFriendsOnly = 1;
     // (Call results' callback ids: LobbyCreated_t, LobbyEnter_t.)
@@ -28,7 +25,6 @@ internal static class SteamApi
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamUser_v021();
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamFriends_v017();
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamMatchmaking_v009();
-    [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamNetworking_v006();
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamUtils_v010();
 
     [DllImport(Dll)] private static extern ulong SteamAPI_ISteamUser_GetSteamID(IntPtr self);
@@ -55,18 +51,6 @@ internal static class SteamApi
     [DllImport(Dll)] private static extern int SteamAPI_ISteamMatchmaking_GetNumLobbyMembers(IntPtr self, ulong lobby);
     [DllImport(Dll)] private static extern ulong SteamAPI_ISteamMatchmaking_GetLobbyMemberByIndex(IntPtr self, ulong lobby, int index);
 
-    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool SteamAPI_ISteamNetworking_SendP2PPacket(IntPtr self, ulong remote, byte[] data, uint size, int type, int channel);
-    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool SteamAPI_ISteamNetworking_IsP2PPacketAvailable(IntPtr self, out uint size, int channel);
-    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool SteamAPI_ISteamNetworking_ReadP2PPacket(IntPtr self, byte[] dest, uint capacity, out uint size, out ulong remote, int channel);
-    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool SteamAPI_ISteamNetworking_AcceptP2PSessionWithUser(IntPtr self, ulong remote);
-    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool SteamAPI_ISteamNetworking_CloseP2PSessionWithUser(IntPtr self, ulong remote);
-    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
-    private static extern bool SteamAPI_ISteamNetworking_AllowP2PPacketRelay(IntPtr self, [MarshalAs(UnmanagedType.U1)] bool allow);
 
     [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool SteamAPI_ISteamUtils_IsAPICallCompleted(IntPtr self, ulong call, [MarshalAs(UnmanagedType.U1)] out bool failed);
@@ -90,41 +74,89 @@ internal static class SteamApi
     {
         get
         {
-            try { return SteamAPI_SteamUser_v021() != IntPtr.Zero && SteamAPI_SteamNetworking_v006() != IntPtr.Zero; }
+            try { return SteamAPI_SteamUser_v021() != IntPtr.Zero && SteamAPI_SteamNetworkingMessages_SteamAPI_v002() != IntPtr.Zero; }
             catch (Exception) { return false; }
         }
     }
 
     public static ulong MySteamId => SteamAPI_ISteamUser_GetSteamID(SteamAPI_SteamUser_v021());
 
-    // ---- peer-to-peer ----
+    // ---- peer-to-peer: ISteamNetworkingMessages (Valve's relay network, SDR) ----
+    // (A player as Steam's messages know one: SteamNetworkingIdentity - its type, 16 a Steam id; its size, 8; the id.
+    // 136 bytes in all. A message: SteamNetworkingMessage_t - its data at 0, size at 8, sender's identity at 16.)
+    private const int IdentitySize = 136, IdentitySteamId = 16;
+    // (Send flags: unreliable without Nagle's wait, and a broken session started again by itself - LiteNetLib inside
+    // does its own reliability; the greeting, reliable.)
+    private const int SendFast = 1 | 32, SendSure = 8 | 32;
 
-    public static bool Send(ulong remote, byte[] data, int size, int channel)
-        => SteamAPI_ISteamNetworking_SendP2PPacket(SteamAPI_SteamNetworking_v006(), remote, data, (uint)size,
-            size <= UnreliableMax ? SendUnreliable : SendReliable, channel);
+    [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamNetworkingMessages_SteamAPI_v002();
+    [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamNetworkingUtils_SteamAPI_v004();
+    [DllImport(Dll)] private static extern int SteamAPI_ISteamNetworkingMessages_SendMessageToUser(IntPtr self, byte[] identity, byte[] data, uint size, int flags, int channel);
+    [DllImport(Dll)] private static extern int SteamAPI_ISteamNetworkingMessages_ReceiveMessagesOnChannel(IntPtr self, int channel, IntPtr[] messages, int max);
+    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser(IntPtr self, byte[] identity);
+    [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser(IntPtr self, byte[] identity);
+    [DllImport(Dll)] private static extern int SteamAPI_ISteamNetworkingMessages_GetSessionConnectionInfo(IntPtr self, byte[] identity, byte[] info, byte[] status);
+    [DllImport(Dll)] private static extern void SteamAPI_SteamNetworkingMessage_t_Release(IntPtr message);
+    [DllImport(Dll)] private static extern void SteamAPI_ISteamNetworkingUtils_InitRelayNetworkAccess(IntPtr self);
 
-    /// <summary>The next packet on a channel into <paramref name="buffer"/> (its size and sender); false if there's none.</summary>
-    public static bool Receive(byte[] buffer, int channel, out int size, out ulong remote)
+    private static IntPtr Messages => SteamAPI_SteamNetworkingMessages_SteamAPI_v002();
+
+    private static byte[] Identity(ulong steamId)
     {
-        IntPtr net = SteamAPI_SteamNetworking_v006();
-        size = 0;
-        remote = 0;
-        if (!SteamAPI_ISteamNetworking_IsP2PPacketAvailable(net, out uint waiting, channel) || waiting > buffer.Length)
-        {
-            // (Too big for us: read and dropped, so it doesn't block the channel.)
-            if (waiting > buffer.Length)
-                SteamAPI_ISteamNetworking_ReadP2PPacket(net, new byte[waiting], waiting, out _, out _, channel);
-            return false;
-        }
-        if (!SteamAPI_ISteamNetworking_ReadP2PPacket(net, buffer, (uint)buffer.Length, out uint read, out remote, channel))
-            return false;
-        size = (int)read;
-        return true;
+        var identity = new byte[IdentitySize];
+        BitConverter.GetBytes(IdentitySteamId).CopyTo(identity, 0);
+        BitConverter.GetBytes(8).CopyTo(identity, 4);
+        BitConverter.GetBytes(steamId).CopyTo(identity, 8);
+        return identity;
     }
 
-    public static void Accept(ulong remote) => SteamAPI_ISteamNetworking_AcceptP2PSessionWithUser(SteamAPI_SteamNetworking_v006(), remote);
-    public static void Close(ulong remote) => SteamAPI_ISteamNetworking_CloseP2PSessionWithUser(SteamAPI_SteamNetworking_v006(), remote);
-    public static void AllowRelay() => SteamAPI_ISteamNetworking_AllowP2PPacketRelay(SteamAPI_SteamNetworking_v006(), true);
+    public static bool Send(ulong remote, byte[] data, int size, int channel, bool sure = false)
+        => SteamAPI_ISteamNetworkingMessages_SendMessageToUser(Messages, Identity(remote), data, (uint)size, sure ? SendSure : SendFast, channel) == 1;
+
+    /// <summary>The next message on a channel into <paramref name="buffer"/> (its size and sender); false if there's none.
+    /// One too big for it is dropped.</summary>
+    public static bool Receive(byte[] buffer, int channel, out int size, out ulong remote)
+    {
+        size = 0;
+        remote = 0;
+        var got = new IntPtr[1];
+        while (SteamAPI_ISteamNetworkingMessages_ReceiveMessagesOnChannel(Messages, channel, got, 1) > 0)
+        {
+            IntPtr message = got[0];
+            try
+            {
+                int length = Marshal.ReadInt32(message, 8);
+                if (length < 0 || length > buffer.Length || Marshal.ReadInt32(message, 16) != IdentitySteamId)
+                    continue;
+                Marshal.Copy(Marshal.ReadIntPtr(message, 0), buffer, 0, length);
+                size = length;
+                remote = (ulong)Marshal.ReadInt64(message, 24);
+                return true;
+            }
+            finally { SteamAPI_SteamNetworkingMessage_t_Release(message); }
+        }
+        return false;
+    }
+
+    public static void Accept(ulong remote) => SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser(Messages, Identity(remote));
+    public static void Close(ulong remote) => SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser(Messages, Identity(remote));
+
+    /// <summary>Steam's relay network got ready ahead of the first message (it takes a few seconds).</summary>
+    public static void AllowRelay() => SteamAPI_ISteamNetworkingUtils_InitRelayNetworkAccess(SteamAPI_SteamNetworkingUtils_SteamAPI_v004());
+
+    /// <summary>How the session with a player is: its ping (ms; -1 unknown) and whether it goes through Valve's relays.
+    /// (SteamNetConnectionRealTimeStatus_t: the ping at 4. SteamNetConnectionInfo_t: the relay's POP at 172.)</summary>
+    public static (int Ping, bool Relayed) Link(ulong remote)
+    {
+        var info = new byte[1024];
+        var status = new byte[256];
+        int state = SteamAPI_ISteamNetworkingMessages_GetSessionConnectionInfo(Messages, Identity(remote), info, status);
+        if (state <= 0)
+            return (-1, false);
+        return (BitConverter.ToInt32(status, 4), BitConverter.ToUInt32(info, 172) != 0);
+    }
 
     // ---- lobbies ----
 

@@ -23,6 +23,10 @@ public sealed class PlayerManager
         public int BuiltVersion = -1;
         public float VisX, VisY;
         public bool Placed;
+        // Where they've been, as their states came (when, where), and the last state taken in: drawn a little behind, from
+        // these (Step).
+        public readonly List<(long At, float X, float Y)> Samples = new();
+        public PlayerState? Sampled;
         // The light on their stand-in (an on-unit light effect), and which light it is (PlayerLight).
         public Instance LightEffect;
         public PlayerLight Light;
@@ -30,6 +34,12 @@ public sealed class PlayerManager
 
     // (A player's object goes when nothing's been heard of where they are for this long.)
     private const long StaleMs = 3000;
+    // (Another player is drawn this far behind what we've heard - between the positions either side - so states that come
+    // late, then several at once, still make a steady walk; a move this far in one step is a jump, drawn at once; how
+    // long their positions are kept.)
+    private const long DrawBehindMs = 100;
+    private const float JumpDistance = 104;
+    private const long KeepMs = 1000;
     // The player object's local hit pool stays huge because receiving a remote player's state is not yet combat authority.
     // Its displayed percentage is still exact: the inspection UI works from current / maximum.
     private const double ProxyVitalMaximum = 1000000000;
@@ -192,7 +202,8 @@ public sealed class PlayerManager
         }
     }
 
-    // A player's Step: follows their state - smoothly for small moves, at once for jumps.
+    // A player's Step: follows their state, drawn a little behind it (DrawBehindMs) from the positions they've had - a
+    // steady walk however the states come - and at once for jumps.
     internal void Step(Instance self)
     {
         if (IsSummon(self))
@@ -202,17 +213,19 @@ public sealed class PlayerManager
         }
         if (ViewOf(self) is not { Player.State: { } state } view)
             return;
-        if (!view.Placed || Math.Abs(view.VisX - state.X) + Math.Abs(view.VisY - state.Y) > 104)
+        long now = Environment.TickCount64;
+        if (!ReferenceEquals(state, view.Sampled))
         {
-            view.VisX = state.X;
-            view.VisY = state.Y;
+            view.Sampled = state;
+            view.Samples.Add((view.Player.StateAt > 0 ? view.Player.StateAt : now, state.X, state.Y));
+            while (view.Samples.Count > 2 && now - view.Samples[0].At > KeepMs)
+                view.Samples.RemoveAt(0);
+        }
+        var (x, y) = DrawnAt(view.Samples, now - DrawBehindMs, state);
+        if (!view.Placed || Math.Abs(view.VisX - x) + Math.Abs(view.VisY - y) > JumpDistance)
             view.Placed = true;
-        }
-        else
-        {
-            view.VisX += (state.X - view.VisX) * 0.5f;
-            view.VisY += (state.Y - view.VisY) * 0.5f;
-        }
+        view.VisX = x;
+        view.VisY = y;
         // Keep the real unit in the occupancy grids too. That lets the game recognize a player as a character,
         // while Draw deliberately uses the remote player's smoother visual position instead. Only onto a free cell (or
         // its own): our player, or an area unit, may be there for a moment - taking it would overwrite that unit in the
@@ -360,6 +373,29 @@ public sealed class PlayerManager
     /// <summary>The object standing for a player in our game (none if they've none here now).</summary>
     public Instance UnitOf(int slot)
         => _views.TryGetValue(slot, out var view) && !view.Unit.IsNone && view.Unit.Exists ? view.Unit : default;
+
+    // Where a player is drawn at time t: between the positions they had either side of it, or at the nearer end - and at
+    // the later one across a jump (a door, a fast travel), never walked between.
+    private static (float X, float Y) DrawnAt(List<(long At, float X, float Y)> samples, long t, PlayerState state)
+    {
+        if (samples.Count == 0)
+            return (state.X, state.Y);
+        if (t <= samples[0].At)
+            return (samples[0].X, samples[0].Y);
+        for (int i = 0; i + 1 < samples.Count; i++)
+        {
+            var (at, x, y) = samples[i];
+            var next = samples[i + 1];
+            if (t >= next.At)
+                continue;
+            if (Math.Abs(next.X - x) + Math.Abs(next.Y - y) > JumpDistance || next.At <= at)
+                return (x, y);
+            float f = (float)(t - at) / (next.At - at);
+            return (x + (next.X - x) * f, y + (next.Y - y) * f);
+        }
+        var last = samples[^1];
+        return (last.X, last.Y);
+    }
 
     private View? ViewOf(Instance self)
     {
