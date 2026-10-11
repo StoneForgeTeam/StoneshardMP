@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.1
 
 - **Fixed: "bool argument is unset" in o_village_standing, crashing the game** - e.g. one player going through the
   mill barn's door while the other was outside. Where a follower's game has no NPC of its own to match one of the
