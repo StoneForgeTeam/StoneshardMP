@@ -72,6 +72,18 @@ public sealed class MultiplayerMenu
             _remake = true;
         }
         _saveMenuWasOpen = saveMenuOpen;
+        // A Steam invite accepted (or the game started with one): joined from the main menu - waiting meanwhile in a
+        // game; dropped if we're already in a session (hosting, or in someone's game).
+        if (Gm.InMainMenu && !saveMenuOpen && _session.HasSteamInvite && _session.TakeSteamInvite() is { } invite)
+        {
+            if (_session.Mode == Session.SessionMode.Idle)
+            {
+                _session.JoinSteam(invite, _playerName());
+                Show(ScreenFor(_session.Mode));
+            }
+            else
+                _context.Log($"Steam invite to {invite.Name}'s game not joined: already in a multiplayer session");
+        }
         if (_shown == Screen.Hosting && _session.SteamHosting != _steamShown)
             _remake = true;
         if (_remake && Gm.InMainMenu && !saveMenuOpen)

@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace StoneshardMP.Net.Steam;
 
@@ -10,6 +12,11 @@ namespace StoneshardMP.Net.Steam;
 //   (Invite Friends: Steam's own invite dialog).
 // - Joining: the friend's lobby joined, its owner the host; a tunnel to them, and our LiteNetLib connected through it.
 // Steam's answers (a lobby made, joined) are polled each frame - nothing here waits.
+// Invites: hosting, our Steam "connect" is "+connect_lobby <lobby>", so every way Steam offers to join us carries the
+// lobby. A friend accepting - a lobby invite, the overlay's Invite to Game, Join Game on the friends list - is one of
+// Steam's callbacks in their running game (GameLobbyJoinRequested, GameRichPresenceJoinRequested: SteamCallback), or,
+// with the game not running, Steam starts it with that on its command line. Either way it's kept (TakeInvite) till
+// the Multiplayer menu can join it - on the main menu, not in a session.
 internal sealed class SteamLink
 {
     public const uint AppId = 625960;
@@ -26,6 +33,10 @@ internal sealed class SteamLink
     private Action<int>? _connect;
     private Action<string>? _failed;
     private long _greetedAt;
+    // Invites: Steam's two callbacks, heard once Steam's up; whether the command line's been read; the latest invite.
+    private SteamCallback? _lobbyJoin, _presenceJoin;
+    private bool _launchRead;
+    private FriendLobby? _invite;
 
     public SteamLink(Action<string> log) => _log = log;
 
@@ -78,8 +89,20 @@ internal sealed class SteamLink
             SteamApi.InviteDialog(_lobby);
     }
 
+    /// <summary>The latest Steam invite accepted (or the game started with), taken: the menu joins it.</summary>
+    public FriendLobby? TakeInvite()
+    {
+        var invite = _invite;
+        _invite = null;
+        return invite;
+    }
+
+    /// <summary>Whether there's an invite waiting to be joined.</summary>
+    public bool HasInvite => _invite != null;
+
     public void Tick()
     {
+        Listen();
         switch (_state)
         {
             case State.Creating when SteamApi.LobbyCreated(_call) is { } lobby:
@@ -93,6 +116,7 @@ internal sealed class SteamLink
                 SteamApi.SetLobbyData(lobby, KeyMod, Session.Protocol.ToString());
                 SteamApi.SetLobbyData(lobby, KeyName, _name);
                 SteamApi.SetRichPresence("status", "Hosting StoneshardMP");
+                SteamApi.SetRichPresence("connect", ConnectPrefix + lobby);
                 _tunnel = SteamTunnel.ForHost(_hostPort);
                 _state = State.Hosting;
                 _log($"Steam: lobby {lobby} open to friends");
@@ -132,7 +156,7 @@ internal sealed class SteamLink
         if (_lobby != 0 && _state is State.Hosting or State.Joined or State.Joining)
             SteamApi.LeaveLobby(_lobby);
         if (_state is State.Hosting or State.Joined)
-            SteamApi.SetRichPresence("status", "");
+            SteamApi.ClearRichPresence();
         _lobby = 0;
         _state = State.Idle;
         _connect = null;
@@ -145,6 +169,48 @@ internal sealed class SteamLink
         Stop();
         failed?.Invoke(why);
     }
+
+    // ---- invites ----
+
+    private const string ConnectPrefix = "+connect_lobby ";
+    // (Steam's callback ids, and their structs' sizes: GameLobbyJoinRequested_t - the lobby, then the friend;
+    // GameRichPresenceJoinRequested_t - the friend, then their connect string, 256 bytes.)
+    private const int LobbyJoinRequested = 333, LobbyJoinSize = 16;
+    private const int PresenceJoinRequested = 337, PresenceJoinSize = 8 + 256;
+
+    private void Listen()
+    {
+        if (_lobbyJoin != null || !Available)
+            return;
+        _lobbyJoin = new SteamCallback(LobbyJoinRequested, LobbyJoinSize, param =>
+            Invited(Marshal.ReadInt64(param, 8), (ulong)Marshal.ReadInt64(param, 0)));
+        _presenceJoin = new SteamCallback(PresenceJoinRequested, PresenceJoinSize, param =>
+        {
+            if (LobbyIn(Marshal.PtrToStringUTF8(param + 8) ?? "") is { } lobby)
+                Invited(Marshal.ReadInt64(param, 0), lobby);
+        });
+        // (Started by accepting an invite: Steam put the friend's connect on our command line.)
+        if (!_launchRead)
+        {
+            _launchRead = true;
+            if (LobbyIn(string.Join(" ", Environment.GetCommandLineArgs())) is { } launched)
+                Invited(0, launched);
+        }
+    }
+
+    private void Invited(long friend, ulong lobby)
+    {
+        if (lobby == 0)
+            return;
+        string name = friend != 0 ? SteamApi.FriendName((ulong)friend) : "";
+        _invite = new FriendLobby((ulong)friend, name.Length > 0 ? name : "your friend", lobby);
+        _log($"Steam: invited to {_invite.Value.Name}'s game (lobby {lobby})");
+    }
+
+    // The lobby in a connect string or command line ("+connect_lobby 1234"), if there's one.
+    private static ulong? LobbyIn(string text)
+        => Regex.Match(text, @"\+connect_lobby\s+(\d+)") is { Success: true } found && ulong.TryParse(found.Groups[1].Value, out ulong lobby) && lobby != 0
+            ? lobby : null;
 
     /// <summary>Friends in a lobby of Stoneshard's: ones we can join.</summary>
     public static FriendLobby[] Friends() => Available ? SteamApi.FriendsInLobbies(AppId) : Array.Empty<FriendLobby>();

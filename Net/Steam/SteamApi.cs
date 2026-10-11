@@ -23,6 +23,8 @@ internal static class SteamApi
     // (Friends we can see the games of: k_EFriendFlagImmediate.)
     private const int FriendFlagImmediate = 0x04;
 
+    [DllImport(Dll)] private static extern void SteamAPI_RegisterCallback(IntPtr callback, int id);
+    [DllImport(Dll)] private static extern void SteamAPI_UnregisterCallback(IntPtr callback);
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamUser_v021();
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamFriends_v017();
     [DllImport(Dll)] private static extern IntPtr SteamAPI_SteamMatchmaking_v009();
@@ -39,6 +41,7 @@ internal static class SteamApi
     [DllImport(Dll)] [return: MarshalAs(UnmanagedType.U1)]
     private static extern bool SteamAPI_ISteamFriends_SetRichPresence(IntPtr self, byte[] key, byte[] value);
     [DllImport(Dll)] private static extern void SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialog(IntPtr self, ulong lobby);
+    [DllImport(Dll)] private static extern void SteamAPI_ISteamFriends_ClearRichPresence(IntPtr self);
 
     [DllImport(Dll)] private static extern ulong SteamAPI_ISteamMatchmaking_CreateLobby(IntPtr self, int type, int maxMembers);
     [DllImport(Dll)] private static extern ulong SteamAPI_ISteamMatchmaking_JoinLobby(IntPtr self, ulong lobby);
@@ -202,6 +205,16 @@ internal static class SteamApi
 
     public static void SetRichPresence(string key, string value)
         => SteamAPI_ISteamFriends_SetRichPresence(SteamAPI_SteamFriends_v017(), Utf8(key), Utf8(value));
+
+    public static string FriendName(ulong friend) => Text(SteamAPI_ISteamFriends_GetFriendPersonaName(SteamAPI_SteamFriends_v017(), friend));
+
+    public static void ClearRichPresence() => SteamAPI_ISteamFriends_ClearRichPresence(SteamAPI_SteamFriends_v017());
+
+    // ---- callbacks (SteamCallback) ----
+
+    public static void RegisterCallback(IntPtr callback, int id) => SteamAPI_RegisterCallback(callback, id);
+
+    public static void UnregisterCallback(IntPtr callback) => SteamAPI_UnregisterCallback(callback);
 
     public static void InviteDialog(ulong lobby) => SteamAPI_ISteamFriends_ActivateGameOverlayInviteDialog(SteamAPI_SteamFriends_v017(), lobby);
 

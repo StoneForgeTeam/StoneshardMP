@@ -104,6 +104,12 @@ public sealed class Session : INetEventListener
     /// <summary>Hosting: Steam's dialog to invite friends to our lobby.</summary>
     public void InviteSteamFriends() => _steam.Invite();
 
+    /// <summary>A Steam invite accepted (or the game started with), taken - for the menu to join.</summary>
+    public FriendLobby? TakeSteamInvite() => _steam.TakeInvite();
+
+    /// <summary>Whether a Steam invite is waiting to be joined.</summary>
+    public bool HasSteamInvite => _steam.HasInvite;
+
     /// <summary>Whether friends can join us by Steam (we're hosting, with a lobby).</summary>
     public bool SteamHosting => _steam.Hosting;
 

@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## 0.4.1
 
+- **Steam invites join.** Accepting a friend's invite in Steam - their lobby invite (Invite Friends), Steam's own
+  Invite to Game, or Join Game on the friends list - now joins their game, from the main menu: no Join a Friend, no
+  address. With Stoneshard not running, accepting starts it and joins once the main menu's up; accepted while you're
+  playing, it waits till you're back on the main menu. (Hosting now sets the host's Steam "connect" to its lobby, so
+  every Steam invite carries it.)
+
 - **Fixed: an error box on hitting someone** ("stoneshardmp threw in scr_effect_create ... Struct/global handles
   cannot be persisted as instances"). Some effects are made from inside one of the game's structs, and our check of
   whether an effect was our player's doing tried to compare that struct with our player as an instance. A struct is
