@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.3
 
 - **Fixed (again): the "scr_effect_create ... Struct/global handles cannot be persisted as instances" error in
   combat** ([#4](https://github.com/StoneForgeTeam/StoneshardMP/issues/4)). 0.4.1's fix told a struct from a unit by
