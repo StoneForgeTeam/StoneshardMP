@@ -86,6 +86,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private GatherSync _gather = null!;
     private QuestSync _quests = null!;
     private ContractSync _contracts = null!;
+    private SituationSync _situations = null!;
 
     public void Load(ModContext context)
     {
@@ -175,6 +176,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _quests = new QuestSync(context, _session, _join);
         // One set of contracts: the host's, kept alike, with deadlines on the host's clock.
         _contracts = new ContractSync(context, _session, _join, _quests);
+        // One set of settlement situations - a fair, a pilgrimage, the economy: the host's.
+        _situations = new SituationSync(context, _session, _join);
         _menu = new MultiplayerMenu(context, _session, settings, PlayerName, join, () => _join.Status, _slots, _roster, lobby);
         // Dev tools for the mod's contributors (mod.json): Ctrl+Shift+M.
         _dev = new DevTools(context, new DevHooks
@@ -191,6 +194,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
                 ("placeables", () => _placeables.DevSummary),
                 ("ground effects", () => _groundEffects.DevSummary),
                 ("bombs", () => _bombs.DevSummary),
+                ("situations", () => _situations.DevSummary),
                 ("talk", () => _talk.DevSummary),
                 ("rounds", () => _rounds.Active ? "a round is on" : "no round"),
             },
@@ -253,6 +257,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _gather.Clear();
         _quests.Clear();
         _contracts.Clear();
+        _situations.Clear();
     }
 
     public void Tick(double deltaTime)
@@ -290,6 +295,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "map markers", _markers.Tick);
             Profiler.Measure(_context, "quests", _quests.Tick);
             Profiler.Measure(_context, "contracts", _contracts.Tick);
+            Profiler.Measure(_context, "situations", _situations.Tick);
             Profiler.Measure(_context, "players", _players.Tick);
             Profiler.Measure(_context, "party", _party.Tick);
             Profiler.Measure(_context, "effects", _effects.Tick);

@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Settlement situations are the host's.** A town's fair, pilgrimage, rut, rats, reinforcements and its economy are
+  rolled every day at random, and were rolled in every game - so a fair (its stalls, traders, music, the lantern by
+  Osbrook's inn) could be on in one game and not another. A client in the host's world rolls none now; the host sends
+  every village's as they change. As in one game, a settlement shows a change when it's next entered. One packet (69);
+  protocol 38.
+
 - **Fixed: Osbrook's blacksmith hammered behind his anvil in a follower's game.** While he works at it his own AI hides
   the anvil's front so he's seen; a follower's copy has no AI, so it covered him. It's hidden and shown with his pose now.
 
