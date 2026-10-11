@@ -136,6 +136,18 @@ jobs:
           $ready = $env:KEY -and $env:MOD_ID -and $env:FILE_ID -and $env:VERSION -notmatch '-'
           if (-not $ready) { Write-Host "Nexus Mods upload skipped: NEXUSMODS_API_KEY, NEXUS_MOD_ID or NEXUS_FILE_ID not set, or a pre-release." }
           "ready=$(if ($ready) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+          # (Nexus's API knows a mod by its own id - the game's and the page's numbers in one - not the page's number
+          # alone: looked up. Not found, the file still goes up, without its changelog.)
+          $uid = ""
+          if ($ready) {
+              try {
+                  $mod = Invoke-RestMethod "https://api.nexusmods.com/v3/games/stoneshard/mods/$env:MOD_ID" -Headers @{ apikey = $env:KEY; "User-Agent" = "StoneshardMP-release" }
+                  $uid = "$($mod.data.id)"
+                  Write-Host "Nexus Mods: mod $env:MOD_ID is $uid"
+              }
+              catch { Write-Host "Nexus Mods: couldn't look mod $env:MOD_ID up ($($_.Exception.Message)) - uploading without the changelog" }
+          }
+          "mod_uid=$uid" >> $env:GITHUB_OUTPUT
           # (The changelog: the release notes, as one output.)
           $notes = Get-Content artifacts/release-notes.md -Raw -Encoding UTF8
           "changelog<<NEXUS_NOTES_END" >> $env:GITHUB_OUTPUT
@@ -148,10 +160,10 @@ jobs:
         uses: Nexus-Mods/upload-action@c96019556046053aa26044b44396cd38929daf23
         with:
           api_key: ${{ secrets.NEXUSMODS_API_KEY }}
-          mod_id: ${{ vars.NEXUS_MOD_ID || secrets.NEXUS_MOD_ID }}
+          mod_id: ${{ steps.nexus.outputs.mod_uid }}
           file_id: ${{ vars.NEXUS_FILE_ID || secrets.NEXUS_FILE_ID }}
           filename: artifacts/StoneshardMP-${{ steps.version.outputs.version }}.zip
           version: ${{ steps.version.outputs.version }}
           display_name: StoneshardMP ${{ steps.version.outputs.version }}
           update_mod_version: true
-          changelog: ${{ steps.nexus.outputs.changelog }}
+          changelog: ${{ steps.nexus.outputs.mod_uid != '' && steps.nexus.outputs.changelog || '' }}
