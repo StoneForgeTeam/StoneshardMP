@@ -3,7 +3,6 @@ using System.Linq;
 using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // The game's crime for hitting a town NPC - an attack, an arrow, a thrown item, damage the player dealt: every way in runs
 // it as the NPC.

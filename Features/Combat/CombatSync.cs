@@ -6,7 +6,6 @@ using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Features.Summons;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // The game's attack: hooked to see what a follower's attacks do to the owner's units, and to send the owner's units'
 // attacks on followers to their games.

@@ -1,0 +1,16 @@
+using StoneshardMP.Memory;
+using StoneshardMP.Net.Packets;
+
+namespace StoneshardMP.Features.Combat;
+
+/// <summary>Host to client: one of the host's units (its sync id) a player took part in has been killed near the client - its XP is the client's too.</summary>
+public readonly record struct UnitKilledPacket(long UnitId) : IPacket
+{
+    public const byte PacketId = 29;
+
+    public byte Id => PacketId;
+
+    public void Write(ref SpanReadWrite writer) => writer.Write(UnitId);
+
+    public static UnitKilledPacket Read(ref SpanReadWrite reader) => new(UnitId: reader.Read<long>());
+}

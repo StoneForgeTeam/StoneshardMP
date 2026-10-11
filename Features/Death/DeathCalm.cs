@@ -3,7 +3,6 @@ using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 namespace StoneshardMP.Features.Death;
 

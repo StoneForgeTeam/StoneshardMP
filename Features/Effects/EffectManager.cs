@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LiteNetLib;
-using StoneshardMP.Net.Packets;
 using LiteNetLib.Utils;
 using StoneForge;
 using StoneshardMP.Features.Players;

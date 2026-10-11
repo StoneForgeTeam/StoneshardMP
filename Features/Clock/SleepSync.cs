@@ -3,7 +3,6 @@ using System.Linq;
 using StoneForge;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // The game's sleep (a bed's skip-time panel, a jail bed): the host's starts the fade everyone shares.
 [assembly: HookScript(nameof(Scripts.scr_smoothSaveSleep))]

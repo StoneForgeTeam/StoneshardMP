@@ -4,7 +4,6 @@ using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // Every noise in the game - a step, a blow, a door, something broken, a spell: whoever's in range hears it.
 [assembly: HookScript(nameof(Scripts.scr_noise_produce))]

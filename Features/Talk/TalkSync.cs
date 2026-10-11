@@ -5,7 +5,6 @@ using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // A conversation starting (every way in: talking to an NPC, a trigger, a warning - run as the NPC), and the dialogue
 // window moving on (an answer, the number keys, Space): a listener's window is ours to fill, not the game's.

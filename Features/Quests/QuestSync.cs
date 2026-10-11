@@ -5,7 +5,6 @@ using StoneForge;
 using StoneshardMP.Features.World;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // The game scripts quests and the rest of the shared story go through (the patcher makes them hookable).
 [assembly: HookScript(nameof(Scripts.scr_quest_start))]

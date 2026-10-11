@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 namespace StoneshardMP.Features.Recipes;
 

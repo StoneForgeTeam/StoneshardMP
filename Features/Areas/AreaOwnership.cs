@@ -4,7 +4,6 @@ using System.Linq;
 using StoneForge;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 namespace StoneshardMP.Features.Areas;
 

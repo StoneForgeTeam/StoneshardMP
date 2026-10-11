@@ -6,7 +6,6 @@ using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Clock;
 using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
-using StoneshardMP.Net.Packets;
 
 // How long the player is busy (the game asks before every action): the gate on our turn in a round.
 [assembly: HookScript(nameof(Scripts.scr_unitTurnGetTime))]
