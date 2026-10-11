@@ -3,6 +3,15 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Fixed: the game crashed entering a place another player had changed** ("Data structure with index does not exist"
+  in o_roomEntityLoader) - e.g. the Black Boar Inn after a client dropped an item there, for the client rejoining
+  and the host going in. Since 0.4.1 a place's saved state sent between games was sometimes written in a form the
+  game can't read (characters like ' escaped as codes). It's written as the game reads it now, and a place already
+  saved that way is put right as it loads (and before each save). One that still can't be read loads as it was
+  built instead of crashing - logged.
+
 ## 0.4.4
 
 - New versions now go up on Nexus Mods the moment they're released on GitHub.

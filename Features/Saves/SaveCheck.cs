@@ -48,8 +48,10 @@ public sealed class SaveCheck
                         {
                             if (room.Preset(presetKey)?.Export() is not { EntitiesJson: { } json } state)
                                 continue;
-                            var (cleaned, removed) = ItemLists.Clean(json);
-                            if (removed == 0)
+                            // (Written again as the game reads it, if it needs to be - PlaceRepair - then cleaned.)
+                            var (readable, unreadable) = ItemLists.Readable(json);
+                            var (cleaned, removed) = ItemLists.Clean(readable);
+                            if (removed == 0 && !unreadable)
                                 continue;
                             if (Locations.Store(state with { EntitiesJson = cleaned }))
                             {

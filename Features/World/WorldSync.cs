@@ -77,6 +77,7 @@ public sealed class WorldSync
         _ownership = ownership;
         session.On<WorldDataPacket>(Receive);
         ItemLists.GuardLoading(context);
+        new PlaceRepair(context);
         session.PlayerLeft += player =>
         {
             if (_copyTo == player.Slot)

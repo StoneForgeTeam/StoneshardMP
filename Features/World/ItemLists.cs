@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using StoneForge;
 
@@ -23,6 +25,11 @@ namespace StoneshardMP.Features.World;
 internal static class ItemLists
 {
     private static readonly string[] Keys = { "loot_list", "loot_list_meat", "loot_list_add" };
+
+    // (JSON as the game's json_decode reads it: its text as it is. .NET's own escapes what matters in HTML - ' < > & + -
+    // as backslash-u codes, and the game gives up on some: a place's entities written so didn't load, and the game
+    // crashed entering it - "Data structure with index does not exist" in o_roomEntityLoader.)
+    private static readonly JsonSerializerOptions ForGame = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>Hooks the game's loading of a container's items, to take out any that isn't one of ours.</summary>
     public static void GuardLoading(ModContext context)
@@ -56,7 +63,17 @@ internal static class ItemLists
         if (!Keys.Any(key => json.Contains('"' + key + '"')) || JsonNode.Parse(json) is not { } root)
             return (json, 0);
         int removed = Clean(root);
-        return removed > 0 ? (root.ToJsonString(), removed) : (json, 0);
+        return removed > 0 ? (root.ToJsonString(ForGame), removed) : (json, 0);
+    }
+
+    /// <summary>Saved JSON the game may not read - written by .NET's escaping (backslash-u codes) - written again as the
+    /// game reads it; whether it changed. (What 0.4.1 to 0.4.4 wrote into some places' saved state, and their saves.)</summary>
+    public static (string Json, bool Changed) Readable(string json)
+    {
+        if (!json.Contains(@"\u") || JsonNode.Parse(json) is not { } root)
+            return (json, false);
+        string written = root.ToJsonString(ForGame);
+        return (written, written != json);
     }
 
     private static int Clean(JsonNode? node)
@@ -105,7 +122,7 @@ internal static class ItemLists
         if (!Keys.Any(key => json.Contains('"' + key + '"')) || JsonNode.Parse(json) is not { } root)
             return json;
         Visit(root, portable);
-        return root.ToJsonString();
+        return root.ToJsonString(ForGame);
     }
 
     private static void Visit(JsonNode? node, bool portable)
