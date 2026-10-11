@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: "bool argument is unset" in o_village_standing, crashing the game** - e.g. one player going through the
+  mill barn's door while the other was outside. Where a follower's game has no NPC of its own to match one of the
+  owner's, it makes one, which never gets what the room's own code gives the NPCs it places (is_work); when the place
+  became that player's to run, the NPC's own work routine read it and the game stopped. Made NPCs get the game's
+  default now, and so does each one handed back to its own AI.
+
 - **Fixed: the game crashed opening the cooking pot of a fire another player had used** ("object_get_name argument 1
   incorrect type (undefined)", from o_craftingFoodMenu). The game keeps a fire's pot - and a container's or a corpse's
   loot - as a list of its own item lists, by their numbers, and a location's or a corpse's state went to the other

@@ -225,6 +225,8 @@ public sealed class AreaUnits
     private void Release()
     {
         var copies = _bound.Values.Concat(_everBound).Where(unit => unit.Exists).Distinct().ToList();
+        foreach (Instance copy in copies)
+            RoomDefaults(copy);
         if (Gm.InGame && copies.Count > 0 && Units.ReturnToTurns(copies))
             _context.Log($"No longer following here: {copies.Count} unit(s) ours to run again");
         ForgetBindings();
@@ -505,7 +507,21 @@ public sealed class AreaUnits
             _unbound[(obj, nearCell)].Remove(nearest);
             return nearest;
         }
-        return Units.Create(obj, cell);
+        Instance made = Units.Create(obj, cell);
+        RoomDefaults(made);
+        return made;
+    }
+
+    // What a unit placed in a room gets from the room's creation code, and one we make has never had - given the game's
+    // own default, so its AI can run it when it's handed back to us (Release). A town NPC's work routine
+    // (o_village_standing's do_peasant_work) reads is_work, which only rooms set: unset, the game stopped with "bool
+    // argument is unset" on the copy's first turn of its own.
+    private static void RoomDefaults(Instance unit)
+    {
+        if (unit.IsNone || !unit.Exists)
+            return;
+        if (unit.Get("is_work").IsUndefined)
+            unit["is_work"] = false;
     }
 
     // A whole roster done: ours out of our turns - between turns only, the turn may be walking the list; only when a
