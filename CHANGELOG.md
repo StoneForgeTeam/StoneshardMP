@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.1
 
 - **Fixed: an error box on hitting someone** ("stoneshardmp threw in scr_effect_create ... Struct/global handles
   cannot be persisted as instances"). Some effects are made from inside one of the game's structs, and our check of
@@ -14,8 +14,6 @@ releases them: the release workflow titles that section with the version, sets i
   counts in every game where players are together - two digging the same grave add up - and when it's dug out it's
   dug out for everyone, and what's in it is shared like a chest's. The digger alone pays for it: the shovel's wear,
   the sanity, the crime if a guard sees.
-
-## 0.4.1
 
 - **Fixed: "bool argument is unset" in o_village_standing, crashing the game** - e.g. one player going through the
   mill barn's door while the other was outside. Where a follower's game has no NPC of its own to match one of the
