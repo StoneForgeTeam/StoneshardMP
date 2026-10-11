@@ -4,6 +4,7 @@ using System.Linq;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using StoneshardMP.Net.Packets;
+using StoneshardMP.Net.Steam;
 
 namespace StoneshardMP.Net;
 
@@ -29,6 +30,8 @@ public sealed class Session : INetEventListener
     private readonly string _version;
     private readonly Action<string> _log;
     private NetManager? _net;
+    // (Its Steam side: a host's lobby friends join through, or the friend's we joined - LiteNetLib tunnelled over Steam.)
+    private readonly SteamLink _steam;
 
     // Host: each client's connection by slot. Client: the host's (slot 0).
     private readonly Dictionary<int, NetPeer> _peers = new();
@@ -43,6 +46,7 @@ public sealed class Session : INetEventListener
     {
         _version = version;
         _log = log;
+        _steam = new SteamLink(log);
     }
 
     public SessionMode Mode { get; private set; }
@@ -77,19 +81,45 @@ public sealed class Session : INetEventListener
         Mode = SessionMode.Host;
         Slot = 0;
         SetStatus($"Hosting on port {port} - waiting for players");
+        // (Friends can join by Steam too, when the game has it.)
+        _steam.Host(port, _limit, name);
         return true;
     }
 
     public void Join(string address, int port, string name)
     {
         Stop("");
+        Connect(address, port, name, $"Connecting to {address}:{port}...");
+    }
+
+    /// <summary>Joins a Steam friend's game: their lobby, then through Steam to them.</summary>
+    public void JoinSteam(FriendLobby friend, string name)
+    {
+        Stop("");
+        Mode = SessionMode.Client;
+        SetStatus($"Joining {friend.Name} on Steam...");
+        _steam.Join(friend, port => Connect("127.0.0.1", port, name, $"Connecting to {friend.Name} through Steam..."), why => Stop(why));
+    }
+
+    /// <summary>Hosting: Steam's dialog to invite friends to our lobby.</summary>
+    public void InviteSteamFriends() => _steam.Invite();
+
+    /// <summary>Whether friends can join us by Steam (we're hosting, with a lobby).</summary>
+    public bool SteamHosting => _steam.Hosting;
+
+    /// <summary>Dev tools: the Steam side.</summary>
+    public string SteamSummary => _steam.Summary;
+
+    // Our LiteNetLib connecting to a host (by Steam: our tunnel's port on 127.0.0.1).
+    private void Connect(string address, int port, string name, string status)
+    {
         _name = name;
         _net = NewManager();
         _net.Start();
         var hello = new NetDataWriter();
         hello.Put(PacketCodec.Encode(new HelloPacket(Key, Protocol, _version, name)));
         Mode = SessionMode.Client;
-        SetStatus($"Connecting to {address}:{port}...");
+        SetStatus(status);
         _net.Connect(address, port, hello);
     }
 
@@ -109,6 +139,7 @@ public sealed class Session : INetEventListener
     // Out of the session (status: why, if there's anything to say).
     public void Stop(string why)
     {
+        _steam.Stop();
         if (_net != null)
         {
             var net = _net;
@@ -132,6 +163,7 @@ public sealed class Session : INetEventListener
     // Each frame: LiteNetLib's events (connections, packets), handled here on the game's thread.
     public void Poll()
     {
+        _steam.Tick();
         if (_net == null)
             return;
         _net.PollEvents();

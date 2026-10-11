@@ -5,6 +5,13 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Joining through Steam.** Hosting with Steam running opens a friends-only Steam lobby; friends pick **Join a Friend**
+  on the Multiplayer screen, which lists the Steam friends hosting, and join with no address and no port forwarding -
+  through Steam, by Valve's relays where there's no direct route. The host has **Invite Friends** (Steam's invite
+  dialog). It's the same LiteNetLib connection as joining by address, its packets carried as Steam peer-to-peer
+  packets (Net\Steam: the game's own steam_api64.dll, called directly). Joining by address works as before. Accepting
+  an invite from Steam's overlay doesn't join yet: use Join a Friend.
+
 - **Settlement situations are the host's.** A town's fair, pilgrimage, rut, rats, reinforcements and its economy are
   rolled every day at random, and were rolled in every game - so a fair (its stalls, traders, music, the lantern by
   Osbrook's inn) could be on in one game and not another. A client in the host's world rolls none now; the host sends

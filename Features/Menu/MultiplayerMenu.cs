@@ -2,14 +2,17 @@ using System;
 using StoneForge;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Net;
+using StoneshardMP.Net.Steam;
 
 namespace StoneshardMP.Features.Menu;
 
 // The Multiplayer screens of the main menu, made of its own buttons (StoneForge's MainMenu), as the game's Play screen
 // is - one for each state of the session, switched as it changes (the host leaving, a connection lost...):
-// - Multiplayer (after Play): Host Game, Join Game (its dialog: JoinDialog), Back.
+// - Multiplayer (after Play): Host Game, Join Game (its dialog: JoinDialog), Join a Friend (by Steam: SteamJoinDialog),
+//   Back.
 // - Hosting: Play (once a save's picked), Continue and Load Game - which pick a save, not go into it (HostLobby): the
-//   players choose their slots first -, New Game (straight into the Adventure), and Stop Hosting.
+//   players choose their slots first -, New Game (straight into the Adventure), Invite Friends (Steam's dialog, once
+//   our Steam lobby's open), and Stop Hosting.
 // - Joined: Leave Game only - a client plays the host's world, launched into it (or into making a character for it)
 //   when the host is in it (JoinManager).
 // The session's status shows under the menu meanwhile, and who's in the game at its left (PlayersPanel - the host
@@ -23,6 +26,7 @@ public sealed class MultiplayerMenu
     private readonly MpSettings _settings;
     private readonly Func<string> _playerName;
     private readonly JoinDialog _join;
+    private readonly SteamJoinDialog _steamJoin;
     private readonly PlayersPanel _players;
     private readonly UILabel _status;
     private readonly Func<string?> _joinStatus;
@@ -31,6 +35,8 @@ public sealed class MultiplayerMenu
     // (The picked save changed: the Hosting screen made again - from Tick, not inside the game's save menu. And whether the
     // save menu was open last frame.)
     private bool _remake, _saveMenuWasOpen;
+    // (Whether our Steam lobby was open when the Hosting screen was made: it opens a moment after hosting starts.)
+    private bool _steamShown;
 
     public MultiplayerMenu(ModContext context, Session session, MpSettings settings, Func<string> playerName,
         JoinDialog join, Func<string?> joinStatus, WorldSlots slots, SlotRoster roster, HostLobby lobby)
@@ -43,6 +49,7 @@ public sealed class MultiplayerMenu
         _settings = settings;
         _playerName = playerName;
         _join = join;
+        _steamJoin = context.UI.MainMenu.Add(new SteamJoinDialog(session, playerName));
         _players = context.UI.MainMenu.Add(new PlayersPanel(session, settings, playerName, slots, roster, lobby));
         // (Under the menu: the session's status, while the Multiplayer screens show or a session's on.)
         _status = context.UI.MainMenu.Add(new UILabel("", 0, 14) { Anchor = UIAnchor.Bottom, Width = 400, Align = Draw.AlignCenter, Visible = false });
@@ -65,6 +72,8 @@ public sealed class MultiplayerMenu
             _remake = true;
         }
         _saveMenuWasOpen = saveMenuOpen;
+        if (_shown == Screen.Hosting && _session.SteamHosting != _steamShown)
+            _remake = true;
         if (_remake && Gm.InMainMenu && !saveMenuOpen)
         {
             _remake = false;
@@ -107,12 +116,15 @@ public sealed class MultiplayerMenu
         // (One screen deep: what an earlier one did undone first - ours only: other mods' and the loader's buttons stay.)
         MainMenu.UndoChanges(_context);
         _shown = screen;
+        _steamShown = _session.SteamHosting;
         MainMenu.ClearButtons(_context);
         switch (screen)
         {
             case Screen.Multiplayer:
                 MainMenu.AddButton(_context, "Host Game", Host);
                 MainMenu.AddButton(_context, "Join Game", _join.Open);
+                if (SteamLink.Available)
+                    MainMenu.AddButton(_context, "Join a Friend", _steamJoin.Open);
                 MainMenu.AddButton(_context, "Back", Close);
                 break;
             case Screen.Hosting:
@@ -125,6 +137,8 @@ public sealed class MultiplayerMenu
                 // players waiting make their characters alongside: JoinManager.)
                 MainMenu.AddButton(_context, "New Game", JoinSave.StartNew);
                 MainMenu.AddButton(_context, VanillaButton.LoadGame);
+                if (_session.SteamHosting)
+                    MainMenu.AddButton(_context, "Invite Friends", _session.InviteSteamFriends);
                 MainMenu.AddButton(_context, "Stop Hosting", () => _session.Stop("Stopped hosting"));
                 break;
             case Screen.Joined:

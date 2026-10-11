@@ -195,6 +195,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
                 ("ground effects", () => _groundEffects.DevSummary),
                 ("bombs", () => _bombs.DevSummary),
                 ("situations", () => _situations.DevSummary),
+                ("steam", () => _session.SteamSummary),
                 ("talk", () => _talk.DevSummary),
                 ("rounds", () => _rounds.Active ? "a round is on" : "no round"),
             },

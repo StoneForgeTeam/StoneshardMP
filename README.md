@@ -17,10 +17,15 @@ CHANGELOG.md for what works so far.
 
 ## Playing
 
-- **Multiplayer** (on the main menu, after Play) opens the Multiplayer screen: **Host Game**, **Join Game**, **Back**.
+- **Multiplayer** (on the main menu, after Play) opens the Multiplayer screen: **Host Game**, **Join Game**, **Join a
+  Friend** (with Steam), **Back**.
 - **Host Game** listens on the port (UDP 7777 by default) and shows the game's Continue / New Game / Load Game, to
-  start playing, and **Stop Hosting**. To be reached over the internet, the host forwards that port on their router.
-- **Join Game** asks for the host's address. Once in, you join the host's world when the host is in it (Continue,
+  start playing, and **Stop Hosting**. With Steam running it also opens a friends-only Steam lobby, and **Invite
+  Friends** opens Steam's invite dialog. Friends joining through Steam need no address and no port forwarding: the
+  connection goes through Steam (via Valve's relays when there's no direct route). To be joined by address over the
+  internet instead, the host forwards that port on their router.
+- **Join a Friend** lists Steam friends who are hosting, with **Join** for each. **Join Game** asks for the host's
+  address instead. Once in, you join the host's world when the host is in it (Continue,
   New Game or Load Game): with your character if the host's world has it, or straight into making one (on the host's
   world map) if not. The host keeps everyone's save - nothing is saved on a client's PC.
 - **One world:** areas and dungeons are built from the world seed, so everyone gets the same layout. When you leave
