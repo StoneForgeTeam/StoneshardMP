@@ -108,7 +108,11 @@ internal static class SharedWorld
     /// <summary>A location's saved state as the game keeps it - its tags, preset flags and entities (what's dead, taken,
     /// opened) - as JSON for the others (LocationStore). "" if there's none.</summary>
     public static string LocationExport(string location, GmValue room, GmValue preset)
-        => Locations.Get(location)?.Room(room)?.Preset(preset)?.Export() is { EntitiesJson: not null } state ? state.ToJson() : "";
+        => Locations.Get(location)?.Room(room)?.Preset(preset)?.Export() is { EntitiesJson: not null } state ? Portable(state).ToJson() : "";
+
+    /// <summary>A location's state with its containers' and corpses' items as items, fit for another game (ItemLists).</summary>
+    public static LocationState Portable(LocationState state)
+        => state.EntitiesJson is { } json ? state with { EntitiesJson = ItemLists.Portable(json) } : state;
 
     /// <summary>Another game's saved state for a location (LocationExport) into our world data, where the game keeps its
     /// own save of that location, so our next visit there loads theirs. The flags go too: they decide whether its
@@ -124,6 +128,9 @@ internal static class SharedWorld
         // We're standing in it: our live copy is the current one.
         if (Locations.Here is var (location, room) && location == state.Location && room.AsString == state.Room.AsString)
             return "";
+        // (Its containers' and corpses' items made ours: ItemLists.)
+        if (state.EntitiesJson is { } entities)
+            state = state with { EntitiesJson = ItemLists.Local(entities) };
         return Locations.Store(state) ? $"location {what}: stored" : $"location {what}: its state didn't read back - kept ours";
     }
 

@@ -76,6 +76,7 @@ public sealed class WorldSync
         _join = join;
         _ownership = ownership;
         session.On<WorldDataPacket>(Receive);
+        ItemLists.GuardLoading(context);
         session.PlayerLeft += player =>
         {
             if (_copyTo == player.Slot)
@@ -196,7 +197,7 @@ public sealed class WorldSync
         // A game following the place's owner leaves the owner's copy as the real one.
         if (_following)
             return;
-        string state = saved.Export() is { EntitiesJson: not null } export ? export.ToJson() : "";
+        string state = saved.Export() is { EntitiesJson: not null } export ? SharedWorld.Portable(export).ToJson() : "";
         if (state.Length > 0)
             Send(WorldData.Location, state);
         // Its tile too: leaving a dungeon floor, the floor's graph is saved in the dungeon's maps, filled in place

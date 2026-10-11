@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using StoneForge;
 using StoneshardMP.Features.Areas;
 using StoneshardMP.Features.Players;
+using StoneshardMP.Features.World;
 using StoneshardMP.Net;
 using StoneshardMP.Net.Packets;
 
@@ -136,7 +137,8 @@ public sealed class CorpseSync
                         ["key"] = Key(corpse),
                         ["tag"] = corpse.Get("roomEntityTag").AsString,
                         ["preset"] = corpse.Get("roomEntityPresetTag").AsString,
-                        ["data"] = saved.ToJson(),
+                        // (Its loot as items, not this game's numbers for them: ItemLists.)
+                        ["data"] = ItemLists.Portable(saved.ToJson()),
                     });
                 }
                 finally { saved.Destroy(); }
@@ -184,7 +186,7 @@ public sealed class CorpseSync
 
     private static void Restore(Instance corpse, string json)
     {
-        if (DsMap.FromJson(json) is not { } saved)
+        if (DsMap.FromJson(ItemLists.Local(json)) is not { } saved)
             throw new InvalidOperationException("Invalid corpse save data");
         try { Game.CallScript("scr_locationRoomEntityCorpsesSaveDataSet", default, corpse, saved.Id); }
         finally { saved.Destroy(); }
@@ -192,7 +194,7 @@ public sealed class CorpseSync
 
     private static Instance Create(JsonNode entry, string json)
     {
-        if (DsMap.FromJson(json) is not { } saved)
+        if (DsMap.FromJson(ItemLists.Local(json)) is not { } saved)
             return default;
         string[] globals = { "locationRoomEntityType", "locationRoomEntityTag", "locationRoomEntityPresetTag",
             "locationRoomEntityTypePrevious", "locationRoomEntityTagPrevious", "locationRoomEntityPresetTagPrevious" };

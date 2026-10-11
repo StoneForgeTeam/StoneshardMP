@@ -5,6 +5,13 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: the game crashed opening the cooking pot of a fire another player had used** ("object_get_name argument 1
+  incorrect type (undefined)", from o_craftingFoodMenu). The game keeps a fire's pot - and a container's or a corpse's
+  loot - as a list of its own item lists, by their numbers, and a location's or a corpse's state went to the other
+  games with those numbers as they were: in another game they're nothing, or some other list. The items themselves are
+  sent now, and made again as that game's own. A world saved with the bad numbers already (a host's keeps the places
+  others last had) loses those items as their container's opened, instead of crashing. Protocol 39.
+
 - **Fixed: an error box ("stoneshardmp threw in Tick", SEHException) for host and clients.** Another player's move
   passes a share of a turn's time in your game; when that took the clock over an hour, the game's hourly updates ran
   with no instance behind them and crashed inside the game. The time passes as your player now, as the game's own
