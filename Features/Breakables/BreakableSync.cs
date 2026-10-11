@@ -17,6 +17,11 @@ namespace StoneshardMP.Features.Breakables;
 // sends what's been hurt or broken since it came (State: what's left of each) - the others' copies may be older. One off
 // screen when its news comes gets it when it's next on. Matched by object and position: every game builds a place alike.
 // Where nobody else is, nothing's sent: leaving, the place's save is (WorldSync).
+// Graves (and stashes - o_interactive_grave_abstract) the same way: digging takes HP off one, and dug out (its HP gone,
+// its user event 2) it's swapped for the dug grave, a container. Each dig goes to the others as damage, and dug out
+// as broken: their grave is dug out the same way (that event alone - the digger's game has the rest: the shovel's
+// wear, sanity, the crime if a guard saw). Others' digging never digs one out here by itself: only that news does.
+// What's in the dug grave is shared as a container's (ChestSync).
 public sealed class BreakableSync
 {
     // (Every this many frames.)
@@ -50,6 +55,13 @@ public sealed class BreakableSync
         context.OnCode("gml_Object_c_broken_Destroy_0", before: (self, _) =>
         {
             if (_place != null && !self.IsNone && self.Get("HP").AsReal <= 0)
+                Broke(_keys.GetValueOrDefault(self) ?? KeyOf(self));
+            return false;
+        });
+        // A grave dug out (its user event 2: swapped for the dug one).
+        context.OnCode("gml_Object_o_interactive_grave_abstract_Other_12", before: (self, _) =>
+        {
+            if (_place != null && !self.IsNone)
                 Broke(_keys.GetValueOrDefault(self) ?? KeyOf(self));
             return false;
         });
@@ -98,7 +110,7 @@ public sealed class BreakableSync
         _keys.Clear();
         foreach (Instance stuff in Instances.All(GameObjectId.o_stuff))
         {
-            if (!stuff.Get("can_broke").AsBool)
+            if (!Shared(stuff))
                 continue;
             string key = KeyOf(stuff);
             _keys[stuff] = key;
@@ -136,12 +148,22 @@ public sealed class BreakableSync
     private double Apply(Instance stuff, string key, double hp, double damage, double? left, bool broken)
     {
         double now = broken ? 0 : Math.Max(0, Math.Min(hp - damage, left ?? double.MaxValue));
+        bool grave = IsGrave(stuff);
+        // (A grave's dug out by its digger's news alone: until then, others' digging leaves it some.)
+        if (grave && !broken)
+            now = Math.Max(1, now);
         if (now < hp)
         {
             if (now <= 0)
                 _breaking.Add(key);
             stuff.Set("HP", now);
             _hurt[key] = now;
+            // (Dug out as the game does it: swapped for the dug grave - it's gone from here once that's done.)
+            if (grave && now <= 0)
+            {
+                Game.CallBuiltinAs("event_user", stuff, stuff, 2);
+                return 0;
+            }
         }
         _last[key] = Math.Min(hp, now);
         return now;
@@ -157,7 +179,7 @@ public sealed class BreakableSync
         double damage = packet.Kind == BreakableKind.Damage ? packet.Amount : 0;
         double? left = packet.Kind == BreakableKind.State ? packet.Amount : null;
         bool broken = packet.Kind == BreakableKind.Broken;
-        Instance found = Instances.All(GameObjectId.o_stuff).FirstOrDefault(s => s.Get("can_broke").AsBool && KeyOf(s) == packet.Key);
+        Instance found = Instances.All(GameObjectId.o_stuff).FirstOrDefault(s => Shared(s) && KeyOf(s) == packet.Key);
         if (!found.IsNone)
         {
             Apply(found, packet.Key, found.Get("HP").AsReal, damage, left, broken);
@@ -166,6 +188,15 @@ public sealed class BreakableSync
         // (Not on screen - or not here at all, broken already: kept for when it is.)
         var was = _pending.GetValueOrDefault(packet.Key);
         _pending[packet.Key] = (was.Damage + damage, left is { } l ? Math.Min(l, was.Left ?? l) : was.Left, was.Broken || broken);
+    }
+
+    // What's shared: what can be broken, and graves.
+    private static bool Shared(Instance stuff) => stuff.Get("can_broke").AsBool || IsGrave(stuff);
+
+    private static bool IsGrave(Instance stuff)
+    {
+        int obj = stuff.Get("object_index").AsInt;
+        return obj == (int)GameObjectId.o_interactive_grave_abstract || Gm.ObjectIsAncestor(obj, (int)GameObjectId.o_interactive_grave_abstract);
     }
 
     // A breakable's key: its object and position - the same one in every game, which build the place alike.
