@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: Osbrook's blacksmith hammered behind his anvil in a follower's game.** While he works at it his own AI hides
+  the anvil's front so he's seen; a follower's copy has no AI, so it covered him. It's hidden and shown with his pose now.
+
 - **Thrown bombs where players are together.** A Smoke Bomb, Nistrian Flame Flask, Spider Blood Flask or Deathstinger
   Jar bursts in its thrower's game; the others only saw the bottle vanish. Now their games show and sound the burst where
   it landed - the smoke's puff, the acid's splash, the flame flask's sparks, scorch and hole, the breaking glass - for

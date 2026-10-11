@@ -584,6 +584,7 @@ public sealed class AreaUnits
             unit["is_life"] = GmValue.FromJsonNode(u["lifeAnimation"]);
             // (Its highlight sprite, which goes by the sprite it shows.)
             Game.CallScript("scr_set_hl", unit);
+            ShowScenery(unit, (int)shown);
         }
         if (Changed("frame"))
             unit["image_index"] = Number(u["frame"]);
@@ -595,6 +596,18 @@ public sealed class AreaUnits
             unit["image_alpha"] = Number(u["alpha"]);
         if (Changed("ind"))
             SetIndicator(unit, u["ind"] as JsonObject);
+    }
+
+    // What a unit's own AI does to the scenery as it changes pose - off on a copy, so done here from the pose it's given.
+    // Osbrook's smith hides the anvil's front (o_blacksmithpart02) while he hammers at it, so his work sprite is seen,
+    // and shows it again as he leaves it (o_npc_smith_osbrook's do_smith_work); left showing, it covered him.
+    private static void ShowScenery(Instance unit, int sprite)
+    {
+        if (unit.Get("object_index").AsInt != (int)GameObjectId.o_npc_smith_osbrook)
+            return;
+        bool hammering = sprite == (int)Sprite.s_blacksmith_01_work01;
+        foreach (Instance part in Instances.All(GameObjectId.o_blacksmithpart02))
+            part.Set("visible", !hammering);
     }
 
     private bool IsAssetSprite(int sprite)
