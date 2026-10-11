@@ -218,8 +218,11 @@ public sealed class CombatSync
         return false;
     }
 
+    // (A struct - the game makes some effects from a struct's method, which is then the call's self - has no object: never
+    // ours, and it can't be compared as an instance.)
     private static bool IsOurPlayer(Instance unit)
-        => !unit.IsNone && unit.Exists && (OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist())
+        => !unit.IsNone && unit.Exists && !unit.Get("object_index").IsUndefined
+            && (OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist())
             // (Our summon's doing is ours, as our player's is: its caster's game runs it - SummonSync.)
             || SummonSync.IsOurs(unit));
 
@@ -347,6 +350,9 @@ public sealed class CombatSync
     private (Instance Copy, long HostId)? Ours(Instance copy)
     {
         if (!Following || _areaUnits.Applying || _hostsAttack > 0 || !_inSharedWorld())
+            return null;
+        // (A struct isn't a unit: nothing of the owner's.)
+        if (!copy.IsNone && copy.Get("object_index").IsUndefined)
             return null;
         copy = copy.IsNone ? copy : copy.Persist();
         if (copy.IsNone || !copy.Exists || _areaUnits.OwnerIdOf(copy) is not { } hostId)

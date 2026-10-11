@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: an error box on hitting someone** ("stoneshardmp threw in scr_effect_create ... Struct/global handles
+  cannot be persisted as instances"). Some effects are made from inside one of the game's structs, and our check of
+  whether an effect was our player's doing tried to compare that struct with our player as an instance. A struct is
+  never ours now, without the comparison.
+
 - **Digging graves is shared.** A grave (or a buried stash) dug in one game stayed whole in the others. Each dig now
   counts in every game where players are together - two digging the same grave add up - and when it's dug out it's
   dug out for everyone, and what's in it is shared like a chest's. The digger alone pays for it: the shovel's wear,
