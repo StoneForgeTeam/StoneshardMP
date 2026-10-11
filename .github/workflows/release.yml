@@ -9,6 +9,11 @@
 #     version like 0.2.0-beta.1);
 #  5. the stamped version committed back to main. When main is still at the tagged commit, the tag is moved onto that
 #     commit, so it holds exactly what was released; when main has moved on, the version's stamped on top of it.
+#  6. uploaded to Nexus Mods as the main file's new version (display name "StoneshardMP <version>", the mod's version
+#     made it, the CHANGELOG section as its changelog) - when the repository has the secret NEXUSMODS_API_KEY (an API
+#     key: nexusmods.com/settings/api-keys) and NEXUS_MOD_ID and NEXUS_FILE_ID, as variables or secrets (the mod page's, and its
+#     main file's: the Files tab's "Advanced" view). Without them, or for a pre-release, it's skipped. Last, so the
+#     GitHub release and the version on main are done whatever Nexus says.
 # (Pushes made with this workflow's token start no other workflows.)
 name: Release
 
@@ -118,3 +123,35 @@ jobs:
                   if ($LASTEXITCODE -ne 0) { throw "Couldn't push the version to main (is main protected?)" }
               }
           }
+
+      # (Only with the key and the IDs set, and not a pre-release.)
+      - name: Nexus Mods upload set up?
+        id: nexus
+        env:
+          KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+          MOD_ID: ${{ vars.NEXUS_MOD_ID || secrets.NEXUS_MOD_ID }}
+          FILE_ID: ${{ vars.NEXUS_FILE_ID || secrets.NEXUS_FILE_ID }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ready = $env:KEY -and $env:MOD_ID -and $env:FILE_ID -and $env:VERSION -notmatch '-'
+          if (-not $ready) { Write-Host "Nexus Mods upload skipped: NEXUSMODS_API_KEY, NEXUS_MOD_ID or NEXUS_FILE_ID not set, or a pre-release." }
+          "ready=$(if ($ready) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+          # (The changelog: the release notes, as one output.)
+          $notes = Get-Content artifacts/release-notes.md -Raw -Encoding UTF8
+          "changelog<<NEXUS_NOTES_END" >> $env:GITHUB_OUTPUT
+          $notes.TrimEnd() >> $env:GITHUB_OUTPUT
+          "NEXUS_NOTES_END" >> $env:GITHUB_OUTPUT
+
+      # (Nexus Mods' own action, pinned to v1.0.0-beta.10's commit: it's given the API key.)
+      - name: Upload to Nexus Mods
+        if: steps.nexus.outputs.ready == 'true'
+        uses: Nexus-Mods/upload-action@c96019556046053aa26044b44396cd38929daf23
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          mod_id: ${{ vars.NEXUS_MOD_ID || secrets.NEXUS_MOD_ID }}
+          file_id: ${{ vars.NEXUS_FILE_ID || secrets.NEXUS_FILE_ID }}
+          filename: artifacts/StoneshardMP-${{ steps.version.outputs.version }}.zip
+          version: ${{ steps.version.outputs.version }}
+          display_name: StoneshardMP ${{ steps.version.outputs.version }}
+          update_mod_version: true
+          changelog: ${{ steps.nexus.outputs.changelog }}
