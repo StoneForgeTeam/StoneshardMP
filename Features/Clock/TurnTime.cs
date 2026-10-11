@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using StoneForge;
+using StoneshardMP.Features.Players;
 using StoneshardMP.Net;
 
 // A world turn (scr_global_turn) and the time it lets pass (scr_timeUpdate): hooked to share a turn's time out.
@@ -64,11 +65,20 @@ public sealed class TurnTime
     {
         if (!_session.Connected || !_inSharedWorld())
             return;
+        // (Run as our player, as the game's own turns run it: an hour or a day passing goes on into the clock's triggers,
+        // some of which read the instance running them - with none, the runner crashed. No player - between rooms -: the
+        // time waits, carried, for the next.)
+        Instance player = OurPlayer.Instance;
+        if (player.IsNone || !player.Exists)
+        {
+            _carried += SecondsPerTurn / Math.Max(1, Players);
+            return;
+        }
         double share = SecondsPerTurn / Math.Max(1, Players) + _carried;
         double whole = Math.Floor(share);
         _carried = share - whole;
         if (whole > 0)
-            Game.CallScript("scr_timeUpdate", default, whole);
+            Game.CallScript("scr_timeUpdate", player, whole);
     }
 
     // A world turn's own time (its 30 seconds, nothing else) in a world shared with others, out of a round: its share,
