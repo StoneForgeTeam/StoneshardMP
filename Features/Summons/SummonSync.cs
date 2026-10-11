@@ -70,7 +70,7 @@ public sealed class SummonSync
 
     /// <summary>Whether a unit is one of our player's summons.</summary>
     public static bool IsOurs(Instance unit)
-        => IsPlayers(unit) && OurPlayer.Instance is { IsNone: false } player && Instance.Of(unit.Get("owner")).Persist().Equals(player.Persist());
+        => IsPlayers(unit) && OurPlayer.Instance is { IsNone: false } player && Combat.Handles.Kept(Instance.Of(unit.Get("owner"))).Equals(player.Persist());
 
     public void Tick()
     {

@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed (again): the "scr_effect_create ... Struct/global handles cannot be persisted as instances" error in
+  combat** ([#4](https://github.com/StoneForgeTeam/StoneshardMP/issues/4)). 0.4.1's fix told a struct from a unit by
+  asking for its object, which didn't work, and as the error came with every effect, StoneForge paused the mod after
+  three - multiplayer stopped mid-fight. Anything that isn't a unit is now never taken for one, wherever an effect's
+  maker or target is looked at; the same for the dialogue window's.
+
 - **Lower ping through Steam, and other players no longer teleport.**
   - Steam connections now use Steam's newer networking (Valve's relay network, or straight between the PCs when
     Steam can manage it) in place of its old peer-to-peer, whose relays could add a lot of ping.

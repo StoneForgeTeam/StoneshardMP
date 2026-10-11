@@ -67,7 +67,7 @@ public sealed class TalkSync
         players.TalkingTo = TalkingTo;
         Scripts.scr_dialogue_start.Before(context, call => Starting(call.Self));
         // (A listener's window: the game doesn't move it on - not an answer, not a key.)
-        Scripts.scr_dialogue_advance.Before(context, call => _panel.Exists && call.Self.Persist().Equals(_panel));
+        Scripts.scr_dialogue_advance.Before(context, call => _panel.Exists && Combat.Handles.Kept(call.Self).Equals(_panel));
         context.OnCode("gml_Object_o_contract_button_Mouse_4", before: (self, _) => Clicked(self));
         // (An NPC's turn: o_NPC's user event 0.)
         context.OnCode("gml_Object_o_NPC_Other_10", before: (self, _) => Together && InTalk(self.Persist()));

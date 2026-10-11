@@ -218,13 +218,13 @@ public sealed class CombatSync
         return false;
     }
 
-    // (A struct - the game makes some effects from a struct's method, which is then the call's self - has no object: never
-    // ours, and it can't be compared as an instance.)
+    // (A struct - the game makes some effects from a struct's method, which is then the call's self - is never ours:
+    // Handles.Kept makes it none.)
     private static bool IsOurPlayer(Instance unit)
-        => !unit.IsNone && unit.Exists && !unit.Get("object_index").IsUndefined
-            && (OurPlayer.Instance is { IsNone: false } player && unit.Persist().Equals(player.Persist())
+        => Handles.Kept(unit) is { IsNone: false } kept && kept.Exists
+            && (OurPlayer.Instance is { IsNone: false } player && kept.Equals(player.Persist())
             // (Our summon's doing is ours, as our player's is: its caster's game runs it - SummonSync.)
-            || SummonSync.IsOurs(unit));
+            || SummonSync.IsOurs(kept));
 
     // ---- a follower's attacks ----
 
@@ -236,7 +236,7 @@ public sealed class CombatSync
         Instance target = Instance.Of(call.Args[0]);
         if (target.IsNone || !target.Exists || _areaUnits.OwnerIdOf(target) is not { } hostId)
             return null;
-        return (target.Persist(), hostId, target.Get("HP").AsReal);
+        return Handles.Kept(target) is { IsNone: false } kept ? (kept, hostId, target.Get("HP").AsReal) : null;
     }
 
     // Follower: the attack done - what it took off the unit goes to the owner, and our copy stays alive till the owner
@@ -351,10 +351,8 @@ public sealed class CombatSync
     {
         if (!Following || _areaUnits.Applying || _hostsAttack > 0 || !_inSharedWorld())
             return null;
-        // (A struct isn't a unit: nothing of the owner's.)
-        if (!copy.IsNone && copy.Get("object_index").IsUndefined)
-            return null;
-        copy = copy.IsNone ? copy : copy.Persist();
+        // (A struct isn't a unit: nothing of the owner's - Handles.Kept.)
+        copy = Handles.Kept(copy);
         if (copy.IsNone || !copy.Exists || _areaUnits.OwnerIdOf(copy) is not { } hostId)
             return null;
         return (copy, hostId);
