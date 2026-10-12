@@ -9,6 +9,10 @@ releases them: the release workflow titles that section with the version, sets i
   its XP, not only the one who disarmed it, with the actions log saying who did. (Protocol 41: everyone needs this
   version to play together.)
 
+- **Fixed: Planar Exchange cast by a client didn't swap on the host.** The host saw the caster and the enemy on the
+  same tile, and then pushed the enemy aside, so the caster saw it jump next to them. The swap now goes to the host,
+  which trades the two units' places as the caster's game did - an enemy with the caster, or two enemies.
+
 - **Fixed: a follower recruited for the caravan wasn't in the camp, and talking to Verren failed**, when another
   player was already at the camp. Each game copied the camp's people from whoever got there first - whose camp had
   been built before the recruit - so the new follower was taken out. The camp's people (Verren, the quartermaster, the

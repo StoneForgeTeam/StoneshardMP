@@ -76,6 +76,8 @@ public sealed class CombatSync
     // whether it's ours (sent to the owner) or not (undone here: the owner's own copy takes it) - or null, any other.
     private readonly Stack<(Instance Target, long HostId, double Health, bool Ours)?> _damages = new();
     private int _ourActions;
+    // Follower: inside our Planar Exchange's swap (o_planar_exchange's alarm 0) - what it moves traded places.
+    private int _swapping;
 
     public CombatSync(ModContext context, Session session, AreaUnits areaUnits, AreaOwnership ownership, PlayerManager players,
         Func<bool> inSharedWorld)
@@ -120,6 +122,20 @@ public sealed class CombatSync
                 return false;
             },
             after: (_, _) => End());
+        // (Planar Exchange's swap, when its two are put in each other's place - ours when its owner is our player: it runs
+        // from the spell's own alarm, not our player's action.)
+        context.OnCode("gml_Object_o_planar_exchange_Alarm_0",
+            before: (exchange, _) =>
+            {
+                Begin(!exchange.IsNone && IsOursDeep(exchange));
+                _swapping++;
+                return false;
+            },
+            after: (_, _) =>
+            {
+                _swapping = Math.Max(0, _swapping - 1);
+                End();
+            });
         // (A unit's death: o_enemy's Destroy, its children's too - they inherit it.)
         context.OnCode("gml_Object_o_enemy_Destroy_0", before: (self, _) =>
         {
@@ -383,8 +399,8 @@ public sealed class CombatSync
             return;
         Cell cell = Units.CellOf(copy);
         _areaUnits.Moved(copy, cell);
-        _session.Send(new UnitMovedPacket(hostId, (short)cell.X, (short)cell.Y), _ownership.Owner);
-        _context.Log($"Moved the host's unit {hostId} to {cell}");
+        _session.Send(new UnitMovedPacket(hostId, (short)cell.X, (short)cell.Y, Swap: _swapping > 0), _ownership.Owner);
+        _context.Log($"Moved the host's unit {hostId} to {cell}{(_swapping > 0 ? " (a swap)" : "")}");
     }
 
     // Follower: scr_effect_create(effect, duration, target, owner, stage...) put an effect on one of the owner's units: the
@@ -429,6 +445,11 @@ public sealed class CombatSync
         Instance unit = _areaUnits.UnitOf(move.UnitId);
         if (unit.IsNone)
             return;
+        if (move.Swap && Swapped(unit, move.Cell))
+        {
+            _context.Log($"{from.Name} swapped unit {move.UnitId} onto {move.Cell}");
+            return;
+        }
         if (!Units.CanTake(unit, move.Cell))
         {
             _context.Log($"{from.Name} moved unit {move.UnitId} to {move.Cell}, which isn't free here");
@@ -442,6 +463,34 @@ public sealed class CombatSync
         unit["is_moving"] = true;
         Game.CallScript("scr_enemy_stop_animation", unit);
         _context.Log($"{from.Name} moved unit {move.UnitId} to {move.Cell}");
+    }
+
+    // Owner: a follower's swap (Planar Exchange) put one of our units on a cell someone's on here - the other one it traded
+    // with, not moved here yet (their player's stand-in, until its next state; or our unit, the swap's second move to
+    // come): the two trade places, as they did there. Both snapped (a teleport). false: nobody's there to trade with - a
+    // plain move. (A big unit - more than one cell - isn't swapped by the spell.)
+    private bool Swapped(Instance unit, Cell cell)
+    {
+        Instance other = Units.At(cell);
+        if (other.IsNone || !other.Exists || other.Equals(unit.Persist()) || Units.Current() is not { } grids
+            || !Gm.ObjectIsAncestor(other.Get("object_index").AsInt, (int)GameObjectId.o_unit)
+            || other.Get("is_poly_cell").AsBool || unit.Get("is_poly_cell").AsBool)
+            return false;
+        Cell from = Units.CellOf(unit);
+        Units.Move(other, from, grids, poly: false, snap: true);
+        Units.Move(unit, cell, grids, poly: false, snap: true);
+        // (Moving off it cleared its cell in the collision grid - where the other one stands now.)
+        Game.CallScript("scr_collision_add_enemy", grids.Controller, grids.Collisions, from.X, from.Y);
+        foreach (Instance moved in new[] { unit, other })
+        {
+            // (Our area's units: a player's stand-in has no AI to stop.)
+            if (_areaUnits.SyncIdOf(moved) is null)
+                continue;
+            moved["force_stop"] = true;
+            moved["is_moving"] = true;
+            Game.CallScript("scr_enemy_stop_animation", moved);
+        }
+        return true;
     }
 
     // Owner: a follower's action put an effect on one of our units (in their game) - put on the real one as the game puts
