@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.5
 
 - **Fixed: the host's Respawn made everyone reload.** Respawning after the host dies reloads only the host's game now,
   back at its checkpoint; the other players carry on where they are, as if the host had gone somewhere else. (The log
