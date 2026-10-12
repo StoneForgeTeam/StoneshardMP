@@ -12,24 +12,42 @@ namespace StoneshardMP.Features.Traps;
 // - Spent: disarmed by anyone (o_trap's alarm 2), or sprung (its animation's end) - is_disarm, in the game's own terms -
 //   is harmless in every game there: disarmed, shown spent, off the marks grid (as the game's disarm leaves it). Before,
 //   a trap one player disarmed was still live in the other's game.
+// - Its XP: shared, as a kill's is (CombatSync) - a player who disarms one says so (o_trap's alarm 2 made it spent, our
+//   player its target), and every player in that place within XpReach tiles of it gets its XP, as the game gives it.
 // Kept for this room, including traps currently culled or not yet created; everyone sends theirs when someone arrives.
 // (Traps players set - their faction's - are PlacedTrapSync's: re-armed, they'd be spent again here.)
 public sealed class TrapSync
 {
     private const int Interval = 6;
+    // (How near a disarmed trap a player gets its XP, in tiles - as near a kill.)
+    private const int XpReach = 20;
+    private readonly ModContext _context;
     private readonly Session _session;
     private readonly Func<bool> _inSharedWorld;
     private readonly HashSet<string> _discovered = new();
     private readonly HashSet<string> _disarmed = new();
+    // Traps whose XP we've had (a disarm's said once, but never paid twice), and whether each trap in alarm 2 was spent
+    // before it.
+    private readonly HashSet<string> _xpTaken = new();
+    private readonly Dictionary<Instance, bool> _wasSpent = new();
     private string? _place;
     private string _others = "";
     private int _frame;
 
-    public TrapSync(Session session, Func<bool> inSharedWorld)
+    public TrapSync(ModContext context, Session session, Func<bool> inSharedWorld)
     {
+        _context = context;
         _session = session;
         _inSharedWorld = inSharedWorld;
         session.On<TrapDiscoveredPacket>(Receive);
+        // A disarm's roll (o_trap's alarm 2, and its children's through event_inherited).
+        context.OnCode("gml_Object_o_trap_Alarm_2",
+            before: (trap, _) =>
+            {
+                _wasSpent[trap.Persist()] = trap.Get("is_disarm").AsBool;
+                return false;
+            },
+            after: (trap, _) => Disarmed(trap));
     }
 
     public void Clear()
@@ -39,6 +57,8 @@ public sealed class TrapSync
         _frame = 0;
         _discovered.Clear();
         _disarmed.Clear();
+        _xpTaken.Clear();
+        _wasSpent.Clear();
     }
 
     public void Tick()
@@ -103,6 +123,41 @@ public sealed class TrapSync
         _place = place;
     }
 
+    // After a disarm's roll: one of the world's traps our player has just disarmed - the others there are told now, its XP
+    // theirs too.
+    private void Disarmed(Instance trap)
+    {
+        if (!_wasSpent.Remove(trap.Persist(), out bool wasSpent) || wasSpent || !trap.Get("is_disarm").AsBool || IsPlayers(trap))
+            return;
+        Instance player = OurPlayer.Instance;
+        string? place = OurPlayer.State()?.Place;
+        if (player.IsNone || !Instance.Of(trap.Get("target")).Equals(player.Persist()) || !Ready(place))
+            return;
+        Enter(place!);
+        string key = KeyOf(trap);
+        _disarmed.Add(key);
+        _xpTaken.Add(key);
+        if (_session.Players.Any(p => p.State?.Place == place))
+            _session.Send(new TrapDiscoveredPacket(place!, key, true, Xp: true));
+    }
+
+    // Another player disarmed a trap near us: its XP ours too, as the game gives it (scr_get_XP of its gain_XP), and the
+    // actions log says so as it does.
+    private void TakeXp(RemotePlayer from, Instance trap, string key)
+    {
+        if (_xpTaken.Contains(key) || Instances.All(GameObjectId.o_player).FirstOrDefault() is not { IsNone: false } player)
+            return;
+        var trapCell = new Cell((int)(trap.Get("x").AsReal / 26), (int)(trap.Get("y").AsReal / 26));
+        var ourCell = new Cell((int)(player.Get("x").AsReal / 26), (int)(player.Get("y").AsReal / 26));
+        if (ourCell.DistanceTo(trapCell) > XpReach || trap.Get("gain_XP") is not { Kind: GmKind.Real } xp)
+            return;
+        _xpTaken.Add(key);
+        double gained = Game.CallScript("scr_get_XP", default, xp).AsReal;
+        using (GmArray names = GmArray.From(new[] { (GmValue)from.Name, Game.CallScript("scr_actionsLogGetName", default, trap) }))
+            Game.CallScript("scr_actionsLogXP", default, "disarmTrapSuccess", names, gained);
+        _context.Log($"{from.Name} disarmed a trap near us: {gained} XP");
+    }
+
     private void Receive(RemotePlayer from, TrapDiscoveredPacket packet)
     {
         string? place = OurPlayer.State()?.Place;
@@ -123,6 +178,8 @@ public sealed class TrapSync
             Reveal(trap);
             if (packet.Disarmed)
                 Disarm(trap);
+            if (packet.Xp)
+                TakeXp(from, trap, packet.Key);
         }
     }
 

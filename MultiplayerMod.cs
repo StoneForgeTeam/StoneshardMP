@@ -159,7 +159,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _death = new DeathSync(context, _session, _join, _ownership, _loot);
         // Doors opened or shut where players are together: the same in every game there.
         _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
-        _traps = new TrapSync(_session, () => _join.InSharedWorld);
+        _traps = new TrapSync(context, _session, () => _join.InSharedWorld);
         // Traps players set - claw traps, caltrops: the place owner's, in everyone's game; they catch enemies only.
         _placedTraps = new PlacedTrapSync(context, _session, _ownership, _players, () => _join.InSharedWorld);
         _corpses = new CorpseSync(_session, _ownership, () => _join.InSharedWorld);

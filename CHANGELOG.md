@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Disarming a trap shares its XP**, as a kill does: every player in the same place within 20 tiles of the trap gets
+  its XP, not only the one who disarmed it, with the actions log saying who did. (Protocol 41: everyone needs this
+  version to play together.)
+
 - **Fixed: a follower recruited for the caravan wasn't in the camp, and talking to Verren failed**, when another
   player was already at the camp. Each game copied the camp's people from whoever got there first - whose camp had
   been built before the recruit - so the new follower was taken out. The camp's people (Verren, the quartermaster, the
