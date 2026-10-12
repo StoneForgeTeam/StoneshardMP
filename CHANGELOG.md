@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a client saw an enemy die ("Poacher dies") that was still alive in the host's game.** Damage the client
+  didn't deal - a bleed or poison ticking, fire or acid underfoot - could kill the client's copy of the host's enemy
+  on its own, with its death message (and its XP), before the real one; then the enemy came back. Only the client's
+  own hits count on the host's enemies in the client's game now - the rest the host's game deals, and the client gets
+  the enemy's health from it.
+
 - The Join address is no longer on StoneshardMP's settings page: Join Game asks for it, and still remembers the last
   one you typed.
 

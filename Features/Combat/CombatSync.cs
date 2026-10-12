@@ -72,9 +72,9 @@ public sealed class CombatSync
     // Follower: our player's own action under way - its attack, or a knockback it owns (each pushed as whether it's ours:
     // they nest) - while what it does to the owner's units is ours to send.
     private readonly Stack<bool> _actions = new();
-    // Follower: damage being dealt (scr_simple_damage) to one of the owner's units by something of ours - each with its
-    // health before - or null, any other.
-    private readonly Stack<(Instance Target, long HostId, double Health)?> _damages = new();
+    // Follower: damage being dealt (scr_simple_damage) to one of the owner's units - each with its health before, and
+    // whether it's ours (sent to the owner) or not (undone here: the owner's own copy takes it) - or null, any other.
+    private readonly Stack<(Instance Target, long HostId, double Health, bool Ours)?> _damages = new();
     private int _ourActions;
 
     public CombatSync(ModContext context, Session session, AreaUnits areaUnits, AreaOwnership ownership, PlayerManager players,
@@ -142,8 +142,12 @@ public sealed class CombatSync
         });
         Scripts.scr_simple_damage.After(context, _ =>
         {
-            if (_damages.Count > 0 && _damages.Pop() is { } damage)
-                Finished(damage);
+            if (_damages.Count == 0 || _damages.Pop() is not { } damage)
+                return;
+            if (damage.Ours)
+                Finished((damage.Target, damage.HostId, damage.Health));
+            else
+                Undone(damage.Target, damage.Health);
         });
         Scripts.scr_effect_update.After(context, call =>
         {
@@ -189,17 +193,27 @@ public sealed class CombatSync
     }
 
     // Whether an instance is our own player's character.
-    // Damage starting (scr_simple_damage(target, amount), called as what deals it): one of the owner's units, dealt by
-    // something of ours - not inside an attack on it already measured (its hit is the attack's).
-    private (Instance, long, double)? DamageStarted(ScriptCall call)
+    // Damage starting (scr_simple_damage(target, amount), called as what deals it) to one of the owner's units - not
+    // inside an attack on it already measured (its hit is the attack's). Ours (our player's, our summon's, their spell's
+    // or skill's): sent to the owner. Anything else - a bleed or poison ticking, fire or acid underfoot, the place's own:
+    // not ours to deal - the owner's copy takes it, in the owner's game, and we have its health from the roster.
+    private (Instance, long, double, bool)? DamageStarted(ScriptCall call)
     {
         if (!Following || !_inSharedWorld() || call.Args.Length < 2 || Ours(call.Args[0]) is not var (target, hostId))
             return null;
         if (_attacks.Any(a => a is { } attack && attack.Target.Equals(target)))
             return null;
-        if (_ourActions == 0 && !IsOursDeep(call.Self))
-            return null;
-        return (target, hostId, target.Get("HP").AsReal);
+        bool ours = _ourActions > 0 || IsOursDeep(call.Self);
+        return (target, hostId, target.Get("HP").AsReal, ours);
+    }
+
+    // Follower: damage that wasn't ours to one of the owner's units, undone - its health back as it was. Left, our copy
+    // could die before the real one: the game killed it here ("Poacher dies", its XP) while the owner's lived on, and the
+    // roster brought it back.
+    private void Undone(Instance target, double health)
+    {
+        if (target.Exists && target.Get("HP").AsReal < health)
+            target["HP"] = health;
     }
 
     // Whether something's ours: our player, our summon, or what one of them owns - a spell, a skill, a projectile (its
