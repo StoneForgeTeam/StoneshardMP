@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- The Join address is no longer on StoneshardMP's settings page: Join Game asks for it, and still remembers the last
+  one you typed.
+
+- **The port is typed now**, in a number box on StoneshardMP's settings page (digits only, 1 to 65535) instead of a
+  slider. Needs StoneForge 0.9.5 or newer.
+
 - **Fixed: the game crashed entering a place another player had changed** ("Data structure with index does not exist"
   in o_roomEntityLoader) - e.g. the Black Boar Inn after a client dropped an item there, for the client rejoining
   and the host going in. Since 0.4.1 a place's saved state sent between games was sometimes written in a form the

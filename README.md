@@ -39,7 +39,7 @@ CHANGELOG.md for what works so far.
   host's clock.
 - **Players:** while you're hosting or in a game, the left of the main menu lists who's in it, with the host marked and
   each player's ping. The host can remove a player with **Kick**, then **Sure?**.
-- **Settings** (your name, the join address, name tags, party frames, the port and player limit) are on StoneshardMP's
+- **Settings** (your name, name tags, party frames, the port and player limit) are on StoneshardMP's
   page in the Mods window.
 
 ## Save backups
