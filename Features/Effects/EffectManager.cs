@@ -5,7 +5,13 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using StoneForge;
 using StoneshardMP.Features.Players;
+using StoneshardMP.Features.Combat;
 using StoneshardMP.Net;
+
+// The game's one-off animations - a spell's flash on its target (scr_animationCreate), a cast over the caster
+// (scr_guiAnimation): hooked to know which our player's spells made.
+[assembly: HookScript(nameof(Scripts.scr_animationCreate))]
+[assembly: HookScript(nameof(Scripts.scr_guiAnimation))]
 
 namespace StoneshardMP.Features.Effects;
 
@@ -27,6 +33,11 @@ public sealed class EffectManager
     private readonly HashSet<int> _sent = new();
     // (sender slot, sender's instance ID) -> our harmless echo.
     private readonly Dictionary<(int Slot, int Id), Instance> _remote = new();
+    // Our player's spells' one-off animations (o_simple_animation_object, o_gui_animation): not every one - the game makes
+    // most in every game alike (a hit, a death) - only those made by something of our player's, or inside our Planar
+    // Exchange (its flashes are made on its targets). Streamed as the others are, while they last.
+    private readonly HashSet<Instance> _ours = new();
+    private int _ourSpell;
 
     public EffectManager(ModContext context, Session session)
     {
@@ -37,6 +48,29 @@ public sealed class EffectManager
         session.On<EffectPacket>(Receive);
         session.On<EffectEndPacket>(End);
         session.PlayerLeft += player => Forget(player.Slot);
+        Scripts.scr_animationCreate.After(context, Made);
+        Scripts.scr_guiAnimation.After(context, Made);
+        context.OnCode("gml_Object_o_planar_exchange_Alarm_0",
+            before: (exchange, _) =>
+            {
+                if (!exchange.IsNone && CombatSync.IsOursDeep(exchange))
+                    _ourSpell++;
+                return false;
+            },
+            after: (exchange, _) =>
+            {
+                if (_ourSpell > 0)
+                    _ourSpell--;
+            });
+    }
+
+    // An animation made: ours to stream if our player's spell made it.
+    private void Made(ScriptCall call)
+    {
+        if (!_session.Connected || Instance.Of(call.Result) is not { IsNone: false } made)
+            return;
+        if (_ourSpell > 0 || (!call.Self.IsNone && CombatSync.IsOursDeep(call.Self)))
+            _ours.Add(made.Persist());
     }
 
     public void Tick()
@@ -44,6 +78,7 @@ public sealed class EffectManager
         if (!_session.Connected || !Gm.InGame)
         {
             _sent.Clear();
+            _ours.Clear();
             return;
         }
 
@@ -66,6 +101,18 @@ public sealed class EffectManager
                 Send(source);
             }
         }
+        foreach (Instance source in _ours.ToList())
+        {
+            if (!source.Exists)
+            {
+                _ours.Remove(source);
+                continue;
+            }
+            if (current.Count >= MaxEffects || !VisibleSprite(source))
+                continue;
+            current.Add(source["id"].AsInt);
+            Send(source);
+        }
         foreach (int ended in _sent.Except(current).ToArray())
             _session.Send(new EffectEndPacket(ended), delivery: DeliveryMethod.Sequenced);
         _sent.Clear();
@@ -84,6 +131,8 @@ public sealed class EffectManager
     public void Clear()
     {
         _sent.Clear();
+        _ours.Clear();
+        _ourSpell = 0;
         foreach (var echo in _remote.Values)
             if (echo.Exists)
                 echo.Destroy();

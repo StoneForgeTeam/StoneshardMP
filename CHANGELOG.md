@@ -24,6 +24,10 @@ releases them: the release workflow titles that section with the version, sets i
   same tile, and then pushed the enemy aside, so the caster saw it jump next to them. The swap now goes to the host,
   which trades the two units' places as the caster's game did - an enemy with the caster, or two enemies.
 
+- **The others see more of a player's spells**: the one-off animations a player's spells and skills make - Planar
+  Exchange's flash on each of its targets, the cast over the caster - now show in the other players' games too. (The
+  arcane particles and the screen's ripple are drawn straight to the screen, so they're still only the caster's.)
+
 - **Fixed: a follower recruited for the caravan wasn't in the camp, and talking to Verren failed**, when another
   player was already at the camp. Each game copied the camp's people from whoever got there first - whose camp had
   been built before the recruit - so the new follower was taken out. The camp's people (Verren, the quartermaster, the
