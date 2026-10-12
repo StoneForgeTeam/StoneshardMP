@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a building's entrance unlocked with its key locked itself again** (the granary - the Osbrook mill's barn -
+  and any locked house or stable). The other players' games never saw it unlocked, and the place's saved state is the
+  game running it, so it was saved locked and the key was needed every time. An entrance one player unlocks is now
+  unlocked in every game there, and saved so.
+
 - **Fixed: "stoneshardmp threw in Tick" (SEHException in OurPlayer.ReadState), and the crash it led to** - travelling,
   or arriving where another player was ("array_get :: Index [1] out of range [0]" in o_cameraController, or in the
   units' render atlas). Reading our player's animation row and shadow read past the end of the game's arrays when

@@ -64,6 +64,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
+    private EntranceLocks _entrances = null!;
     private TrapSync _traps = null!;
     private PlacedTrapSync _placedTraps = null!;
     private CorpseSync _corpses = null!;
@@ -159,6 +160,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _death = new DeathSync(context, _session, _join, _ownership, _loot);
         // Doors opened or shut where players are together: the same in every game there.
         _doors = new DoorSync(context, _session, () => _join.InSharedWorld);
+        // Building entrances unlocked by one player: unlocked for everyone there, and saved so.
+        _entrances = new EntranceLocks(context, _session, () => _join.InSharedWorld);
         _traps = new TrapSync(context, _session, () => _join.InSharedWorld);
         // Traps players set - claw traps, caltrops: the place owner's, in everyone's game; they catch enemies only.
         _placedTraps = new PlacedTrapSync(context, _session, _ownership, _players, () => _join.InSharedWorld);
@@ -216,6 +219,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
                 _traps.Clear();
                 _placedTraps.Clear();
                 _doors.Clear();
+                _entrances.Clear();
             },
         });
         context.Log($"StoneshardMP {context.Manifest.Version} (protocol {Session.Protocol}), LiteNetLib networking");
@@ -234,6 +238,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _rounds.Clear();
         _turnTime.Clear();
         _doors.Clear();
+        _entrances.Clear();
         _traps.Clear();
         _placedTraps.Clear();
         _corpses.Clear();
@@ -282,6 +287,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "loot", _loot.Tick);
             Profiler.Measure(_context, "gather", _gather.Tick);
             Profiler.Measure(_context, "doors", _doors.Tick);
+            Profiler.Measure(_context, "entrances", _entrances.Tick);
             Profiler.Measure(_context, "traps", _traps.Tick);
             Profiler.Measure(_context, "placed traps", _placedTraps.Tick);
             Profiler.Measure(_context, "corpses", _corpses.Tick);

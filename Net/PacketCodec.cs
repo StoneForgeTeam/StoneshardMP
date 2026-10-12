@@ -121,6 +121,7 @@ public static class PacketCodec
             BombLandedPacket.PacketId => BombLandedPacket.Read(ref reader),
             SwarmReleasedPacket.PacketId => SwarmReleasedPacket.Read(ref reader),
             SituationsPacket.PacketId => SituationsPacket.Read(ref reader),
+            EntranceUnlockedPacket.PacketId => EntranceUnlockedPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");
