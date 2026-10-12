@@ -45,23 +45,28 @@ internal static class OurPlayer
             return null;
 
         double V(string name) => player.Get(name).AsReal;
-        // Which of the 5 animation rows it's drawn from.
+        // Which of the 5 animation rows it's drawn from. (Every read within the array's length: one past its end is an
+        // error in the game, thrown through our call - the game's own error handling was left broken by it, and the next
+        // array read anywhere failed: o_cameraController, the units' render atlas.)
         int row = 0;
         GmValue sprite = player.Get("sprite_index");
         using (GmArray? rows = Game.Global["playerSpriteArray"].AsArray)
-            for (int i = 0; rows != null && i < 5; i++)
-                if (rows[i].AsReal == sprite.AsReal)
+        {
+            int length = rows == null ? 0 : Math.Min(rows.Length, 5);
+            for (int i = 0; i < length; i++)
+                if (rows![i].AsReal == sprite.AsReal)
                 {
                     row = i;
                     break;
                 }
+        }
         double shadowAlpha = 0;
         if (V("isGround") == 1 && !player.Get("hasFootwave").AsBool && !player.Get("is_sleeping").AsBool
             && (player.Get("is_life").AsBool || V("image_speed") == 0))
             shadowAlpha = V("shadow_spr_alpha") * V("shadow_spr_alpha_multiplier");
         double shiftX = 0, shiftY = 0;
         using (GmArray? shift = player.Get("shadow_spr_shift").AsArray)
-            if (shift != null)
+            if (shift != null && shift.Length >= 2)
             {
                 shiftX = shift[0].AsReal;
                 shiftY = shift[1].AsReal;
