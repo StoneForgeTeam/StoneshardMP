@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a follower recruited for the caravan wasn't in the camp, and talking to Verren failed**, when another
+  player was already at the camp. Each game copied the camp's people from whoever got there first - whose camp had
+  been built before the recruit - so the new follower was taken out. The camp's people (Verren, the quartermaster, the
+  followers) are each game's own now, made from the caravan's shared state.
+
 - **Fixed: the host's game crashed when a client went into an inn again** ("I64 argument is unset", for
   o_village_standing). A town NPC coming back from the inn's other floor goes through one of its doors; when none of
   them was in the room, the game had nowhere to put it and stopped. It comes back where it started instead now.

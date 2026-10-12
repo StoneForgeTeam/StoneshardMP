@@ -37,6 +37,16 @@ public sealed class AreaUnits
     private int _frame;
     // Whether a sprite is one of the game's own (the same id in every game) - a sprite made at run time isn't.
     private readonly Dictionary<int, bool> _assetSprites = new();
+    // The caravan's camp - Verren, the quartermaster, the followers - isn't shared: every game makes the same camp from the
+    // caravan's state, which is shared (CaravanSync), and runs its people itself. A copy of another game's camp was the
+    // camp as it was built there: a follower just recruited by someone else - in their camp only once it's built again
+    // - was removed from ours, and talking to Verren failed. Whether an object is one of them (read once).
+    private static readonly GameObjectId[] CampPeople =
+    {
+        GameObjectId.o_npc_caravan_follower, GameObjectId.o_verren_brynn, GameObjectId.o_verren_cart,
+        GameObjectId.o_verren_cart_prepare, GameObjectId.o_npc_quartermaster_brynn,
+    };
+    private readonly Dictionary<int, bool> _campPerson = new();
     // Owner: our units' sync ids (what they go by on the wire).
     private readonly Dictionary<Instance, long> _syncIds = new();
     private long _nextSyncId;
@@ -279,7 +289,7 @@ public sealed class AreaUnits
         {
             int obj = unit.Get("object_index").AsInt;
             // (Another player's stand-in, or a player's summon: its caster's game runs it - SummonSync.)
-            if (obj == playerObject || SummonSync.IsPlayers(unit))
+            if (obj == playerObject || SummonSync.IsPlayers(unit) || IsCampPerson(obj))
                 continue;
             var look = new JsonObject();
             foreach (string key in LookKeys)
@@ -373,6 +383,9 @@ public sealed class AreaUnits
         long hostId = (long)Number(u["id"]);
         int obj = Int(u["obj"]);
         var cell = new Cell(Int(u["x"]), Int(u["y"]));
+        // (An owner on an older version still sends its camp's people: ours are our own.)
+        if (IsCampPerson(obj))
+            return;
         Instance unit = _bound.GetValueOrDefault(hostId);
         if (unit.IsNone || !unit.Exists)
         {
@@ -476,7 +489,7 @@ public sealed class AreaUnits
             _unbound = new();
             foreach (Instance local in Instances.All(GameObjectId.o_enemy))
             {
-                if (_everBound.Contains(local) || ObjectOf(local) == playerObject)
+                if (_everBound.Contains(local) || ObjectOf(local) == playerObject || IsCampPerson(ObjectOf(local)))
                     continue;
                 var key = (ObjectOf(local), Units.CellOf(local));
                 if (!_unbound.TryGetValue(key, out var list))
@@ -537,15 +550,23 @@ public sealed class AreaUnits
             _turnsSize = Units.TurnsCount();
         }
         int playerObject = _playerObject();
-        // (Not a player's stand-in, nor our player's summon: ours - SummonSync.)
+        // (Not a player's stand-in, nor our player's summon: ours - SummonSync. Nor the camp's people: ours too.)
         foreach (Instance gone in Instances.All(GameObjectId.o_enemy).Where(unit => !_current.Contains(unit) && ObjectOf(unit) != playerObject
-            && !SummonSync.IsOurs(unit)))
+            && !SummonSync.IsOurs(unit) && !IsCampPerson(ObjectOf(unit))))
         {
             Units.Remove(gone);
             _applied.Remove(gone);
             _objectOf.Remove(gone);
             _poly.Remove(gone);
         }
+    }
+
+    // Whether an object is one of the caravan camp's people (CampPeople, or one of theirs - each follower's own object).
+    private bool IsCampPerson(int obj)
+    {
+        if (!_campPerson.TryGetValue(obj, out bool person))
+            _campPerson[obj] = person = CampPeople.Any(camp => obj == (int)camp || Gm.ObjectIsAncestor(obj, (int)camp));
+        return person;
     }
 
     // A unit's object (it never changes: read once).
