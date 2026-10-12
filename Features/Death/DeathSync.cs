@@ -25,8 +25,8 @@ namespace StoneshardMP.Features.Death;
 //   checkpoint now, the host's world loaded in place - and Disconnect - out to the main menu, back as your checkpoint when
 //   you next join.
 // The host's death is the same, against its own checkpoint (kept by itself): its death screen has Respawn - the world as
-// it is now reloaded in place with the host's checkpoint character in it, everyone's characters asked for first so they
-// come back as they are (JoinManager.HostRespawn) - Load (the game's save menu: a save loads for everyone) and
+// it is now reloaded in place with the host's checkpoint character in it, for the host alone: the players carry on where
+// they are (JoinManager.HostRespawn) - Load (the game's save menu: a save loads for everyone) and
 // Disconnect (out without saving: the world as the last save left it). Only while hosting: alone, death is the game's.
 public sealed class DeathSync
 {

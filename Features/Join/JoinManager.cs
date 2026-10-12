@@ -97,11 +97,10 @@ public sealed class JoinManager
     private SaveFile? _topUpOf;
     private static readonly TimeSpan TopUpWait = TimeSpan.FromSeconds(5);
     private bool _disconnecting;
-    // Host, dead: coming back to our checkpoint - the players' characters asked for first (SaveRequestPacket), up to
-    // TopUpWait, so the world reloaded holds them as they are; then the load, which keeps them (HostLoading).
-    private bool _respawning, _respawnLoad;
-    private readonly HashSet<int> _respawnWaiting = new();
-    private DateTime _respawnDeadline;
+    // Host, dead: coming back to our checkpoint - our world reloaded in place with it as ours, on the next frame
+    // (_respawning); only ours: the players carry on where they are, as if we'd gone somewhere else (HostLoading). Once
+    // we're back in (_respawnLanded), where we are, for the log.
+    private bool _respawning, _respawnLoad, _respawnLanded;
 
     public JoinManager(ModContext context, Session session, Func<string> playerName, WorldSlots slots)
     {
@@ -202,6 +201,9 @@ public sealed class JoinManager
         _exitGo = false;
         _saveNow = false;
         _hostLoading = false;
+        _respawning = false;
+        _respawnLoad = false;
+        _respawnLanded = false;
         _reloading = false;
         _askOnMenu = false;
         _topUpWaiting.Clear();
@@ -247,7 +249,7 @@ public sealed class JoinManager
         }
         if (_session.Mode == Session.SessionMode.Host)
         {
-            if (_respawning && (_respawnWaiting.Count == 0 || DateTime.UtcNow >= _respawnDeadline))
+            if (_respawning)
                 HostRespawnLoad();
             HostTick();
         }
@@ -256,22 +258,14 @@ public sealed class JoinManager
     }
 
     /// <summary>Host, dead: back to our checkpoint - our character as at our last save, where we saved - with the world
-    /// as it is now: everyone's characters asked for, then the world reloaded in place with ours swapped in (everyone
-    /// reloads into it, as they are). false: we've no checkpoint (never saved).</summary>
+    /// as it is now: our world reloaded in place with ours swapped in. Only we reload: the players stay where they are.
+    /// false: we've no checkpoint (never saved).</summary>
     public bool HostRespawn()
     {
         if (_session.Mode != Session.SessionMode.Host || Checkpoints.Of(0) is null || _respawning)
             return false;
         _respawning = true;
-        _respawnWaiting.Clear();
-        foreach (var player in _session.Players)
-            if (player.State != null)
-                _respawnWaiting.Add(player.Slot);
-        _respawnDeadline = DateTime.UtcNow + TopUpWait;
-        if (_respawnWaiting.Count > 0)
-            _session.Send(new SaveRequestPacket());
         StoneForge.Blackout.Show("Returning to your last save...");
-        _context.Log($"Respawning: asking {_respawnWaiting.Count} player(s) for their characters first");
         return true;
     }
 
@@ -324,6 +318,11 @@ public sealed class JoinManager
             }
             else
                 inWorld = false;
+        }
+        if (_respawnLanded && inWorld && !Gm.InstanceExists(GameObjectId.o_smoothRoomChanger) && !Game.IsBusy)
+        {
+            _respawnLanded = false;
+            _context.Log($"Respawned: we're in {JoinSave.PlayerWhere()}, our character says {JoinSave.Where(JoinSave.CharacterJson())}");
         }
         if (_hostWasInWorld && !inWorld && Gm.InMainMenu)
         {
@@ -427,7 +426,6 @@ public sealed class JoinManager
             _pendingCharacters[worldSlot] = (packet.Name, character);
         else
             _context.Log($"{packet.Name}'s character kept in slot {worldSlot}: {JoinSave.Where(character)}");
-        _respawnWaiting.Remove(sender.Slot);
         // (A held Save & Exit: one more saved.)
         if (_exitWaiting.Remove(sender.Slot) && _exitWaiting.Count == 0)
             ExitNow();
@@ -548,12 +546,17 @@ public sealed class JoinManager
     // save has them - loaded in place, a fade to black and back. What's still to come from the world being left is dropped.
     private void HostLoading()
     {
+        // (Our respawn: our world as it is, reloaded for us alone - the players aren't told, and carry on. Characters
+        // they send meanwhile are held till we're back in it, HostTick.)
+        if (_respawnLoad)
+        {
+            _respawnLoad = false;
+            _respawnLanded = true;
+            return;
+        }
         _hostLoading = true;
         _hostLoadCalm = 0;
-        // (Our respawn: the characters just asked for are the ones to keep - into the world once it's up, HostTick.)
-        if (!_respawnLoad)
-            _pendingCharacters.Clear();
-        _respawnLoad = false;
+        _pendingCharacters.Clear();
         _exitWaiting.Clear();
         _topUpWaiting.Clear();
         _topUpGot = false;

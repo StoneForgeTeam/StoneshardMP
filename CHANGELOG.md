@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: the host's Respawn made everyone reload.** Respawning after the host dies reloads only the host's game now,
+  back at its checkpoint; the other players carry on where they are, as if the host had gone somewhere else. (The log
+  now also says where the host landed after respawning, to track down reports of the host coming back where it died.)
+
 - **Fixed: a client saw an enemy die ("Poacher dies") that was still alive in the host's game.** Damage the client
   didn't deal - a bleed or poison ticking, fire or acid underfoot - could kill the client's copy of the host's enemy
   on its own, with its death message (and its XP), before the real one; then the enemy came back. Only the client's
