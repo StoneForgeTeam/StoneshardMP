@@ -18,6 +18,7 @@ using StoneshardMP.Net;
 [assembly: HookScript(nameof(Scripts.scr_quest_next_target))]
 [assembly: HookScript(nameof(Scripts.scr_quest_dismiss_incomplete))]
 [assembly: HookScript(nameof(Scripts.scr_globaltile_reputation_update))]
+[assembly: HookScript(nameof(Scripts.scr_globaltile_reputation_log))]
 [assembly: HookScript(nameof(Scripts.scr_dialogue_complete))]
 [assembly: HookScript(nameof(Scripts.scr_globalFraction))]
 [assembly: HookScript(nameof(Scripts.scr_locationRoomPresetFlagSet))]
@@ -69,6 +70,8 @@ public sealed class QuestSync
     // whether a call from that player is made here (none: always).
     private readonly Dictionary<string, Func<GmValue[], GmValue[]?>> _shared = new();
     private readonly Dictionary<string, Func<RemotePlayer, bool>> _madeHereIf = new();
+    // ...and for some, how a call's arguments come in (a map sent as its JSON made a map again; null: not made).
+    private readonly Dictionary<string, Func<GmValue[], GmValue[]?>> _incoming = new();
     private bool _applying;
     // Quest triggers running (and the item check inside one, asking the game itself).
     private bool _triggers, _askingGame;
@@ -113,6 +116,28 @@ public sealed class QuestSync
             if (sent[2].IsUndefined)
                 sent[2] = here.Y;
             return sent;
+        });
+        // Its entry in the settlement's reputation history (the journal's: what earned it - a quest, a contract...): a map
+        // the script keeps (and destroys, off the world map), so it goes as its JSON and is made a map again there.
+        // Before, a client's quest reward changed the host's reputation but left nothing in its history.
+        Share(Scripts.scr_globaltile_reputation_log, args =>
+        {
+            if (WorldMap.PlayerCell is not { } here || args.Length == 0 || DsMap.From(args[0]) is not { } entry)
+                return null;
+            var sent = Pad(args, 3);
+            sent[0] = entry.ToJson();
+            if (sent[1].IsUndefined)
+                sent[1] = here.X;
+            if (sent[2].IsUndefined)
+                sent[2] = here.Y;
+            return sent;
+        }, incoming: args =>
+        {
+            if (args.Length == 0 || args[0].Kind != GmKind.String || DsMap.FromJson(args[0].AsString) is not { } entry)
+                return null;
+            var made = (GmValue[])args.Clone();
+            made[0] = entry.Id;
+            return made;
         });
         // Dialogue flags (said, offered, settled): with one argument it only reads.
         Share(Scripts.scr_dialogue_complete, args => args.Length > 1 && !args[1].IsUndefined ? args : null);
@@ -209,11 +234,14 @@ public sealed class QuestSync
     /// <summary>Shares a script's calls: each one goes to the others, made with the arguments <paramref name="outgoing"/>
     /// gives (null: not this call), and they make it too - those <paramref name="madeHereIf"/> says yes to, for the
     /// player it's from (none: all). The mod declares it hookable ([assembly: HookScript]).</summary>
-    public void Share(Script script, Func<GmValue[], GmValue[]?> outgoing, Func<RemotePlayer, bool>? madeHereIf = null)
+    public void Share(Script script, Func<GmValue[], GmValue[]?> outgoing, Func<RemotePlayer, bool>? madeHereIf = null,
+        Func<GmValue[], GmValue[]?>? incoming = null)
     {
         _shared[script.Name] = outgoing;
         if (madeHereIf != null)
             _madeHereIf[script.Name] = madeHereIf;
+        if (incoming != null)
+            _incoming[script.Name] = incoming;
         script.Before(_context, call =>
         {
             if (!_applying && Sharing && outgoing(call.Args) is { } args)
@@ -229,10 +257,17 @@ public sealed class QuestSync
             return;
         if (_madeHereIf.TryGetValue(packet.Script, out var madeHere) && !madeHere(sender))
             return;
+        GmValue[] args = packet.Args;
+        if (_incoming.TryGetValue(packet.Script, out var incoming))
+        {
+            if (incoming(args) is not { } made)
+                return;
+            args = made;
+        }
         // (As our player, as the game's own calls are made.)
         Instance player = StoneForge.Player.Instance;
         _applying = true;
-        try { Game.CallScript(packet.Script, player, packet.Args); }
+        try { Game.CallScript(packet.Script, player, args); }
         catch (Exception e) { _context.Log($"{packet.Script} from {sender.Name} failed: {e.Message}"); }
         finally { _applying = false; }
         if (packet.Script == Scripts.scr_quest_set_complete.Name)

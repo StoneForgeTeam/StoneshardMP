@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a client's quest reward left nothing in the host's reputation history.** The reputation itself was shared,
+  but the entry saying what earned it (the settlement's reputation log, in the journal) stayed in the client's game.
+  It's shared now too.
+
 - **Fixed: entering a place another player was already running could crash the game at the end of a turn** ("REAL
   argument incorrect type undefined" in o_enemy_pass_hive - the Mannshire orchard's beehive). A unit the owner doesn't
   have is removed from the others' games, and its passive skills were left behind, reading a unit that's gone. Needs
