@@ -449,8 +449,9 @@ public sealed class JoinManager
         if (_topUpWaiting.Count == 0)
         {
             // (No one to ask: the checkpoints from the characters we keep, and the save written again with them.)
-            _context.Log($"Checkpoints: {Checkpoints.RecordAll()} recorded at {saved.Slot.Name}/{saved.Name}");
-            StoneForge.SaveData.WriteTo(saved);
+            int recorded = JoinSave.TopUp(saved);
+            _context.Log(recorded >= 0 ? $"Checkpoints: {recorded} recorded at {saved.Slot.Name}/{saved.Name}"
+                : $"Saved {saved.Slot.Name}/{saved.Name}, but couldn't read it back to record the checkpoints");
             return;
         }
         _topUpOf = saved;
@@ -469,8 +470,12 @@ public sealed class JoinManager
             return;
         _topUpGot = false;
         // Everyone's checkpoint: their character as now, where we saved - written with the save, and sent to each.
-        int recorded = Checkpoints.RecordAll();
-        StoneForge.SaveData.WriteTo(save);
+        int recorded = JoinSave.TopUp(save);
+        if (recorded < 0)
+        {
+            _context.Log($"Save {save.Slot.Name}/{save.Name} couldn't be read back to top it up - it has the characters as they were");
+            return;
+        }
         foreach (var player in _session.Players)
             SendCheckpoint(player.Slot);
         _context.Log($"Save {save.Slot.Name}/{save.Name} topped up with everyone's characters as they are now; {recorded} checkpoints");

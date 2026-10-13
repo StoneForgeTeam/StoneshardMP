@@ -40,10 +40,11 @@ internal static class Checkpoints
     /// own character's location, as just saved) - and the host's own (slot 0) as it is. The kept characters are placed
     /// there too, so the save has everyone where the host saved, as a save at a bed has its player: loading it, or
     /// joining from it, everyone starts there. (Until each client's next update: a session going on keeps where they
-    /// are.) How many.</summary>
-    public static int RecordAll()
+    /// are.) <paramref name="hostCharacter"/>: the host's character as the save has it (its file, read back - JoinSave.TopUp);
+    /// the save data's if none. How many.</summary>
+    public static int RecordAll(string? hostCharacter = null)
     {
-        if (SaveData.Map is not { } save || SaveData.CharacterJson() is not { Length: > 0 } host
+        if (SaveData.Map is not { } save || (hostCharacter ?? SaveData.CharacterJson()) is not { Length: > 0 } host
             || JsonNode.Parse(host)?["characterDataMap"] is not JsonObject hostMap)
             return 0;
         Set(0, host);

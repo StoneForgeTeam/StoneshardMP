@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using StoneForge;
 using StoneshardMP.Features.Chests;
+using StoneshardMP.Features.Death;
 
 namespace StoneshardMP.Features.Join;
 
@@ -334,6 +335,51 @@ internal static class JoinSave
             if (ours[section] is { } value)
                 world[section] = value.DeepClone();
         return world.ToJsonString(GameJson);
+    }
+
+    /// <summary>Host: the save just written, topped up - read back from its file and written again with our own keys (mp...:
+    /// the players' characters, their checkpoints, stashes) as the save data has them now, the game's own as the file has
+    /// them. Not the save data written whole: some of it is only right while the game saves - the skills on the hotbar
+    /// are names in it then, and numbers after (so a save rewritten from it later lost the hotbar), and the player's
+    /// position is cleared from it as the player's made again (so its player came back in the corner of the room).
+    /// The checkpoints are recorded first, from the file's own character (Checkpoints.RecordAll). How many, or -1 if the
+    /// file couldn't be read (nothing written).</summary>
+    public static int TopUp(SaveFile save)
+    {
+        if (SaveData.Map is not { } memory
+            || DsMap.From(Game.CallScript("scr_slotSaveDataMapLoad", default, save.Slot.Name, save.Name)) is not { } file)
+            return -1;
+        try
+        {
+            JsonObject written = file.ToJsonNode();
+            var character = new JsonObject();
+            foreach (string section in SaveData.CharacterSections)
+                if (written[section] is { } value)
+                    character[section] = value.DeepClone();
+            int recorded = Checkpoints.RecordAll(character.ToJsonString(GameJson));
+            foreach (GmValue key in memory.Keys)
+            {
+                if (key.Kind != GmKind.String || !key.AsString.StartsWith("mp", System.StringComparison.Ordinal))
+                    continue;
+                if (memory.GetMap(key) is { } ours)
+                {
+                    var copy = DsMap.Create();
+                    copy.AssignFrom(ours);
+                    file.AddMap(key, copy);
+                }
+                else if (memory.GetList(key) is { } list)
+                {
+                    var copy = DsList.Create();
+                    copy.AssignFrom(list);
+                    file.AddList(key, copy);
+                }
+                else
+                    file[key] = memory[key];
+            }
+            Game.CallScript("scr_slotSaveDataMapSave", default, save.Slot.Name, save.Name, file);
+            return recorded;
+        }
+        finally { file.Destroy(); }
     }
 
     /// <summary>Host: a save of our own world, made here (WorldWith), kept to load next (TakePending) - not tagged as

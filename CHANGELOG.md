@@ -5,6 +5,13 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: loading the host's save lost the skills on its hotbar, and could put its player in the corner of the
+  room, out of bounds.** The host's save is written again a moment after the game writes it, with everyone's
+  characters - and it was written from the game's data as it was by then, not as it was saved: the hotbar's skills
+  are names only while the game saves, and the player's position is cleared as the player's made again. Now the save
+  the game wrote is read back and only StoneshardMP's own part of it changed. (The host's checkpoint, and where the
+  others' are placed, come from that save too.) Saves written before keep the problem: save again to fix them.
+
 - **Fixed: a client's fatigue never went down** - only the host can sleep, and when it did, only time passed for the
   others. Now they rest with it, as the game rests a sleeper: fatigue, health and energy restored, pain eased, hunger
   and thirst grown over the hours. A client in the same place as the host's bed rests as the host did (that bed's, that
