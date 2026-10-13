@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.8
 
 - **Fixed: a client's Wormhole mark vanished a turn after it was cast.** The client's copy of the enemy had its effects
   made the host's after a moment, which took the mark's debuff off - and with it, the mark. Effects our own player put
