@@ -127,6 +127,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _summons = new SummonSync(_session, _players, () => _join.InSharedWorld);
         // One caravan, the host's: its state and storage kept alike, its storage one player at a time, moved by the host.
         _caravan = new CaravanSync(context, _session, () => _join.InSharedWorld);
+        // Verren's cart: the players where it leaves ride along.
+        new CartTravel(context, _session, () => _join.InSharedWorld);
         // One stock per trader: a trade's end sends the trader's goods, gold and sold-out uniques to everyone.
         _merchants = new MerchantSync(context, _session, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);

@@ -20,6 +20,9 @@ using StoneshardMP.Net;
 [assembly: HookScript(nameof(Scripts.scr_globaltile_reputation_update))]
 [assembly: HookScript(nameof(Scripts.scr_globaltile_reputation_log))]
 [assembly: HookScript(nameof(Scripts.scr_globaltile_reset))]
+[assembly: HookScript(nameof(Scripts.scr_globaltile_set))]
+[assembly: HookScript(nameof(Scripts.scr_globaltile_location_replace))]
+[assembly: HookScript(nameof(Scripts.scr_npc_lines_verren_caravan_hiring_choose_darrel_location))]
 [assembly: HookScript(nameof(Scripts.scr_dialogue_complete))]
 [assembly: HookScript(nameof(Scripts.scr_globalFraction))]
 [assembly: HookScript(nameof(Scripts.scr_locationRoomPresetFlagSet))]
@@ -63,6 +66,20 @@ public sealed class QuestSync
     // (Our checks go out again this often, for players who've just come in.)
     private const long ItemsResendMs = 2000;
     private static readonly HashSet<string> CrimeFields = new() { "Crime Status", "Penalty", "Attack_Count", "Crime_State", "Crime_Timestamp" };
+    // A world-map tile's values that are the story's, shared as they're set (scr_globaltile_set): Verren's cart, a place's
+    // description and room, cleared or opened, the quests' own marks. Not the rest - seeds (WorldSync), jail and rented
+    // rooms (a player's own), crime (CrimeSync), reputation (its own call).
+    private static readonly HashSet<string> StoryTileKeys = new()
+    {
+        "VerrenCart", "isVerrenStartDialogue", "DescriptionKey", "room_type", "Owner", "mapLocation", "isClear", "isOpen",
+        "guinnelQuestValue", "boarIsCaptured", "boarHeadReturned", "caravanRemains", "vault_is_open", "secretFinded",
+        "isRunicComplete", "runicKnowledge", "RunicStonesIndex", "blacktablet_spawn_wave", "blacktablet_spawn_wave_turn",
+        "blacktablet_zombies_spawned", "blacktablet_ritual_structure_cleanup", "isHunterLocated", "hunterPresetName",
+        "hunterNPCTimestamp", "hunterDays", "quest_turn_counter", "RumorTitleKey", "RumorMarkKey", "Breakfast_Available",
+    };
+    // A character's value the story gives everyone: where Verren says Darrel is (picked at random, kept in the asking
+    // character's data - the tavern's owner spawns him by its own character's).
+    private const string DarrelLocationKey = "darrel_location";
 
     private readonly ModContext _context;
     private readonly Session _session;
@@ -153,6 +170,34 @@ public sealed class QuestSync
             bool keeps = sent[4].Kind is GmKind.Real or GmKind.Bool && !sent[4].AsBool;
             return noRoom && keeps ? null : sent;
         });
+        // A tile's story values (key, value, x, y, level): the tile defaults to where the caller stands - here. Only plain
+        // values.
+        Share(Scripts.scr_globaltile_set, args =>
+        {
+            if (args.Length < 2 || args[0].Kind != GmKind.String || !StoryTileKeys.Contains(args[0].AsString)
+                || args[1].Kind is not (GmKind.Real or GmKind.String or GmKind.Bool) || WorldMap.PlayerCell is not { } here)
+                return null;
+            var sent = Pad(args, 5);
+            if (sent[2].IsUndefined)
+                sent[2] = here.X;
+            if (sent[3].IsUndefined)
+                sent[3] = here.Y;
+            return sent;
+        });
+        // A place's marker on the world map replaced (a quest's camp appearing: Leif's).
+        Share(Scripts.scr_globaltile_location_replace, args => args.Length >= 6 ? args : null);
+        // Where Darrel is: picked here, at random - to everyone as the value picked (scr_atr_set_simple on arrival: their
+        // characters' too). The pick itself isn't made again there.
+        Scripts.scr_npc_lines_verren_caravan_hiring_choose_darrel_location.After(context, _ =>
+        {
+            if (!_applying && Sharing && Game.Global["characterDataMap"].AsDsMap is { } character
+                && character[DarrelLocationKey] is { Kind: GmKind.String } location)
+                _session.Send(new SharedCallPacket(SharedWorld.WorldSeed(), "scr_atr_set_simple",
+                    new GmValue[] { DarrelLocationKey, location }));
+        });
+        _shared["scr_atr_set_simple"] = _ => null;
+        _incoming["scr_atr_set_simple"] = args => args.Length == 2 && args[0].Kind == GmKind.String
+            && args[0].AsString == DarrelLocationKey && args[1].Kind == GmKind.String ? args : null;
         // Dialogue flags (said, offered, settled): with one argument it only reads.
         Share(Scripts.scr_dialogue_complete, args => args.Length > 1 && !args[1].IsUndefined ? args : null);
         // A faction's crime record - set by the town alarm and the game's crime code: these fields, and only sets (with

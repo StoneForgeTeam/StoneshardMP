@@ -5,6 +5,16 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: the caravan quest split the players up.**
+  - **Verren's cart takes everyone there**: riding it from the brewery to Brynn moved only the player who took it.
+    The players in the same place ride along now. (A coachman's paid ride is still your own.)
+  - **The quests' marks on the world map are everyone's**: Verren's cart at the brewery and in Brynn, places cleared
+    or opened, a place's description, the quests' own flags (and a quest's camp appearing on the map) were set in one
+    player's game only - the carriage seen by one, Verren by the caravan seen by the other.
+  - **Darrel is where Verren said, for everyone**: the tavern is picked at random and kept in the asking player's
+    character, so the game running that tavern - another's - never had him there. It's given to everyone's character.
+  (Protocol 43: everyone needs this version to play together.)
+
 - **Fixed: after some quest steps the players at the same spot were in different versions of it** (each other's
   location "IN" - the brewery's carriage after Verren, the old troll's map). A quest that makes a world-map tile anew -
   often as another room (the brewery, Leif's camp, Alda's cabin, the troll's tower, the Venemist camp, Kromm's bandit
