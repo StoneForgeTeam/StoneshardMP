@@ -3,6 +3,14 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Fixed: the second player to leave the inn crashed** ("Packet receive failed: SEHException ... OurPlayer.ReadState",
+  then "array_get :: Index [1] out of range [0]"). Reading our player's animation row and shadow handed one of the
+  game's arrays back to it every frame, and once that reference was lost the read broke the game. They're read only when
+  the player's sprite changes now (and kept otherwise), and a failed read keeps the last. StoneForge 0.9.6 also refuses
+  a lost reference rather than passing it to the game.
+
 ## 0.4.6
 
 - **Fixed: a building's entrance unlocked with its key locked itself again** (the granary - the Osbrook mill's barn -
