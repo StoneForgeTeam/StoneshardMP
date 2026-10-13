@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: "ESCAPE CONTROLLER ERROR: Instance (o_stash_inventory_right) doesn't exist!"** - when someone else opened
+  the caravan's storage, ours was destroyed outright, which left it on the game's Esc list. It closes the game's own way
+  now.
+
 - **Fixed: loading the host's save lost the skills on its hotbar, and could put its player in the corner of the
   room, out of bounds.** The host's save is written again a moment after the game writes it, with everyone's
   characters - and it was written from the game's data as it was by then, not as it was saved: the hotbar's skills

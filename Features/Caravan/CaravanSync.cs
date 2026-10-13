@@ -188,11 +188,14 @@ public sealed class CaravanSync
         bool open = Gm.InstanceExists(GameObjectId.o_stash_inventory);
         if (open && !_inStash)
         {
-            // Someone else is in it: ours closes.
+            // Someone else is in it: ours closes - the game's own way (its user event 2: off the Esc list, then gone).
+            // Destroyed outright, the Esc list kept it, and the next Esc check stopped the game with "ESCAPE CONTROLLER
+            // ERROR: Instance (o_stash_inventory_right) doesn't exist".
             if (_stashHolder >= 0)
             {
                 foreach (Instance window in Instances.All(GameObjectId.o_stash_inventory))
-                    window.Destroy();
+                    if (window.Exists)
+                        Game.CallBuiltinAs("event_user", window, window, 2);
                 string who = _session.Players.FirstOrDefault(p => p.Slot == _stashHolder)?.Name ?? "Someone";
                 Game.CallScript("scr_actionsLogAddMessage", default, $"{who} is using the caravan's storage.");
                 return;
