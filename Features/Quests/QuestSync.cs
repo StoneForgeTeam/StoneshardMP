@@ -19,6 +19,7 @@ using StoneshardMP.Net;
 [assembly: HookScript(nameof(Scripts.scr_quest_dismiss_incomplete))]
 [assembly: HookScript(nameof(Scripts.scr_globaltile_reputation_update))]
 [assembly: HookScript(nameof(Scripts.scr_globaltile_reputation_log))]
+[assembly: HookScript(nameof(Scripts.scr_globaltile_reset))]
 [assembly: HookScript(nameof(Scripts.scr_dialogue_complete))]
 [assembly: HookScript(nameof(Scripts.scr_globalFraction))]
 [assembly: HookScript(nameof(Scripts.scr_locationRoomPresetFlagSet))]
@@ -138,6 +139,19 @@ public sealed class QuestSync
             var made = (GmValue[])args.Clone();
             made[0] = entry.Id;
             return made;
+        });
+        // A world-map tile made anew - by a quest, mostly as another room (scr_globaltile_reset(x, y, room, description,
+        // clear, keepSeed)): the brewery once Verren's left and after its reward, Leif's camp, Alda's cabin, the troll's
+        // tower after the troll, the Venemist camp, Kromm's bandit farm. Made in one game only, the two built different
+        // rooms there: the players at the same tile weren't in the same place ("IN" for each other) - the brewery's
+        // carriage, the troll's map. Not a dungeon's reset (no room, not cleared: scr_dungeon_reset_preprocess) - WorldSync
+        // shares those.
+        Share(Scripts.scr_globaltile_reset, args =>
+        {
+            var sent = Pad(args, 6);
+            bool noRoom = sent[2].IsUndefined || sent[2].Kind == GmKind.Real && sent[2].AsReal == -4;
+            bool keeps = sent[4].Kind is GmKind.Real or GmKind.Bool && !sent[4].AsBool;
+            return noRoom && keeps ? null : sent;
         });
         // Dialogue flags (said, offered, settled): with one argument it only reads.
         Share(Scripts.scr_dialogue_complete, args => args.Length > 1 && !args[1].IsUndefined ? args : null);
