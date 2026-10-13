@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: entering the caravan camp failed to take the caravan's state ("Packet receive failed: SEHException ...
+  DsMap.AssignFrom"), so a client's camp upgrades never reached the host** - the game had destroyed a map it nests in
+  the caravan's data and left it marked. Needs StoneForge 0.9.8, which replaces such a map instead of reading into it.
+
 - **Fixed: town NPCs stayed hidden in the morning for whoever wasn't running the place** (the market's merchants
   after the host slept, the client in the village). The game hides a town NPC for the night and shows it again when it
   comes out; the copies in the other players' games were moved back but never shown. Whether each is hidden is now
