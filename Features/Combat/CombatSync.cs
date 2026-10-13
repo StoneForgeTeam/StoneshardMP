@@ -136,6 +136,16 @@ public sealed class CombatSync
                 _swapping = Math.Max(0, _swapping - 1);
                 End();
             });
+        // (Wormhole's mark taking its target back, from the mark's own alarms - ours when its owner is our player: what it
+        // moves is ours, to the owner.)
+        foreach (string alarm in new[] { "gml_Object_o_wormhole_mark_Alarm_2", "gml_Object_o_wormhole_mark_Alarm_3" })
+            context.OnCode(alarm,
+                before: (mark, _) =>
+                {
+                    Begin(!mark.IsNone && IsOursDeep(mark));
+                    return false;
+                },
+                after: (_, _) => End());
         // (A unit's death: o_enemy's Destroy, its children's too - they inherit it.)
         context.OnCode("gml_Object_o_enemy_Destroy_0", before: (self, _) =>
         {

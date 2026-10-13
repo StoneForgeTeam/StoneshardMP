@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a client's Wormhole mark vanished a turn after it was cast.** The client's copy of the enemy had its effects
+  made the host's after a moment, which took the mark's debuff off - and with it, the mark. Effects our own player put
+  on a copy are ours to keep now, and the mark taking its target back is sent to the game running the place.
+
 - **Fixed: a client's quest reward left nothing in the host's reputation history.** The reputation itself was shared,
   but the entry saying what earned it (the settlement's reputation log, in the journal) stayed in the client's game.
   It's shared now too.

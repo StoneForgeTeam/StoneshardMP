@@ -475,8 +475,10 @@ public sealed class AreaUnits
             if (!made.IsNone && made.Exists)
                 made["duration"] = duration;
         }
+        // (Not one our own player put on it - a debuff of ours, a spell's mark: ours to keep, whatever the owner reports.
+        // Taken off here, Wormhole's mark went with it a turn after it was cast - its Destroy clears the mark.)
         foreach (var effect in ours)
-            if (effect.Instance.Exists)
+            if (effect.Instance.Exists && !Combat.CombatSync.IsOursDeep(Instance.Of(effect.Instance.Get("owner"))))
                 effect.Instance.Destroy();
     }
 
