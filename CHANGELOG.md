@@ -5,6 +5,12 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a client's fatigue never went down** - only the host can sleep, and when it did, only time passed for the
+  others. Now they rest with it, as the game rests a sleeper: fatigue, health and energy restored, pain eased, hunger
+  and thirst grown over the hours. A client in the same place as the host's bed rests as the host did (that bed's, that
+  inn's rates, and the vigor after); one elsewhere rests at the plain rates, without the morale and sanity a bed gives.
+  (Protocol 42: everyone needs this version to play together.)
+
 - **Fixed: the second player to leave the inn crashed** ("Packet receive failed: SEHException ... OurPlayer.ReadState",
   then "array_get :: Index [1] out of range [0]"). Reading our player's animation row and shadow handed one of the
   game's arrays back to it every frame, and once that reference was lost the read broke the game. They're read only when

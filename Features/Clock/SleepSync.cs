@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using StoneForge;
 using StoneshardMP.Features.Players;
@@ -8,6 +9,8 @@ using StoneshardMP.Net;
 [assembly: HookScript(nameof(Scripts.scr_smoothSaveSleep))]
 // (And the vigor it gives - o_b_fresh, through the game's modifier script - for those who slept beside it.)
 [assembly: HookScript(nameof(Scripts.scr_modifier_change))]
+// (And how it rests the sleeper - fatigue, health, energy, pain, hunger and thirst over the hours - for the clients too.)
+[assembly: HookScript(nameof(Scripts.scr_lifeParamsUpdate))]
 
 namespace StoneshardMP.Features.Clock;
 
@@ -15,10 +18,12 @@ namespace StoneshardMP.Features.Clock;
 // - A client can't: a bed (c_bed_sleep's use, and a jail bed's) only says so - its hours would be its own, and the
 //   world's time is the host's.
 // - The host's sleep (o_sleepController, the game's own: its fade, the hours passing, the save) fades every client out
-//   with it, and when the host wakes they fade back in with the host's clock - the hours it slept (SleepPacket). Their
-//   characters don't sleep: only time passes for them - but a client in the same place as the host's bed wakes with
-//   the vigor the host's sleep gave it (o_b_fresh: the same turns, and the same most - the bed's, the hours'; none after a
-//   poor bed or nightmares).
+//   with it, and when the host wakes they fade back in with the host's clock - the hours it slept (SleepPacket) - and
+//   rested as the game rests a sleeper (scr_lifeParamsUpdate: fatigue, health and energy restored, pain eased, hunger
+//   and thirst grown over the hours). A client in the same place as the host's bed rests as the host did (the bed's,
+//   the inn's own rates) and wakes with the vigor the host's sleep gave it (o_b_fresh: the same turns, and the same most;
+//   none after a poor bed or nightmares); one elsewhere rests plainly (no morale or sanity from it). Before, a client's
+//   fatigue never went down.
 // - A host's time that jumps without a sleep (a fast travel: o_sleepController too) is sent the same way, without the fade.
 public sealed class SleepSync
 {
@@ -29,6 +34,10 @@ public sealed class SleepSync
     // Host: where we slept, and the vigor our sleep gave us (its turns and most; 0: none yet).
     private string _sleptAt = "";
     private double _vigor, _vigorMax;
+    // Host: how our sleep rested us (scr_lifeParamsUpdate's arguments, its defaults filled in; null: not yet).
+    private double[]? _rest;
+    // (scr_lifeParamsUpdate's defaults: every rate 1 but immunity's, 0.)
+    private static readonly double[] RestDefaults = { 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1 };
     // Client: faded out for the host's sleep.
     private bool _faded;
 
@@ -47,6 +56,20 @@ public sealed class SleepSync
                 _sleeping = true;
                 _sleptAt = OurPlayer.Place ?? "";
                 _vigor = _vigorMax = 0;
+                _rest = null;
+            }
+            return false;
+        });
+        // (Our sleep's rest, as it's given.)
+        Scripts.scr_lifeParamsUpdate.Before(context, call =>
+        {
+            if (_session.Mode == Session.SessionMode.Host && _sleeping)
+            {
+                var rest = (double[])RestDefaults.Clone();
+                for (int i = 0; i < rest.Length && i < call.Args.Length; i++)
+                    if (call.Args[i].Kind is GmKind.Real or GmKind.Bool)
+                        rest[i] = call.Args[i].AsReal;
+                _rest = rest;
             }
             return false;
         });
@@ -95,7 +118,8 @@ public sealed class SleepSync
             _session.Send(new SleepPacket(true, GameClock.Snapshot(), _sleptAt, 0, 0));
         else if (!now && _was)
         {
-            _session.Send(new SleepPacket(false, GameClock.Snapshot(), _sleeping ? _sleptAt : "", _sleeping ? _vigor : 0, _vigorMax));
+            string rest = _sleeping && _rest != null ? string.Join(",", _rest.Select(r => r.ToString("R", CultureInfo.InvariantCulture))) : "";
+            _session.Send(new SleepPacket(false, GameClock.Snapshot(), _sleeping ? _sleptAt : "", _sleeping ? _vigor : 0, _vigorMax, rest));
             _sleeping = false;
         }
         _was = now;
@@ -112,10 +136,34 @@ public sealed class SleepSync
             return;
         }
         WorldClock.ApplyClock(packet.Clock);
+        bool beside = packet.Place.Length > 0 && OurPlayer.Place == packet.Place;
+        if (StoneForge.Player.Exists && Rest(packet.Rest, beside) is { } rest)
+            Game.CallScript("scr_lifeParamsUpdate", default, rest.Select(r => (GmValue)r).ToArray());
         // (Slept beside the host: its vigor ours too.)
-        if (packet.Vigor > 0 && packet.Place.Length > 0 && OurPlayer.Place == packet.Place && StoneForge.Player.Exists)
+        if (packet.Vigor > 0 && beside && StoneForge.Player.Exists)
             Game.CallScript("scr_modifier_change", default, StoneForge.Player.Instance, (int)GameObjectId.o_b_fresh, packet.Vigor, packet.VigorMax);
         Unfade();
+    }
+
+    // How we rest for the host's sleep: as it did, beside it; elsewhere, plainly - its hours at the plain rates, with no
+    // morale or sanity from it (no bed of ours). Null: no sleep's rest sent (a fast travel, an older host).
+    private static double[]? Rest(string sent, bool beside)
+    {
+        string[] parts = sent.Split(',');
+        if (sent.Length == 0 || parts.Length != RestDefaults.Length)
+            return null;
+        var rest = new double[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out rest[i]))
+                return null;
+        if (rest[0] <= 0)
+            return null;
+        if (beside)
+            return rest;
+        var plain = (double[])RestDefaults.Clone();
+        plain[0] = rest[0];
+        plain[6] = plain[7] = 0;
+        return plain;
     }
 
     private void Unfade()

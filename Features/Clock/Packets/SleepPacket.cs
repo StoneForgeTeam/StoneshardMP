@@ -7,8 +7,10 @@ namespace StoneshardMP.Features.Clock;
 /// in), with its clock as it is (GameClock.Snapshot: "seconds|minutes|hours|days|months") - the hours slept, ours too.
 /// Waking, where it slept (its place) and the vigor its sleep gave it (o_b_fresh: the turns, and the most it can stack to;
 /// 0: none - a poor bed, nightmares): a client in the same place gets the same. Also sent, not Asleep and without a fade
-/// before it, when its time jumped another way (a fast travel).</summary>
-public readonly record struct SleepPacket(bool Asleep, string Clock, string Place, double Vigor, double VigorMax) : IPacket
+/// before it, when its time jumped another way (a fast travel). Rest: how its sleep rested it - the arguments of the
+/// game's scr_lifeParamsUpdate (the hours, then how much each need, wound and fatigue is restored), comma-separated; ""
+/// if it didn't sleep: a client rests too, as the host did if it's in the same place.</summary>
+public readonly record struct SleepPacket(bool Asleep, string Clock, string Place, double Vigor, double VigorMax, string Rest = "") : IPacket
 {
     public const byte PacketId = 55;
 
@@ -21,8 +23,10 @@ public readonly record struct SleepPacket(bool Asleep, string Clock, string Plac
         writer.Write(Place);
         writer.Write(Vigor);
         writer.Write(VigorMax);
+        writer.Write(Rest);
     }
 
     public static SleepPacket Read(ref SpanReadWrite reader)
-        => new(reader.ReadBoolean(), reader.ReadString(), reader.ReadString(), reader.ReadDouble(), reader.ReadDouble());
+        => new(reader.ReadBoolean(), reader.ReadString(), reader.ReadString(), reader.ReadDouble(), reader.ReadDouble(),
+            reader.ReadString());
 }
