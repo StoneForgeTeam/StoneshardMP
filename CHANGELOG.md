@@ -3,6 +3,13 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Fixed: entering a place another player was already running could crash the game at the end of a turn** ("REAL
+  argument incorrect type undefined" in o_enemy_pass_hive - the Mannshire orchard's beehive). A unit the owner doesn't
+  have is removed from the others' games, and its passive skills were left behind, reading a unit that's gone. Needs
+  StoneForge 0.9.9, which removes them with it.
+
 ## 0.4.7
 
 - **Fixed: entering the caravan camp failed to take the caravan's state ("Packet receive failed: SEHException ...
