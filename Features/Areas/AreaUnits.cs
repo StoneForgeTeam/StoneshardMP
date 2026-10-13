@@ -307,6 +307,9 @@ public sealed class AreaUnits
                 ["sprite"] = unit.Get("sprite_index").ToJsonNode(), ["frame"] = unit.Get("image_index").ToJsonNode(),
                 ["speed"] = unit.Get("image_speed").ToJsonNode(), ["angle"] = unit.Get("image_angle").ToJsonNode(),
                 ["alpha"] = unit.Get("image_alpha").ToJsonNode(), ["look"] = look,
+                // (A town NPC out of sight - at home for the night, on another floor - is flattened and hidden; back, it's
+                // shown again: scr_invis_enable_npc / scr_invis_disable_npc.)
+                ["yscale"] = unit.Get("image_yscale").ToJsonNode(), ["hidden"] = unit.Get("isHidden").ToJsonNode(),
                 ["npcName"] = unit.Get("name").ToJsonNode(), ["lifeAnimation"] = unit.Get("is_life").ToJsonNode(),
                 ["fx"] = EffectsOf(unit),
                 ["ind"] = indicators.TryGetValue(unit.Persist(), out var indicator) ? indicator : null,
@@ -631,6 +634,12 @@ public sealed class AreaUnits
             unit["image_angle"] = Number(u["angle"]);
         if (Changed("alpha"))
             unit["image_alpha"] = Number(u["alpha"]);
+        // (Hidden or shown as the owner has it: a copy's own AI is off, so a town NPC hidden for the night here stayed
+        // hidden after the owner's came out in the morning.)
+        if (Changed("yscale") && u["yscale"] is { } yscale)
+            unit["image_yscale"] = Number(yscale);
+        if (Changed("hidden") && u["hidden"] is { } hidden && !unit.Get("isHidden").IsUndefined)
+            Game.CallScript("scr_unitRenderHiddenUpdate", default, unit, GmValue.FromJsonNode(hidden).AsBool);
         if (Changed("ind"))
             SetIndicator(unit, u["ind"] as JsonObject);
     }

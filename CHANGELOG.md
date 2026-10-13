@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: town NPCs stayed hidden in the morning for whoever wasn't running the place** (the market's merchants
+  after the host slept, the client in the village). The game hides a town NPC for the night and shows it again when it
+  comes out; the copies in the other players' games were moved back but never shown. Whether each is hidden is now
+  copied too.
+
 - **Fixed: "ESCAPE CONTROLLER ERROR: Instance (o_stash_inventory_right) doesn't exist!"** - when someone else opened
   the caravan's storage, ours was destroyed outright, which left it on the game's Esc list. It closes the game's own way
   now.
