@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## 0.4.9
+## Unreleased
 
 - **Fixed: a client's Planar Exchange and Wormhole did nothing in the host's game** (#29): the swap and the pull back
   stayed in the client's. The game gives what a player's skills cast the player's object as its owner rather than the
