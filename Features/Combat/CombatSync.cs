@@ -78,6 +78,10 @@ public sealed class CombatSync
     private int _ourActions;
     // Follower: inside our Planar Exchange's swap (o_planar_exchange's alarm 0) - what it moves traded places.
     private int _swapping;
+    // Inside a spell whose moves and effects reach the owner from its own alarms (Planar Exchange, Wormhole): what it does
+    // to the owner's units, and why it isn't sent if it isn't, goes in the log - neither reached the host in a report
+    // (#29), with nothing logged on either side.
+    private int _tracing;
 
     public CombatSync(ModContext context, Session session, AreaUnits areaUnits, AreaOwnership ownership, PlayerManager players,
         Func<bool> inSharedWorld)
@@ -127,13 +131,17 @@ public sealed class CombatSync
         context.OnCode("gml_Object_o_planar_exchange_Alarm_0",
             before: (exchange, _) =>
             {
-                Begin(!exchange.IsNone && IsOursDeep(exchange));
+                bool ours = !exchange.IsNone && IsOursDeep(exchange);
+                Trace("Planar Exchange", exchange, ours);
+                Begin(ours);
                 _swapping++;
+                _tracing++;
                 return false;
             },
             after: (_, _) =>
             {
                 _swapping = Math.Max(0, _swapping - 1);
+                _tracing = Math.Max(0, _tracing - 1);
                 End();
             });
         // (Wormhole's mark taking its target back, from the mark's own alarms - ours when its owner is our player: what it
@@ -142,10 +150,26 @@ public sealed class CombatSync
             context.OnCode(alarm,
                 before: (mark, _) =>
                 {
-                    Begin(!mark.IsNone && IsOursDeep(mark));
+                    bool ours = !mark.IsNone && IsOursDeep(mark);
+                    Trace("Wormhole's mark", mark, ours);
+                    Begin(ours);
+                    _tracing++;
                     return false;
                 },
-                after: (_, _) => End());
+                after: (_, _) =>
+                {
+                    _tracing = Math.Max(0, _tracing - 1);
+                    End();
+                });
+        // (Wormhole's cast reaching its target - its debuff, o_db_wormhole, put on it: traced.)
+        context.OnCode("gml_Object_o_wormhole_birth_Other_10",
+            before: (birth, _) =>
+            {
+                Trace("Wormhole", birth, !birth.IsNone && IsOursDeep(birth));
+                _tracing++;
+                return false;
+            },
+            after: (_, _) => _tracing = Math.Max(0, _tracing - 1));
         // (A unit's death: o_enemy's Destroy, its children's too - they inherit it.)
         context.OnCode("gml_Object_o_enemy_Destroy_0", before: (self, _) =>
         {
@@ -387,6 +411,28 @@ public sealed class CombatSync
     // owner's unit's own attack, or not one of the owner's.
     private (Instance Copy, long HostId)? Ours(GmValue unit) => Ours(Instance.Of(unit));
 
+    // A traced spell running here: whose it is, and whether we follow the place's owner - its moves and effects go to the
+    // owner only if both.
+    private void Trace(string spell, Instance self, bool ours)
+    {
+        if (_session.Mode != Session.SessionMode.Client)
+            return;
+        string owner = self.IsNone || !self.Exists ? "none" : self.Get("owner") is var o && o.IsUndefined ? "undefined" : Instance.Of(o) is { IsNone: false } i && i.Exists ? Gm.ObjectGetName(i.Get("object_index").AsInt) : o.ToString();
+        _context.Log($"{spell}: its owner {owner}, ours {ours}, our role here {_ownership.Role}, actions under way {_actions.Count} (ours {_ourActions})");
+    }
+
+    // Why a unit isn't one of the owner's to send what's done to it, for the trace.
+    private string NotOursWhy(Instance copy)
+    {
+        if (!Following) return $"we're not following here (role {_ownership.Role})";
+        if (_areaUnits.Applying) return "the owner's roster was being applied";
+        if (_hostsAttack > 0) return "inside the owner's unit's attack";
+        if (!_inSharedWorld()) return "not in the shared world";
+        copy = Handles.Kept(copy);
+        if (copy.IsNone || !copy.Exists) return "no such unit";
+        return $"{Gm.ObjectGetName(copy.Get("object_index").AsInt)} isn't one of the owner's (no sync id)";
+    }
+
     private (Instance Copy, long HostId)? Ours(Instance copy)
     {
         if (!Following || _areaUnits.Applying || _hostsAttack > 0 || !_inSharedWorld())
@@ -402,11 +448,19 @@ public sealed class CombatSync
     // pull: the owner moves the real one there.
     private void CoordinatesChanged(ScriptCall call)
     {
-        if (_ourActions == 0)
-            return;
         Instance unit = call.Args.Length > 2 && !call.Args[2].IsUndefined ? Instance.Of(call.Args[2]) : call.Self;
-        if (Ours(unit) is not var (copy, hostId))
+        if (_ourActions == 0)
+        {
+            if (_tracing > 0 && !OurPlayer.Instance.Equals(Handles.Kept(unit).Persist()))
+                _context.Log("  a move not sent: not our action here");
             return;
+        }
+        if (Ours(unit) is not var (copy, hostId))
+        {
+            if (_tracing > 0 && !OurPlayer.Instance.Equals(Handles.Kept(unit).Persist()))
+                _context.Log("  a move not sent: " + NotOursWhy(unit));
+            return;
+        }
         Cell cell = Units.CellOf(copy);
         _areaUnits.Moved(copy, cell);
         _session.Send(new UnitMovedPacket(hostId, (short)cell.X, (short)cell.Y, Swap: _swapping > 0), _ownership.Owner);
@@ -417,6 +471,10 @@ public sealed class CombatSync
     // owner puts it on the real one. (Made inside a refresh: sent as the refresh.)
     private void EffectCreated(ScriptCall call)
     {
+        if (_tracing > 0 && call.Args.Length >= 3)
+            _context.Log($"  {Gm.ObjectGetName(call.Args[0].AsInt)} made: result {(Instance.Of(call.Result).IsNone ? "none" : "an effect")}, "
+                + $"in a refresh {_refreshing > 0}, ours {_ourActions > 0 || (call.Args.Length > 3 && IsOursDeep(Instance.Of(call.Args[3])))}, "
+                + (Ours(call.Args[2]) is null ? "not sent: " + NotOursWhy(Instance.Of(call.Args[2])) : "the owner's unit"));
         if (_refreshing > 0 || call.Args.Length < 3 || Instance.Of(call.Result).IsNone)
             return;
         // (Ours: inside our action, or given by something of ours - our player, our summon, their spell or skill.)
