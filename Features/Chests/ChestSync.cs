@@ -223,7 +223,11 @@ public sealed class ChestSync
         if (_applying || _place == null || fire.IsNone || OurPlayer.State()?.Place != _place || !Shared(fire) || IsOpen(fire))
             return;
         if (ContentsOf(fire) is { } contents)
+        {
             Send(ChestKind.Contents, KeyOf(fire), contents);
+            // (For #28, a fire's light not reaching the others.)
+            _context.Log($"{KeyOf(fire)} {(fire.Get("image_speed").AsReal != 0 ? "lit" : "put out")}: sent");
+        }
     }
 
     // What's in a container, as the others are sent it (null: can't be read now - open). A fire's: its pot's contents,
@@ -288,6 +292,7 @@ public sealed class ChestSync
             fire["image_speed"] = lit ? 0.8 : 0;
             if (!lit)
                 fire["image_index"] = 0;
+            _context.Log($"{KeyOf(fire)} {(lit ? "lit" : "put out")} as the others have it" + (lit && !Instance.Of(fire.Get("light")).Exists ? " - but it has no light" : ""));
         }
     }
 
