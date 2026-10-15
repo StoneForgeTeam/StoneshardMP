@@ -60,10 +60,19 @@ public sealed class WorldClock
 
     public void Clear()
     {
+        Pause();
+        _tick = 0;
+    }
+
+    // Tracking stopped for a moment - a room change (no player), not in the world - with the tick count kept: it numbers
+    // the host's world turns for the whole connection. Started over at every room change of the host's, a client that
+    // stayed where it was took every tick after as old (tick <= its last) and dropped them - the host's clock and its
+    // turns - until the count caught up again: the host at dusk, the client still at midday.
+    private void Pause()
+    {
         _remoteActions.Clear();
         _tracking = false;
         _turns = 0;
-        _tick = 0;
         _idleTurns = 0;
     }
 
@@ -71,15 +80,20 @@ public sealed class WorldClock
     {
         // (A client making its character isn't in the host's world: its actions aren't the host's turns, nor is the
         // host's clock its intro's.)
-        if (!_session.Connected || !_inSharedWorld())
+        if (!_session.Connected)
         {
             Clear();
+            return;
+        }
+        if (!_inSharedWorld())
+        {
+            Pause();
             return;
         }
         int turns = GameClock.Turns();
         if (turns < 0)
         {
-            Clear();
+            Pause();
             return;
         }
         if (!_tracking)

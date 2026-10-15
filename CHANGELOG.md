@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a client's clock fell behind the host's** (the host at dusk, the client at midday) - and the host's world
+  turns stopped reaching it. The host numbers its world turns for the clients, and started the count over at each of
+  its room changes; a client that hadn't changed rooms took every turn after as an old one and dropped it, until the
+  count caught up. The count now runs for the whole connection.
+
 - **Fixed: the caravan quest split the players up.**
   - **Verren's cart takes everyone there**: riding it from the brewery to Brynn moved only the player who took it.
     The players in the same place ride along now. (A coachman's paid ride is still your own.)
