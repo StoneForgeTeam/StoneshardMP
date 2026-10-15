@@ -257,7 +257,15 @@ public sealed class PlayerManager
         self["MP"] = ProxyVital(state.Energy, state.MaxEnergy);
         ApplyProfile(self, view.Player.Profile);
         // The light they carry, lighting what's around them here as it does in their game.
-        PlayerLight.Apply(self, ref view.LightEffect, ref view.Light, view.Player.Party?.Light ?? default);
+        var wantedLight = view.Player.Party?.Light ?? default;
+        bool lightChanged = wantedLight != view.Light;
+        PlayerLight.Apply(self, ref view.LightEffect, ref view.Light, wantedLight);
+        // (Their light here - for #28, the light not reaching the others: whether the game made its light for them.)
+        if (lightChanged)
+            _context.Log(wantedLight.Lit
+                ? $"{view.Player.Name}'s light here: radius {wantedLight.Radius}, " + (view.LightEffect.Exists
+                    ? (Instance.Of(view.LightEffect.Get("light")).Exists ? "lit" : "its light effect made, but no light in it") : "the light effect couldn't be made")
+                : $"{view.Player.Name}'s light here: none");
         self["depth"] = state.Depth;
     }
 

@@ -31,6 +31,7 @@ public sealed class PartyFrames
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(3);
 
     private readonly ModContext _context;
+    private PlayerLight _lightSent;
     private readonly Session _session;
     private readonly MpSettings _settings;
     private readonly Func<bool> _inSharedWorld;
@@ -139,8 +140,15 @@ public sealed class PartyFrames
         try
         {
             GmValue head = StoneForge.Player.Attribute("Head");
+            var light = PlayerLight.Of(player);
+            // (Our light as the others get it - for #28, the light not reaching them.)
+            if (light != _lightSent)
+            {
+                _lightSent = light;
+                _context.Log(light.Lit ? $"Our light, to the others: radius {light.Radius}" : "Our light, to the others: none");
+            }
             return new PartyInfo(StoneForge.Player.Level, head.Kind == GmKind.String ? head.AsString : "", (float)StoneForge.Player.HealthCap,
-                (float)StoneForge.Player.EnergyCap, StoneForge.Player.InCombat, Effects(player), PlayerLight.Of(player));
+                (float)StoneForge.Player.EnergyCap, StoneForge.Player.InCombat, Effects(player), light);
         }
         catch (Exception e)
         {

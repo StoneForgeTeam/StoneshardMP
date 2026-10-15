@@ -292,7 +292,11 @@ public sealed class LootSync
             return;
         }
         if (OwnerDiff() is { } changes)
+        {
             SendToFollowers(LootKind.Changes, changes);
+            if (JsonNode.Parse(changes) is JsonObject diff)
+                _context.Log($"Ground loot here: sent {(diff["add"] as JsonArray)?.Count ?? 0} new, {(diff["gone"] as JsonArray)?.Count ?? 0} gone");
+        }
     }
 
     // Owner: loot's sync id, given on first use.
@@ -350,22 +354,36 @@ public sealed class LootSync
     // Owner: a follower dropped something - {j: its saved state, f: its throw, t: its token}. Made here and thrown along
     // the same arc; our next diff adds it, token and all, to every follower - the one whose drop it is then keeps its own
     // copy as the synced item (FollowerAdd).
-    private void OwnerDrop(string json)
+    private void OwnerDrop(string json, string from)
     {
         if (!Gm.InstanceExists(GameObjectId.o_player) || JsonNode.Parse(json) is not JsonObject drop)
             return;
         if (Create(drop["j"]?.GetValue<string>(), drop["f"]) is { } item)
+        {
             _tokenOf[item.Instance] = drop["t"]?.GetValue<string>() ?? "";
+            _context.Log($"{from} dropped {item.ObjectName}: made here");
+        }
+        else
+            _context.Log($"{from} dropped something we couldn't make here");
     }
 
     // Owner: a follower picked these up (our sync ids) - gone from our world too; our next diff tells every follower.
-    private void OwnerTaken(string json)
+    private void OwnerTaken(string json, string from)
     {
         if (JsonNode.Parse(json) is not JsonArray uids)
             return;
+        int removed = 0, unknown = 0;
         foreach (JsonNode? uid in uids)
+        {
             if (uid != null && _known.TryGetValue(uid.GetValue<long>(), out Instance id) && !Gone(id))
+            {
                 Destroy(id);
+                removed++;
+            }
+            else
+                unknown++;
+        }
+        _context.Log($"{from} picked up {uids.Count} item(s): removed here {removed}" + (unknown > 0 ? $", {unknown} not here (already gone, or unknown)" : ""));
     }
 
     // ---- follower ----
@@ -386,9 +404,14 @@ public sealed class LootSync
         _shots.RemoveAll(shot => shot.Until < now);
         var (taken, drops) = FollowerStep(now <= _dropUntil, now - _syncedAt < SettleMs, now);
         if (taken.Count > 0)
+        {
             Send(LootKind.Taken, taken.ToJsonString(), _owner);
+            _context.Log($"Picked up {taken.Count} item(s): told the place's owner");
+        }
         foreach (JsonObject drop in drops)
             Send(LootKind.Dropped, drop.ToJsonString(), _owner);
+        if (drops.Count > 0)
+            _context.Log($"Dropped {drops.Count} item(s): sent to the place's owner");
     }
 
     // Follower: the owner has this loot (an entry). Bound to ours if we have it - our own drop coming back (its token),
@@ -447,6 +470,7 @@ public sealed class LootSync
     {
         if (JsonNode.Parse(json) is not JsonObject diff)
             return;
+        _context.Log($"Ground loot here from the owner: {(diff["add"] as JsonArray)?.Count ?? 0} new, {(diff["gone"] as JsonArray)?.Count ?? 0} gone");
         if (diff["gone"] is JsonArray gone)
             foreach (JsonNode? uid in gone)
                 if (uid != null && _map.Remove(uid.GetValue<long>(), out Instance id))
@@ -507,13 +531,19 @@ public sealed class LootSync
             if (!Has(id, Mark.OurDrop))
             {
                 if (!settling)
+                {
+                    _context.Log($"Removed {item.ObjectName} at {item.X},{item.Y}: not the place owner's, and not a drop of ours");
                     Destroy(id);
+                }
                 continue;
             }
             if (Has(id, Mark.Sent))
             {
                 if (now - _sentAt.GetValueOrDefault(id, now) > DropPendingMs)
+                {
+                    _context.Log($"Removed our drop {item.ObjectName}: the place's owner didn't bring it back within {DropPendingMs / 1000} s");
                     Destroy(id);
+                }
                 continue;
             }
             if (item.ToJson() is not { } json)
@@ -543,7 +573,11 @@ public sealed class LootSync
         // Only for the place we're in, in the role it's meant for (one sent just before either of us moved on is
         // dropped).
         if (packet.Place != _place)
+        {
+            if (packet.Kind is LootKind.Taken or LootKind.Dropped)
+                _context.Log($"Ground loot from {sender.Name} ({packet.Kind}) for {packet.Place} ignored: we're in {_place ?? "no place"}");
             return;
+        }
         string json = JoinCompression.Decompress(packet.Data);
         switch (packet.Kind)
         {
@@ -561,7 +595,7 @@ public sealed class LootSync
                 _snapshotOwed = true;
                 break;
             case LootKind.Taken when _owning:
-                OwnerTaken(json);
+                OwnerTaken(json, sender.Name);
                 break;
             case LootKind.Dropped when _owning:
                 long now = Environment.TickCount64;
@@ -571,9 +605,13 @@ public sealed class LootSync
                     _dropCount = 0;
                 }
                 if (++_dropCount <= DropsPerSecond)
-                    OwnerDrop(json);
+                    OwnerDrop(json, sender.Name);
                 else
                     _context.Log($"Ignored a drop from {sender.Name}: more than {DropsPerSecond} a second");
+                break;
+            // (A follower's drop or pickup reaching a game that doesn't run the place - the roles changed meanwhile.)
+            case LootKind.Taken or LootKind.Dropped:
+                _context.Log($"Ground loot from {sender.Name} ({packet.Kind}) ignored: we don't run this place (owner {_owner})");
                 break;
         }
     }

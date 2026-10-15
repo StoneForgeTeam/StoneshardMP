@@ -556,14 +556,19 @@ public sealed class AreaUnits
         }
         int playerObject = _playerObject();
         // (Not a player's stand-in, nor our player's summon: ours - SummonSync. Nor the camp's people: ours too.)
+        var removed = new List<string>();
         foreach (Instance gone in Instances.All(GameObjectId.o_enemy).Where(unit => !_current.Contains(unit) && ObjectOf(unit) != playerObject
-            && !SummonSync.IsOurs(unit) && !IsCampPerson(ObjectOf(unit))))
+            && !SummonSync.IsOurs(unit) && !IsCampPerson(ObjectOf(unit))).ToList())
         {
+            removed.Add(Gm.ObjectGetName(ObjectOf(gone)));
             Units.Remove(gone);
             _applied.Remove(gone);
             _objectOf.Remove(gone);
             _poly.Remove(gone);
         }
+        // (What the owner has decides what's here - a unit dead there, alive here, or the reverse: #35.)
+        if (removed.Count > 0)
+            _context.Log($"Units here the owner doesn't have, removed: {string.Join(", ", removed)}");
     }
 
     // Whether an object is one of the caravan camp's people (CampPeople, or one of theirs - each follower's own object).

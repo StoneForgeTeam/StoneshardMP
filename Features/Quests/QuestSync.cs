@@ -304,16 +304,34 @@ public sealed class QuestSync
         script.Before(_context, call =>
         {
             if (!_applying && Sharing && outgoing(call.Args) is { } args)
+            {
                 _session.Send(new SharedCallPacket(SharedWorld.WorldSeed(), script.Name, args));
+                if (script.Name.StartsWith("scr_quest_", StringComparison.Ordinal))
+                    _context.Log($"Sent {script.Name}({Describe(args)})");
+            }
             return false;
         });
     }
 
     private void Apply(RemotePlayer sender, SharedCallPacket packet)
     {
-        // Only listed scripts, from and for a game in our world.
-        if (!_shared.ContainsKey(packet.Script) || !Sharing || packet.Seed != SharedWorld.WorldSeed())
+        // Only listed scripts, from and for a game in our world. (A quest's call turned away is logged: a quest the host had
+        // and a client didn't, #36.)
+        bool quest = packet.Script.StartsWith("scr_quest_", StringComparison.Ordinal);
+        if (!_shared.ContainsKey(packet.Script))
             return;
+        if (!Sharing)
+        {
+            if (quest)
+                _context.Log($"{packet.Script}({Describe(packet.Args)}) from {sender.Name} ignored: we're not in the shared world");
+            return;
+        }
+        if (packet.Seed != SharedWorld.WorldSeed())
+        {
+            if (quest)
+                _context.Log($"{packet.Script}({Describe(packet.Args)}) from {sender.Name} ignored: another world (seed {packet.Seed}, ours {SharedWorld.WorldSeed()})");
+            return;
+        }
         if (_madeHereIf.TryGetValue(packet.Script, out var madeHere) && !madeHere(sender))
             return;
         GmValue[] args = packet.Args;
@@ -331,7 +349,13 @@ public sealed class QuestSync
         finally { _applying = false; }
         if (packet.Script == Scripts.scr_quest_set_complete.Name)
             _context.Log($"{sender.Name} completed a quest ({packet.Args.FirstOrDefault().AsString})");
+        else if (quest)
+            _context.Log($"{sender.Name}: {packet.Script}({Describe(packet.Args)})");
     }
+
+    // A call's arguments, for the log.
+    private static string Describe(GmValue[] args)
+        => string.Join(", ", args.Select(a => a.Kind == GmKind.String ? a.AsString : a.IsUndefined ? "-" : a.ToString()));
 
     // ---- quest items ----
 
