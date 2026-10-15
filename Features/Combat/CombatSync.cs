@@ -113,7 +113,7 @@ public sealed class CombatSync
         // (A knockback our player owns: what it does is ours.)
         Scripts.scr_knockback.Before(context, call =>
         {
-            Begin(call.Self.Exists && IsOurPlayer(Instance.Of(call.Self.Get("owner"))));
+            Begin(call.Self.Exists && IsOurPlayer(Handles.Owner(call.Self.Get("owner"))));
             return false;
         });
         Scripts.scr_knockback.After(context, _ => End());
@@ -277,7 +277,7 @@ public sealed class CombatSync
             GmValue owner = thing.Get("owner");
             if (owner.IsUndefined)
                 return false;
-            thing = Instance.Of(owner);
+            thing = Handles.Owner(owner);
         }
         return false;
     }

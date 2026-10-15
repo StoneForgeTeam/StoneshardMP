@@ -65,12 +65,12 @@ public sealed class SummonSync
     /// <summary>Whether a unit is a summon a player owns (its owner is a player's character - ours, in our game).</summary>
     public static bool IsPlayers(Instance unit)
         => unit.Exists && Gm.ObjectIsAncestor(unit.Get("object_index").AsInt, (int)GameObjectId.o_summoned_entity)
-            && Instance.Of(unit.Get("owner")) is { IsNone: false } owner && owner.Exists
-            && owner.Get("object_index").AsInt == (int)GameObjectId.o_player;
+            && Combat.Handles.Owner(unit.Get("owner")) is { IsNone: false } owner && owner.Exists
+            && Combat.Handles.IsPlayerObject(owner.Get("object_index").AsInt);
 
     /// <summary>Whether a unit is one of our player's summons.</summary>
     public static bool IsOurs(Instance unit)
-        => IsPlayers(unit) && OurPlayer.Instance is { IsNone: false } player && Combat.Handles.Kept(Instance.Of(unit.Get("owner"))).Equals(player.Persist());
+        => IsPlayers(unit) && OurPlayer.Instance is { IsNone: false } player && Combat.Handles.Owner(unit.Get("owner")).Equals(player.Persist());
 
     public void Tick()
     {

@@ -94,8 +94,8 @@ public sealed class BombSync
     }
 
     private static bool Ours(Instance shell)
-        => Instance.Of(shell.Get("owner")) is { IsNone: false } owner && owner.Exists
-            && owner.Get("object_index").AsInt == (int)GameObjectId.o_player;
+        => Combat.Handles.Owner(shell.Get("owner")) is { IsNone: false } owner && owner.Exists
+            && Combat.Handles.IsPlayerObject(owner.Get("object_index").AsInt);
 
     // Owner: a follower's jar - its swarm let out here, as the game lets one out.
     private void ReceiveSwarm(RemotePlayer from, SwarmReleasedPacket packet)

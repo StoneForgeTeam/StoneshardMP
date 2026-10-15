@@ -17,4 +17,25 @@ internal static class Handles
         try { return thing.Persist(); }
         catch (InvalidOperationException) { return default; }
     }
+
+    // GameMaker's instance ids start here: a smaller number is an object's index.
+    private const int FirstInstanceId = 100000;
+
+    /// <summary>Who an owner names (a spell's, an effect's, a summon's): an instance or its id - or an object, which names
+    /// its first instance. The game's skills are owned by o_player itself (o_skill's Create: owner = o_player), so what
+    /// they cast is too - read as an id, it was never our player's, and a follower's Planar Exchange and Wormhole weren't
+    /// sent to the owner (#29). None if it names none.</summary>
+    public static Instance Owner(GmValue owner)
+    {
+        if (owner.Kind == GmKind.Real && owner.AsReal >= 0 && owner.AsReal < FirstInstanceId)
+            return Game.CallBuiltin("object_exists", owner.AsInt).AsBool
+                ? Kept(Game.CallBuiltin("instance_find", owner.AsInt, 0))
+                : default;
+        return Instance.Of(owner);
+    }
+
+    /// <summary>Whether an object is a player's character: o_player, or one of the characters made from it (o_dervish
+    /// - Mahir - and the others: the player is always one of these, never o_player itself).</summary>
+    public static bool IsPlayerObject(int obj)
+        => obj == (int)GameObjectId.o_player || Gm.ObjectIsAncestor(obj, (int)GameObjectId.o_player);
 }

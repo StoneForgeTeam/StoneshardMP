@@ -5,6 +5,13 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## 0.4.9
 
+- **Fixed: a client's Planar Exchange and Wormhole did nothing in the host's game** (#29): the swap and the pull back
+  stayed in the client's. The game gives what a player's skills cast the player's object as its owner rather than the
+  player, and the client didn't count that as its own, so never sent it. A player's summons and bombs are checked the
+  same way now, for every character.
+
+## 0.4.9
+
 - **Dying drops everything you carry**, bag and worn, where you fall, and you come back as your checkpoint with nothing
   on you - go back for it (with friends). Before, only what you'd picked up since the checkpoint dropped and the
   checkpoint's gear came back with you, so gear left in a chest before dying was had twice. For the host's respawn too.
