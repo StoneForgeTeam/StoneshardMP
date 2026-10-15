@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.9
 
 - **Dying drops everything you carry**, bag and worn, where you fall, and you come back as your checkpoint with nothing
   on you - go back for it (with friends). Before, only what you'd picked up since the checkpoint dropped and the
