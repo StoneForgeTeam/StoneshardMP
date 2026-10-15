@@ -272,7 +272,7 @@ public sealed class JoinManager
     private void HostRespawnLoad()
     {
         _respawning = false;
-        if (Checkpoints.Of(0) is not { } checkpoint || JoinSave.WorldWith(checkpoint) is not { } world || !JoinSave.SetPendingOwn(world))
+        if (Checkpoints.Of(0) is not { } checkpoint || JoinSave.WorldWith(Checkpoints.WithoutItems(checkpoint)) is not { } world || !JoinSave.SetPendingOwn(world))
         {
             StoneForge.Blackout.Hide();
             _context.Log("Respawn failed: couldn't make our world with our checkpoint");
@@ -498,13 +498,14 @@ public sealed class JoinManager
             return;
         int worldSlot = _slots.Of(sender.Slot);
         string? checkpoint = Checkpoints.Of(worldSlot);
-        if (checkpoint == null || !JoinSave.StoreCharacter(worldSlot, sender.Name, checkpoint))
+        // (With nothing on them: what they carried lies where they died.)
+        if (checkpoint == null || !JoinSave.StoreCharacter(worldSlot, sender.Name, Checkpoints.WithoutItems(checkpoint)))
         {
             _context.Log($"{sender.Name} died, but slot {worldSlot} has no checkpoint here - they come back as last kept");
             return;
         }
-        _context.Log($"{sender.Name} died: slot {worldSlot} back to its checkpoint ({Checkpoints.Where(checkpoint)}, "
-            + $"{Checkpoints.ItemCount(checkpoint)} items){(packet.Rejoin ? ", reloading now" : ", for when they next join")}");
+        _context.Log($"{sender.Name} died: slot {worldSlot} back to its checkpoint ({Checkpoints.Where(checkpoint)}), with nothing on them"
+            + (packet.Rejoin ? ", reloading now" : ", for when they next join"));
     }
 
     /// <summary>Client, dead: back to our checkpoint - the host's world loaded in place with our character as it was at the

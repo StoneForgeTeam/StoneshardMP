@@ -71,6 +71,17 @@ internal static class Checkpoints
         return json.ToJsonString();
     }
 
+    /// <summary>A checkpoint to come back as after dying: the character as it was, with nothing on them - everything they
+    /// carried dropped where they died (DeathSync), so nothing comes back twice (gear stashed before dying, then given back
+    /// with the checkpoint). Unchanged if it can't be read.</summary>
+    public static string WithoutItems(string character)
+    {
+        if (JsonNode.Parse(character) is not JsonObject json)
+            return character;
+        json["inventoryDataList"] = new JsonArray();
+        return json.ToJsonString(new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+    }
+
     /// <summary>A character's items - in its bag and worn (the save's inventoryDataList) - as JSON; "[]" if it has none.</summary>
     public static string InventoryOf(string? character)
         => (character == null ? null : JsonNode.Parse(character)?["inventoryDataList"] as JsonArray)?.ToJsonString() ?? "[]";

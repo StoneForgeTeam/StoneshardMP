@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Dying drops everything you carry**, bag and worn, where you fall, and you come back as your checkpoint with nothing
+  on you - go back for it (with friends). Before, only what you'd picked up since the checkpoint dropped and the
+  checkpoint's gear came back with you, so gear left in a chest before dying was had twice. For the host's respawn too.
+
 - **Fixed: a client's clock fell behind the host's** (the host at dusk, the client at midday) - and the host's world
   turns stopped reaching it. The host numbers its world turns for the clients, and started the count over at each of
   its room changes; a client that hadn't changed rooms took every turn after as an old one and dropped it, until the
