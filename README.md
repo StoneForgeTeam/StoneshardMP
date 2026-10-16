@@ -50,7 +50,8 @@ game's own saves are in `%LOCALAPPDATA%\StoneShard\characters_v1\<character>\<sa
 and copy the backup's folder into its character's folder there, renamed to the save's own name (`autosave_1`), replacing
 the one that went wrong. After a mod's error, StoneForge also keeps the save being played (`before-error_...`, never
 deleted) and asks whether to leave without saving. Before every save, StoneshardMP takes out broken item lists in
-containers, cooking pots and corpses (and logs it), so a save can't keep them.
+containers and cooking pots (and logs it), so a save can't keep them. Corpses' butchering name/count/chance lists
+are preserved as game data, not treated as inventory items.
 
 To test with two games on one PC, add `steam_appid.txt` (containing `625960`) to the game folder, then start the
 game twice.

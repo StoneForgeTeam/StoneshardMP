@@ -9,9 +9,9 @@ using StoneForge;
 
 namespace StoneshardMP.Features.World;
 
-// The items a saved container or corpse holds, made fit to go to another game and back.
-// The game saves a container's items (its loot_list - a fire's cooking pot too; a corpse's loot_list_meat and
-// loot_list_add) by copying the list of them, and each item is a list of its own held there by its number (not nested:
+// The items a saved container holds, made fit to go to another game and back.
+// The game saves a container's items (its loot_list - a fire's cooking pot too)
+// by copying the list of them, and each item is a list of its own held there by its number (not nested:
 // scr_save_item_single's list, never destroyed). In one game those numbers are its live item lists; written to JSON they
 // stay numbers - in another game, nothing, or some other list. A location's state or a corpse sent as it was put
 // numbers into the other game that its cooking window then read as items: "object_get_name argument 1 incorrect type
@@ -24,7 +24,10 @@ namespace StoneshardMP.Features.World;
 //   places others last had - loses those, rather than the game crashing on them.
 internal static class ItemLists
 {
-    private static readonly string[] Keys = { "loot_list", "loot_list_meat", "loot_list_add" };
+    // Corpse loot_list_meat / loot_list_add are NOT inventory items: they hold
+    // alternating object-name/count or object-name/chance values. Converting a
+    // chance into a local ds_list ID corrupts butchering (and can alias a live list).
+    private static readonly string[] Keys = { "loot_list" };
 
     // (JSON as the game's json_decode reads it: its text as it is. .NET's own escapes what matters in HTML - ' < > & + -
     // as backslash-u codes, and the game gives up on some: a place's entities written so didn't load, and the game

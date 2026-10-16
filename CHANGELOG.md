@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- Preserve corpse butchering loot as flat object-name/count/chance pairs. Neither network conversion nor save
+  cleanup treats these as inventory-item list IDs anymore (#37).
+
 - **Fixed: a client's Planar Exchange and Wormhole did nothing in the host's game** (#29): the swap and the pull back
   stayed in the client's. The game gives what a player's skills cast the player's object as its owner rather than the
   player, and the client didn't count that as its own, so never sent it. A player's summons and bombs are checked the

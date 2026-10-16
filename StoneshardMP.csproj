@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
     <Reference Include="StoneForge.API">
       <HintPath>$(StoneForgeSdkDir)\StoneForge.API.dll</HintPath>
       <Private>false</Private>

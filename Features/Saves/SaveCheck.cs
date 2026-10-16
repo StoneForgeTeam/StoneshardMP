@@ -5,14 +5,13 @@ using StoneshardMP.Features.World;
 namespace StoneshardMP.Features.Saves;
 
 // What we know can go wrong, put right before it's saved - so a save never keeps it.
-// As the game's about to write a save (StoneForge's SaveData.OnSaving), the items held by containers, fires' pots and corpses are checked: an
+// As the game's about to write a save (StoneForge's SaveData.OnSaving), the items held by containers and fires' pots are checked: an
 // entry that isn't one of this game's items (another game's number for one - ItemLists) is taken out, from those in the
 // room and from the saved state of every place there's one of. In the game it crashed the cooking window, or loaded as
 // the wrong things; saved, it would have stayed so. What was taken out is logged.
 public sealed class SaveCheck
 {
     private static readonly string[] ContainerLists = { "loot_list" };
-    private static readonly string[] CorpseLists = { "loot_list_meat", "loot_list_add" };
 
     private readonly ModContext _context;
 
@@ -32,8 +31,8 @@ public sealed class SaveCheck
             foreach (GameObjectId kind in new[] { GameObjectId.c_container, GameObjectId.o_campfire_parent })
                 foreach (Instance stuff in Instances.All(kind, includeCulled: true))
                     live += Clean(stuff, ContainerLists);
-            foreach (Instance corpse in Instances.All(GameObjectId.o_abstract_corpse, includeCulled: true))
-                live += Clean(corpse, CorpseLists);
+            // Corpses hold name/count and name/chance pairs, not inventory-item
+            // list IDs. Do not run the container cleaner over butchering data.
             int stored = 0, places = 0;
             if (Locations.Available)
                 foreach (string tag in Locations.Tags)

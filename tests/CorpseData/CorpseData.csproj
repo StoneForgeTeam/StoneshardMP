@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <StoneForgeSdkDir Condition="'$(StoneForgeSdkDir)' == ''">$(STONESHARD_DIR)\dotnet</StoneForgeSdkDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="StoneForge.API">
+      <HintPath>$(StoneForgeSdkDir)\StoneForge.API.dll</HintPath>
+    </Reference>
+    <Compile Include="../../Features/World/ItemLists.cs" Link="ItemLists.cs" />
+    <!-- .cs.txt keeps this test entry point out of the game's recursive mod compiler. -->
+    <Compile Include="Program.cs.txt" />
+  </ItemGroup>
+</Project>

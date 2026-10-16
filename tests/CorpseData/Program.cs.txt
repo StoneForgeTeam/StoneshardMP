@@ -1,0 +1,22 @@
+using System.Text.Json.Nodes;
+using StoneshardMP.Features.World;
+
+// Corpse values are flat pairs, including zero chances and numbers that could
+// accidentally equal a live ds_list ID. None may be treated as inventory lists.
+string[] samples =
+{
+    "{\"loot_list_meat\":[\"o_loot_meat_venison\",2],\"loot_list_add\":[\"o_loot_bone\",35,\"o_loot_sinew\",0]}",
+    "{\"loot_list\":[],\"corpses\":[{\"loot_list_meat\":[\"o_loot_meat_boar\",1],\"loot_list_add\":[\"o_loot_fat\",100]}]}",
+    "{\"loot_list_meat\":[],\"loot_list_add\":[]}",
+};
+foreach (string json in samples)
+{
+    string portable = ItemLists.Portable(json);
+    string local = ItemLists.Local(portable);
+    var (cleaned, removed) = ItemLists.Clean(json);
+    if (!JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(portable))
+        || !JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(local))
+        || !JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(cleaned)) || removed != 0)
+        throw new Exception("Corpse name/count/chance pairs changed during transport or save cleaning");
+}
+Console.WriteLine("PASS: corpse meat/additional-loot pairs survive Portable, Local and Clean, including nested saves and empty lists.");
