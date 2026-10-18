@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.10
 
 - **Fixed: Determination never struck for a player following another** (#37). The game strikes a unit standing on one
   of the skill's marks during that unit's own turn, and where you follow another player the enemies are theirs, never
