@@ -3,6 +3,14 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Fixed: Wormhole's mark vanished a turn after a client cast it** (#48). The client took Wormhole's debuff off the
+  host's unit as not its own (the game owns what a player's skills make by the player's object), and the mark went with
+  it. Effects and noise made by a player's skills are now counted as theirs everywhere.
+- **Fixed: Planar Exchange's swap often failed on the host** (#48): needs StoneForge with the `Units.At` fix. The host
+  never found who was on the cell to trade with and refused the move.
+
 ## 0.4.10
 
 - **Fixed: Determination never struck for a player following another** (#37). The game strikes a unit standing on one

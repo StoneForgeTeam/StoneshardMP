@@ -266,6 +266,10 @@ public sealed class CombatSync
             target["HP"] = health;
     }
 
+    // Whether an owner as the game keeps it (an instance, its id, or an object - Handles.Owner) is our player, our summon
+    // or anything of theirs.
+    internal static bool IsOursDeep(GmValue owner) => IsOursDeep(Handles.Owner(owner));
+
     // Whether something's ours: our player, our summon, or what one of them owns - a spell, a skill, a projectile (its
     // owner, or its owner's owner).
     internal static bool IsOursDeep(Instance thing)
@@ -473,12 +477,12 @@ public sealed class CombatSync
     {
         if (_tracing > 0 && call.Args.Length >= 3)
             _context.Log($"  {Gm.ObjectGetName(call.Args[0].AsInt)} made: result {(Instance.Of(call.Result).IsNone ? "none" : "an effect")}, "
-                + $"in a refresh {_refreshing > 0}, ours {_ourActions > 0 || (call.Args.Length > 3 && IsOursDeep(Instance.Of(call.Args[3])))}, "
+                + $"in a refresh {_refreshing > 0}, ours {_ourActions > 0 || (call.Args.Length > 3 && IsOursDeep(call.Args[3]))}, "
                 + (Ours(call.Args[2]) is null ? "not sent: " + NotOursWhy(Instance.Of(call.Args[2])) : "the owner's unit"));
         if (_refreshing > 0 || call.Args.Length < 3 || Instance.Of(call.Result).IsNone)
             return;
         // (Ours: inside our action, or given by something of ours - our player, our summon, their spell or skill.)
-        bool ourOwn = (call.Args.Length > 3 && IsOursDeep(Instance.Of(call.Args[3]))) || IsOursDeep(call.Self);
+        bool ourOwn = (call.Args.Length > 3 && IsOursDeep(call.Args[3])) || IsOursDeep(call.Self);
         if ((_ourActions == 0 && !ourOwn) || Ours(call.Args[2]) is not var (copy, hostId))
             return;
         string name = Gm.ObjectGetName(call.Args[0].AsInt);

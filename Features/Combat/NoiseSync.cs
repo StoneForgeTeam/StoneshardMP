@@ -46,7 +46,7 @@ public sealed class NoiseSync
     {
         if (_replaying || _ownership.Role != AreaRole.Follower || !_session.Connected || !_inSharedWorld() || call.Args.Length < 3)
             return;
-        Instance source = call.Args.Length > 3 && !call.Args[3].IsUndefined ? Instance.Of(call.Args[3]) : call.Self;
+        Instance source = call.Args.Length > 3 && !call.Args[3].IsUndefined ? Handles.Owner(call.Args[3]) : call.Self;
         if (!CombatSync.IsOursDeep(source))
             return;
         GmValue faction = Game.Global["__noise_faction_key"];
