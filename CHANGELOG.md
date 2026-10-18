@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: the game stopped at the mill** ("Variable o_npc_miller_dog.is_work not set before reading it", #41). A town
+  NPC that had lost what its room sets up for it - here, the miller's dog in the host's game - crashed its work routine.
+  Such an NPC gets the game's default instead.
+
 - Preserve corpse butchering loot as flat object-name/count/chance pairs. Neither network conversion nor save
   cleanup treats these as inventory-item list IDs anymore (#37).
 

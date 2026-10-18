@@ -79,6 +79,7 @@ public sealed class WorldSync
         ItemLists.GuardLoading(context);
         new PlaceRepair(context);
         new NpcDoorGuard(context);
+        new NpcWorkGuard(context);
         session.PlayerLeft += player =>
         {
             if (_copyTo == player.Slot)
