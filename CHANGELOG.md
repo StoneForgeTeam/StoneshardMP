@@ -5,6 +5,11 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: Determination never struck for a player following another** (#37). The game strikes a unit standing on one
+  of the skill's marks during that unit's own turn, and where you follow another player the enemies are theirs, never
+  taking a turn in your game. Now an enemy that comes into one of your marks is struck in your game, and the hit goes
+  to the area's owner as your other attacks do.
+
 - **Fixed: the game stopped at the mill** ("Variable o_npc_miller_dog.is_work not set before reading it", #41). A town
   NPC that had lost what its room sets up for it - here, the miller's dog in the host's game - crashed its work routine.
   Such an NPC gets the game's default instead.

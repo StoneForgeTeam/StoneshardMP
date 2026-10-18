@@ -50,7 +50,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private EffectManager _effects = null!;
     private AreaOwnership _ownership = null!;
     private AreaUnits _areaUnits = null!;
-    private CombatSync _combat = null!;
+    private CombatFeature _combat = null!;
     private CrimeSync _crimes = null!;
     private TalkSync _talk = null!;
     private DevTools _dev = null!;
@@ -60,7 +60,6 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private SummonSync _summons = null!;
     private CaravanSync _caravan = null!;
     private MerchantSync _merchants = null!;
-    private NoiseSync _noise = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
     private DoorSync _doors = null!;
@@ -105,10 +104,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _areaUnits = new AreaUnits(context, _session, _ownership, () => _players.ObjectIndex);
         // (Running a place, our units step off a cell another player's on.)
         _players.OwnsArea = () => _ownership.Role == AreaRole.Owner;
-        // Combat where players are together: each game resolves its own character's fights, the owner's units the real ones.
-        _combat = new CombatSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
-        // A follower's noise - steps, fights, spells - heard by the owner's units, from its stand-in.
-        _noise = new NoiseSync(context, _session, _ownership, _players, () => _join.InSharedWorld);
+        // Combat where players are together: fights, noise, Determination's strikes.
+        _combat = new CombatFeature(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
         _crimes = new CrimeSync(context, _session, _areaUnits, _ownership, () => _join.InSharedWorld);
         _talk = new TalkSync(context, _session, _areaUnits, _ownership, _players, () => _join.InSharedWorld);
         // One completed action is one world turn for everyone: a client's moves turn the host's world, the host's own

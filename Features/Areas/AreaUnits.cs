@@ -423,6 +423,8 @@ public sealed class AreaUnits
             if (!_poly.TryGetValue(unit, out bool poly))
                 _poly[unit] = poly = unit.Get("is_poly_cell").AsBool;
             Units.Move(unit, cell, grids, poly);
+            // (Onto one of our Determination marks: struck, as its turn would have had it.)
+            Combat.MarkStrikes.Arrived(unit, cell);
         }
         // Its effects as the owner has them - when they've changed there, or once ours have been left alone long enough
         // for the owner to have what we did.
