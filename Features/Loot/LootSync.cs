@@ -79,6 +79,10 @@ public sealed class LootSync
     private readonly Dictionary<Instance, long> _hidOf = new();
     private readonly Dictionary<long, Instance> _map = new();
     private readonly Dictionary<string, Instance> _pending = new();
+    // Follower: our drops picked up again before the owner sent them back (their tokens) - it has them still, and would
+    // send them back to be made here again: told they're taken as they come (#45: a bag dropped and picked up quickly,
+    // with a high ping, was on the ground twice).
+    private readonly HashSet<string> _takenPending = new();
     private readonly Dictionary<Instance, long> _sentAt = new();
     private readonly Dictionary<Instance, Mark> _marks = new();
     // What never changes about an item, read once: whether it's persistent, whether it's static. (Each read of a culled
@@ -133,6 +137,7 @@ public sealed class LootSync
         _hidOf.Clear();
         _map.Clear();
         _pending.Clear();
+        _takenPending.Clear();
         _sentAt.Clear();
         _marks.Clear();
         _persistent.Clear();
@@ -424,6 +429,12 @@ public sealed class LootSync
             return;
         Instance bound = default;
         string token = entry["t"]?.GetValue<string>() ?? "";
+        if (token.Length > 0 && _takenPending.Remove(token))
+        {
+            Send(LootKind.Taken, new JsonArray(uid).ToJsonString(), _owner);
+            _context.Log("Picked up a drop of ours before the place's owner had it back: told the owner it's taken");
+            return;
+        }
         if (token.Length > 0 && _pending.Remove(token, out Instance mine) && !Gone(mine))
             bound = mine;
         if (bound.IsNone)
@@ -508,6 +519,12 @@ public sealed class LootSync
             {
                 _map.Remove(uid);
                 taken.Add(uid);
+            }
+        foreach (var (token, id) in _pending.ToList())
+            if (Gone(id))
+            {
+                _pending.Remove(token);
+                _takenPending.Add(token);
             }
         // Items in our throws: ours.
         foreach (Instance shell in Instances.All(GameObjectId.o_physical_shell))

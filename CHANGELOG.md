@@ -5,6 +5,8 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: an item a client dropped and picked straight back up could lie on the host's ground still** (#45), and come
+  back to the client as a second one. Picked up before the host had sent it back, it was never reported taken.
 - **Fixed: Wormhole's mark vanished a turn after a client cast it** (#48). The client took Wormhole's debuff off the
   host's unit as not its own (the game owns what a player's skills make by the player's object), and the mark went with
   it. Effects and noise made by a player's skills are now counted as theirs everywhere.
