@@ -55,6 +55,10 @@ public sealed class AreaUnits
     private readonly Dictionary<long, Instance> _bound = new();
     private readonly HashSet<Instance> _everBound = new();
     private readonly HashSet<Instance> _current = new();
+    // Follower: our units whose AI was off of their own when we bound them (training dummies - o_dummy_parent - never
+    // act): handed back, the game's turns would wake them (Units.ReturnToTurns switches AI on), and a camp's dummies
+    // chased and hit the player (#43). Theirs is put back off.
+    private readonly HashSet<Instance> _aiOff = new();
     // The place those are for: a new place starts them over (the units of the last one are gone).
     private string? _place;
     // Follower: what was last applied to each of our units (the owner's entry for it) - only what's changed since is
@@ -101,6 +105,7 @@ public sealed class AreaUnits
         _bound.Clear();
         _everBound.Clear();
         _current.Clear();
+        _aiOff.Clear();
         _applied.Clear();
         _objectOf.Clear();
         _turnsSize = -1;
@@ -239,6 +244,9 @@ public sealed class AreaUnits
             RoomDefaults(copy);
         if (Gm.InGame && copies.Count > 0 && Units.ReturnToTurns(copies))
             _context.Log($"No longer following here: {copies.Count} unit(s) ours to run again");
+        foreach (Instance still in _aiOff)
+            if (still.Exists)
+                still["ai_is_on"] = false;
         ForgetBindings();
     }
 
@@ -248,6 +256,7 @@ public sealed class AreaUnits
         _bound.Clear();
         _everBound.Clear();
         _current.Clear();
+        _aiOff.Clear();
         _applied.Clear();
         _turnsSize = -1;
         _roster = null;
@@ -267,6 +276,7 @@ public sealed class AreaUnits
         _bound.Clear();
         _everBound.Clear();
         _current.Clear();
+        _aiOff.Clear();
         _applied.Clear();
         _objectOf.Clear();
         _turnsSize = -1;
@@ -396,7 +406,9 @@ public sealed class AreaUnits
             if (unit.IsNone || !unit.Exists)
                 return;
             _bound[hostId] = unit;
-            _everBound.Add(unit);
+            // (Never bound before: its AI is still its own - off, and it's one that never acts.)
+            if (_everBound.Add(unit) && !unit.Get("ai_is_on").AsBool)
+                _aiOff.Add(unit);
             _applied.Remove(unit);
             _passBound = true;
         }

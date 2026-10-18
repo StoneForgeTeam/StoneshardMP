@@ -5,6 +5,8 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: the camp's training dummies chased and hit a player** (#43). Handing the area's units back to a player
+  who'd been following switched every unit's AI on, the dummies' too. Units whose AI is off of their own stay off.
 - **Fixed: an item a client dropped and picked straight back up could lie on the host's ground still** (#45), and come
   back to the client as a second one. Picked up before the host had sent it back, it was never reported taken.
 - **Fixed: Wormhole's mark vanished a turn after a client cast it** (#48). The client took Wormhole's debuff off the
