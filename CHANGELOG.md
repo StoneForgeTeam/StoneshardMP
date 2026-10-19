@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: a client's game stopped as the host left a tavern** ("I64 argument is unset", in `scr_pat_prototype`,
+  #40). A town NPC coming back into view through a door that wasn't in the room was only caught when none of its doors
+  were there. It's now caught whenever the door the game would pick isn't there.
 - **Fixed: the game stopped as the host came into Osbrook** ("Variable Index [1] out of range [0]", in
   `c_TraidingSpot`, #49). A town NPC with no door in the room had its doors taken away for good to keep it from
   crashing, and a trader's stall reads them every step. The doors are now only set aside for that one call.
