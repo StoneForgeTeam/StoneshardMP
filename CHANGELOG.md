@@ -5,6 +5,9 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: the game stopped as the host came into Osbrook** ("Variable Index [1] out of range [0]", in
+  `c_TraidingSpot`, #49). A town NPC with no door in the room had its doors taken away for good to keep it from
+  crashing, and a trader's stall reads them every step. The doors are now only set aside for that one call.
 - **Fixed: the camp's training dummies chased and hit a player** (#43). Handing the area's units back to a player
   who'd been following switched every unit's AI on, the dummies' too. Units whose AI is off of their own stay off.
 - **Fixed: an item a client dropped and picked straight back up could lie on the host's ground still** (#45), and come
