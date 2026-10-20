@@ -50,6 +50,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private EffectManager _effects = null!;
     private AreaOwnership _ownership = null!;
     private AreaUnits _areaUnits = null!;
+    private GridRepair _gridRepair = null!;
     private CombatFeature _combat = null!;
     private CrimeSync _crimes = null!;
     private TalkSync _talk = null!;
@@ -102,6 +103,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         // Who runs each place players share: whoever got there first; the others follow (units, loot, fights, rounds).
         _ownership = new AreaOwnership(context, _session, () => _join.InSharedWorld);
         _areaUnits = new AreaUnits(context, _session, _ownership, () => _players.ObjectIndex);
+        _gridRepair = new GridRepair(context, _players);
         // (Running a place, our units step off a cell another player's on.)
         _players.OwnsArea = () => _ownership.Role == AreaRole.Owner;
         // Combat where players are together: fights, noise, Determination's strikes.
@@ -309,6 +311,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "party", _party.Tick);
             Profiler.Measure(_context, "effects", _effects.Tick);
             Profiler.Measure(_context, "area units", _areaUnits.Tick);
+            Profiler.Measure(_context, "grid repair", _gridRepair.Tick);
             Profiler.Measure(_context, "rounds", _rounds.Tick);
             Profiler.Measure(_context, "clock", _clock.Tick);
             Profiler.Measure(_context, "dump", _dump.Tick);

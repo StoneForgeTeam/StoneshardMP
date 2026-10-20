@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Fixed: tiles nobody could walk onto** (#37), for the player who'd entered first, until someone walked over them or
+  the game was reloaded. Moves the game's own walking doesn't make - other players' stand-ins, knockbacks and swaps from
+  another game, units copied and taken away - could leave a cell blocked for a unit that wasn't there. Every couple of
+  seconds, while players are together, such cells near them are freed.
 - **Fixed: a client's game stopped as the host left a tavern** ("I64 argument is unset", in `scr_pat_prototype`,
   #40). A town NPC coming back into view through a door that wasn't in the room was only caught when none of its doors
   were there. It's now caught whenever the door the game would pick isn't there.
