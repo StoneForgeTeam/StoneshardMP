@@ -69,7 +69,8 @@ internal sealed class GridRepair
                         || Game.CallBuiltin("ds_grid_get", clean, x, y).AsReal != ForUnit
                         || Game.CallBuiltin("ds_grid_get", path, x, y).AsReal != Blocked)
                         continue;
-                    Game.CallScript("scr_collision_clear", grids.Collisions, x, y, true);
+                    // (As the controller - the grid its first argument: as Units.Move frees one.)
+                    Game.CallScript("scr_collision_clear", grids.Controller, grids.Collisions, x, y, true);
                     freed++;
                 }
         }
