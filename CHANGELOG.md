@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.4.11
 
 - **Fixed: tiles nobody could walk onto** (#37), for the player who'd entered first, until someone walked over them or
   the game was reloaded. Moves the game's own walking doesn't make - other players' stand-ins, knockbacks and swaps from
