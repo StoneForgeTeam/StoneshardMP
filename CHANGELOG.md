@@ -7,6 +7,7 @@ releases them: the release workflow titles that section with the version, sets i
 
 - **Fixed: 0.4.11's blocked-tile repair threw an error every couple of seconds** (#37), "stoneshardmp threw in Tick"
   (an SEHException in GridRepair), and freed nothing. It called the game's script with the wrong arguments.
+
 ## 0.4.11
 
 - **Fixed: tiles nobody could walk onto** (#37), for the player who'd entered first, until someone walked over them or
