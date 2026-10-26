@@ -12,19 +12,23 @@ namespace StoneshardMP.Features.Areas;
 // (xstart / ystart). The game's scr_invis_disable_npc stops ("I64 argument is unset", in scr_pat_prototype) when the door
 // it settles on isn't in the room: one it was given, or - picking one itself - the door for the time of day, when no
 // open door of its is here to take instead (the host, a client entering the inn a second time; a client once the host
-// had left the tavern, #40). Such an NPC has no doors for that call - it's back where it started instead - and its own
-// back after it: a trader's stall (c_TraidingSpot) reads its target_array every step, and with none left, the game
-// stopped as the host came into Osbrook (#49).
+// had left the tavern, #40). Such an NPC has no doors for that call - it's back where it started instead.
+//
+// Its doors must be back the moment the call is done: a trader's stall (c_TraidingSpot) reads its target_array[1] every
+// step, and with none, the game stops (#49, #55). So the guard makes that call itself - the doors set aside, the game's
+// script run, the doors put back in a finally - rather than across a before and an after hook, which a failed call could
+// leave unpaired (#55: an NPC left with no doors). And the stall skips a step it can't take instead of stopping the game.
 public sealed class NpcDoorGuard
 {
-    // The NPCs whose doors are set aside for the call under way, and their doors.
-    private readonly Stack<(Instance Npc, GmArray? Doors)> _aside = new();
+    private readonly ModContext _context;
+    // The stalls already reported as skipping a step (once each).
+    private readonly HashSet<int> _reportedStalls = new();
 
     public NpcDoorGuard(ModContext context)
     {
+        _context = context;
         Scripts.scr_invis_disable_npc.Before(context, call =>
         {
-            _aside.Push((default, null));
             // (Only when it's to come back through a door: no position given.)
             if (call.Args.Length > 1 && !(call.Args[1].Kind == GmKind.Real && call.Args[1].AsReal == -4))
                 return false;
@@ -35,21 +39,40 @@ public sealed class NpcDoorGuard
                 doors?.Dispose();
                 return false;
             }
-            using (GmArray none = GmArray.Create())
-                npc["target_array"] = none;
-            _aside.Pop();
-            _aside.Push((npc.Persist(), doors));
-            context.Log($"{Gm.ObjectGetName(npc.Get("object_index").AsInt)} had no door here to come back through: back where it started");
-            return false;
-        });
-        Scripts.scr_invis_disable_npc.After(context, _ =>
-        {
-            if (_aside.Count == 0 || _aside.Pop() is not (var npc, { } doors))
-                return;
             using (doors)
-                if (npc.Exists)
-                    npc["target_array"] = doors;
+            {
+                context.Log($"{Gm.ObjectGetName(npc.Get("object_index").AsInt)} had no door here to come back through: back where it started");
+                try
+                {
+                    using (GmArray none = GmArray.Create())
+                        npc["target_array"] = none;
+                    call.Result = Scripts.scr_invis_disable_npc.CallOriginal(call);
+                }
+                finally
+                {
+                    if (npc.Exists)
+                        npc["target_array"] = doors;
+                }
+            }
+            return true;
         });
+
+        // A stall whose trader has fewer than two doors - for any reason - skips its step rather than stop the game.
+        context.OnCode("gml_Object_c_TraidingSpot_Step_0", before: (stall, _) => !TraderHasDoors(stall));
+    }
+
+    // Whether the stall's trader (myNpc) is gone or has the second door its step reads (target_array[1]).
+    private bool TraderHasDoors(Instance stall)
+    {
+        Instance npc = Instance.Of(stall.Get("myNpc"));
+        if (npc.IsNone || !npc.Exists)
+            return true;
+        using GmArray? doors = npc.Get("target_array").AsArray;
+        if (doors != null && doors.Length > 1)
+            return true;
+        if (_reportedStalls.Add(stall.Get("id").AsInt))
+            _context.Log($"{Gm.ObjectGetName(npc.Get("object_index").AsInt)}'s stall skipped: it has {doors?.Length ?? 0} door(s), the stall reads its second");
+        return false;
     }
 
     // Whether scr_invis_disable_npc will end on a door that's here: the one it was given; or, picking one itself, the door
