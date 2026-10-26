@@ -9,6 +9,10 @@ releases them: the release workflow titles that section with the version, sets i
   `c_TraidingSpot`, #55), for example leaving the elder's house. A town NPC whose doors were set aside for a moment
   could be left with none if that moment was cut short. Its doors are now always put back, and a stall whose trader
   has lost its doors for any reason skips a step instead of stopping the game.
+- **Fixed: an enemy knocked back by the last player to act in a round could still hit from where it had been** (#60),
+  even from two tiles away with a one-tile attack. A client told the round it had acted as its attack began, so the
+  enemies could move before the knockback reached the place's owner. A client now says it has acted once its action has
+  played out (at most 3 seconds later), after anything it moved.
 
 ## 0.4.12
 

@@ -38,9 +38,12 @@ public sealed class TurnRounds
     // Everyone: our reason (read every few frames), the last round we acted in, the game's turn count last seen.
     private TurnReason _reason;
     private int _actedRound = -1, _turns = -1, _frame;
-    // Follower: what we last told the owner, and when.
+    // Follower: what we last told the owner, and when; the round we've told it we acted in; and when our action began, while
+    // it's still playing out (an act told only then - see Settled).
     private (TurnReason, int) _told;
     private long _toldAt;
+    private int _toldActed = -1;
+    private long _actingSince = -1;
     // Owner: each follower's reason and last round acted in; who was skipped this round; when the round last moved on;
     // whether the enemies' turn has begun (and when); what was last sent, and when.
     private readonly Dictionary<int, (TurnReason Reason, int ActedRound)> _status = new();
@@ -116,6 +119,8 @@ public sealed class TurnRounds
         _actedRound = -1;
         _turns = -1;
         _told = default;
+        _toldActed = -1;
+        _actingSince = -1;
         _status.Clear();
         _skipped.Clear();
         _enemiesTurn = false;
@@ -130,6 +135,8 @@ public sealed class TurnRounds
         Active = false;
         Seats = Array.Empty<RoundSeat>();
         _told = default;
+        _toldActed = -1;
+        _actingSince = -1;
         _status.Clear();
         _skipped.Clear();
         _enemiesTurn = false;
@@ -167,20 +174,45 @@ public sealed class TurnRounds
         _actedRound = Round;
         _context.Log($"Round {Round}: acted");
         if (_ownership.Role == AreaRole.Follower)
-            TellOwner(force: true);
+        {
+            _actingSince = Environment.TickCount64;
+            TellOwner();
+        }
     }
 
     // ---- follower ----
 
+    // The owner hears we've acted only once our action has played out: the game counts the turn as the action starts, and
+    // what it does to the owner's units - a knockback's move, sent as it lands (CombatSync) - comes frames later. Told
+    // sooner, the owner would start the enemies' turn first, and a unit knocked back would still hit from where it was
+    // (#60). Packets arrive in order, so the move is there before the act. (At most SettleMs: never a round held up.)
+    private const long SettleMs = 3000;
+
     private void TellOwner(bool force = false)
     {
         long now = Environment.TickCount64;
-        var status = (_reason, _actedRound);
+        if (_actingSince >= 0 && (Settled() || now - _actingSince > SettleMs))
+        {
+            _actingSince = -1;
+            force = true;
+        }
+        int acted = _actingSince >= 0 ? _toldActed : _actedRound;
+        var status = (_reason, acted);
         if (!force && status == _told && now - _toldAt < StatusEveryMs)
             return;
         _told = status;
         _toldAt = now;
-        _session.Send(new TurnStatusPacket((byte)_reason, _actedRound), to: _ownership.Owner);
+        _toldActed = acted;
+        _session.Send(new TurnStatusPacket((byte)_reason, acted), to: _ownership.Owner);
+    }
+
+    // Whether our action has played out: our player free again (not locked, its turn's alarms run) and no knockback still
+    // landing (o_knockback, the swoosh the game makes for each, lives until it has).
+    private static bool Settled()
+    {
+        Instance player = OurPlayer.Instance;
+        return !player.IsNone && !player.Get("lock_movement").AsBool && Math.Max(player.Alarm[4], player.Alarm[1]) <= 0
+            && !Gm.InstanceExists(GameObjectId.o_knockback);
     }
 
     private void ReceiveRound(RemotePlayer from, RoundPacket round)
