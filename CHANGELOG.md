@@ -13,6 +13,10 @@ releases them: the release workflow titles that section with the version, sets i
   even from two tiles away with a one-tile attack. A client told the round it had acted as its attack began, so the
   enemies could move before the knockback reached the place's owner. A client now says it has acted once its action has
   played out (at most 3 seconds later), after anything it moved.
+- **Changed: players coming back to a world get their own character again** (#59). Characters were handed out in the
+  order players joined, so with one player missing, the next took over their character. A player who has played in the
+  host's world before now gets the character they last played, whatever order they join in. New players still get a
+  free one in join order, and the host can still move anyone waiting on the main menu's player list.
 
 ## 0.4.12
 

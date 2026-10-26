@@ -8,10 +8,11 @@ namespace StoneshardMP.Features.Join;
 // Host: which of the world's player slots each player in the session plays (as Divinity's lobby does). The host's world
 // keeps the other players' characters by world slot (1, 2...: JoinSave), not by name - and their own stash in the chest by
 // the bed (PersonalStash). The host is slot 0 (the world's own character). A client plays the slot of the order it
-// joined in (its session slot) unless the host swaps it, on the main menu's player list (PlayersPanel): to the next slot,
-// trading places with whoever has that one. Only a player still waiting to be let in (JoinManager: the host not in its
-// world yet) - not one that's been sent its character, nor into such a one's slot: what they play is decided then. For
-// this session; joining again, it's the order again.
+// joined in (its session slot) - or, coming back to a world, the slot it played before (PlaceReturning: the save keeps
+// who last played each, #59), so one player missing doesn't hand the next their character - unless the host swaps it, on
+// the main menu's player list (PlayersPanel): to the next slot, trading places with whoever has that one. Only a player
+// still waiting to be let in (JoinManager: the host not in its world yet) - not one that's been sent its character, nor
+// into such a one's slot: what they play is decided then. For this session; joining again, it's decided again.
 // The host can pick another slot too (HostSlot), on the main menu: the save it loads next has the host's character and
 // that slot's traded (JoinSave.SwapHost) - the host plays that one, and whoever plays the slot gets the host's. So a
 // client given slot 0 (Pick) is that trade: the host takes the client's slot, and the client the host's character.
@@ -20,6 +21,8 @@ public sealed class WorldSlots
     private readonly Session _session;
     // Session slot -> world slot, for those swapped (the rest play their own).
     private readonly Dictionary<int, int> _swapped = new();
+    // The clients (by session slot) already given the slot they played before, or found to have none (PlaceReturning).
+    private readonly HashSet<int> _placed = new();
 
     public WorldSlots(Session session)
     {
@@ -29,9 +32,35 @@ public sealed class WorldSlots
             if (session.Mode != Session.SessionMode.Host)
             {
                 _swapped.Clear();
+                _placed.Clear();
                 HostSlot = 0;
             }
         };
+        session.PlayerLeft += player => _placed.Remove(player.Slot);
+    }
+
+    /// <summary>Host, in its world, before letting a waiting client in: puts them in the world slot they played before
+    /// (who last played each is kept with the world: JoinSave.SlotName), trading with whoever has it, rather than the
+    /// slot of the order they joined in (#59). Once per client, and never one the host has moved already (its pick
+    /// stands) nor into the slot of one who's been let in.</summary>
+    public void PlaceReturning(int sessionSlot, string name)
+    {
+        if (!CanSwap(sessionSlot) || !_placed.Add(sessionSlot) || _swapped.ContainsKey(sessionSlot) || name.Length == 0)
+            return;
+        int from = Of(sessionSlot);
+        for (int slot = 1; slot < Math.Max(1, _session.Limit); slot++)
+        {
+            if (JoinSave.SlotName(slot) != name)
+                continue;
+            if (slot == from)
+                return;
+            int holder = HolderOf(slot);
+            // (Theirs, but taken by one already let in: they play the slot of their order.)
+            if (holder >= 0 && Settled(holder))
+                return;
+            Pick(sessionSlot, slot);
+            return;
+        }
     }
 
     /// <summary>Whether a client (by session slot) is still waiting to be let in (JoinManager says).</summary>
@@ -165,6 +194,7 @@ public sealed class WorldSlots
     public void Clear()
     {
         _swapped.Clear();
+        _placed.Clear();
         HostSlot = 0;
     }
 }

@@ -379,6 +379,9 @@ public sealed class JoinManager
         // (A save being topped up: everyone's in - or the wait's up - and kept above: written again.)
         if (_topUpGot && _topUpWaiting.Count == 0)
             TopUpSave();
+        // (Players coming back: the slot they played before, now our world's here to say which - not their join order.)
+        foreach (var (slot, request) in _requests.ToList())
+            _slots.PlaceReturning(slot, request.Name);
         foreach (var (slot, request) in _requests.ToList())
         {
             _requests.Remove(slot);
