@@ -17,6 +17,10 @@ releases them: the release workflow titles that section with the version, sets i
   order players joined, so with one player missing, the next took over their character. A player who has played in the
   host's world before now gets the character they last played, whatever order they join in. New players still get a
   free one in join order, and the host can still move anyone waiting on the main menu's player list.
+- **Fixed: butchering gave a client nothing** (#58): no meat, no hides, and no mini-boss trophies from Jorgrim's Gore
+  and Glory. What it dropped was taken for loot that wasn't the client's and removed. Butchering now counts as the
+  client's own drop, so it lands for everyone, and the corpse is butchered for everyone too, so it can't be butchered
+  again for a second lot.
 
 ## 0.4.12
 

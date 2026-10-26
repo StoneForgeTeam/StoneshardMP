@@ -117,6 +117,15 @@ public sealed class LootSync
                 _shots.Add((self.Get("target_x").AsReal, self.Get("target_y").AsReal, Environment.TickCount64 + DropWindowMs));
             return false;
         });
+        // Our player butchering a corpse (o_flaying's user event 0: its meat, hides, extra loot and - Jorgrim's Gore and
+        // Glory - a mini-boss's trophy, each made by the corpse with scr_loot): what turns up there is our drop too. Not
+        // one, it was removed as not the owner's, and a client's butchering gave nothing (#58).
+        context.OnCode("gml_Object_o_flaying_Other_10", before: (self, _) =>
+        {
+            if (self.Exists && IsPlayer(self.Get("owner")) && Instance.Of(self.Get("target")) is { IsNone: false } corpse && corpse.Exists)
+                _shots.Add((corpse.Get("x").AsReal, corpse.Get("y").AsReal, Environment.TickCount64 + DropWindowMs));
+            return false;
+        });
     }
 
     public void Clear()

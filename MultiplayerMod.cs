@@ -166,7 +166,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _traps = new TrapSync(context, _session, () => _join.InSharedWorld);
         // Traps players set - claw traps, caltrops: the place owner's, in everyone's game; they catch enemies only.
         _placedTraps = new PlacedTrapSync(context, _session, _ownership, _players, () => _join.InSharedWorld);
-        _corpses = new CorpseSync(_session, _ownership, () => _join.InSharedWorld);
+        _corpses = new CorpseSync(context, _session, _ownership, () => _join.InSharedWorld);
         _placeables = new PlaceableSync(context, _session, _ownership, () => _join.InSharedWorld);
         _groundEffects = new GroundEffectSync(context, _session, _ownership, () => _join.InSharedWorld);
         // Thrown bombs where players are together: their burst seen and heard by all, a jar's swarm the owner's.

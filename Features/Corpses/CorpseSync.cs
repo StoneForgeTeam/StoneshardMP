@@ -13,8 +13,12 @@ namespace StoneshardMP.Features.Corpses;
 
 // Death corpses belong to the area owner, as in the original GML mod. Use the
 // game's save format, including meat/pelts, decay and resurrection metadata.
+// A follower butchering a corpse (o_flaying's user event 0) does it on its copy - its loot is its drop (LootSync) - and
+// sends the owner that corpse as it's left (the same packet, not a request, the other way): the owner's real one is
+// butchered too, and nobody butchers it again for a second lot (#58).
 public sealed class CorpseSync
 {
+    private readonly ModContext _context;
     private readonly Session _session;
     private readonly AreaOwnership _ownership;
     private readonly Func<bool> _inSharedWorld;
@@ -28,12 +32,30 @@ public sealed class CorpseSync
     private long _asked;
     private bool _owed;
 
-    public CorpseSync(Session session, AreaOwnership ownership, Func<bool> inSharedWorld)
+    public CorpseSync(ModContext context, Session session, AreaOwnership ownership, Func<bool> inSharedWorld)
     {
+        _context = context;
         _session = session;
         _ownership = ownership;
         _inSharedWorld = inSharedWorld;
         session.On<CorpsesPacket>(Receive);
+        context.OnCode("gml_Object_o_flaying_Other_10", after: (self, _) => Butchered(self));
+    }
+
+    // Follower: our player has butchered a corpse here - the owner's told how it's left.
+    private void Butchered(Instance flaying)
+    {
+        if (!Ready || _ownership.Role != AreaRole.Follower || !flaying.Exists || !Units.IsPlayer(flaying.Get("owner"))
+            || Instance.Of(flaying.Get("target")) is not { IsNone: false } corpse || !corpse.Exists)
+            return;
+        var update = new JsonArray();
+        Awake(corpse, () =>
+        {
+            update.Add(Entry(corpse));
+            return true;
+        });
+        _session.Send(new CorpsesPacket(_ownership.Place!, false, JoinCompression.Compress(update.ToJsonString())), _ownership.Owner);
+        _context.Log($"Butchered {Key(corpse)}: the place's owner told");
     }
 
     public void Clear()
@@ -106,6 +128,13 @@ public sealed class CorpseSync
                 _owed = true;
             return;
         }
+        // (A follower's corpse it's butchered: ours left as theirs is - our next snapshot has it for everyone.)
+        if (_ownership.Role == AreaRole.Owner && _ownership.Others.Contains(from.Slot))
+        {
+            if (JsonNode.Parse(JoinCompression.Decompress(packet.Data)) is JsonArray butchered)
+                ApplyButchered(from, butchered);
+            return;
+        }
         if (_ownership.Role != AreaRole.Follower || from.Slot != _owner)
             return;
         if (JsonNode.Parse(JoinCompression.Decompress(packet.Data)) is not JsonArray snapshot)
@@ -125,28 +154,52 @@ public sealed class CorpseSync
     {
         var list = new JsonArray();
         foreach (Instance corpse in All())
-        {
             Awake(corpse, () =>
             {
-                if (Game.CallScript("scr_locationRoomEntityCorpsesSaveDataGet", default, corpse).AsDsMap is not { } saved)
-                    throw new InvalidOperationException("Could not save corpse");
-                try
-                {
-                    list.Add(new JsonObject
-                    {
-                        ["key"] = Key(corpse),
-                        ["tag"] = corpse.Get("roomEntityTag").AsString,
-                        ["preset"] = corpse.Get("roomEntityPresetTag").AsString,
-                        // (Its loot as items, not this game's numbers for them: ItemLists.)
-                        ["data"] = ItemLists.Portable(saved.ToJson()),
-                    });
-                }
-                finally { saved.Destroy(); }
+                list.Add(Entry(corpse));
                 return true;
             });
-        }
         // Stable ordering avoids sending identical snapshots when culling reorders instances.
         return new JsonArray(list.OrderBy(n => n!["key"]!.GetValue<string>()).Select(n => n!.DeepClone()).ToArray());
+    }
+
+    // A corpse as it's sent: its key, its room entity tags and its save data (awake).
+    private static JsonObject Entry(Instance corpse)
+    {
+        if (Game.CallScript("scr_locationRoomEntityCorpsesSaveDataGet", default, corpse).AsDsMap is not { } saved)
+            throw new InvalidOperationException("Could not save corpse");
+        try
+        {
+            return new JsonObject
+            {
+                ["key"] = Key(corpse),
+                ["tag"] = corpse.Get("roomEntityTag").AsString,
+                ["preset"] = corpse.Get("roomEntityPresetTag").AsString,
+                // (Its loot as items, not this game's numbers for them: ItemLists.)
+                ["data"] = ItemLists.Portable(saved.ToJson()),
+            };
+        }
+        finally { saved.Destroy(); }
+    }
+
+    // Owner: corpses a follower has butchered - ours, by their key, left as theirs are.
+    private void ApplyButchered(RemotePlayer from, JsonArray butchered)
+    {
+        // (Two of a kind on one spot share a key: the first is taken, as the snapshot does.)
+        var byKey = new Dictionary<string, Instance>();
+        foreach (Instance c in All())
+            byKey.TryAdd(Awake(c, () => Key(c)), c);
+        foreach (JsonNode? entry in butchered)
+        {
+            string? key = entry?["key"]?.GetValue<string>();
+            if (key == null || !byKey.TryGetValue(key, out Instance corpse))
+            {
+                _context.Log($"{from.Name} butchered {key ?? "a corpse"}, which isn't here");
+                continue;
+            }
+            Awake(corpse, () => { Restore(corpse, entry!["data"]!.GetValue<string>()); return true; });
+            _context.Log($"{from.Name} butchered {key}");
+        }
     }
 
     private void Apply(JsonArray snapshot)
