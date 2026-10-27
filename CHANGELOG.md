@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.5.0
 
 - **Fixed: the game could still stop at a trader's stall in Osbrook** ("Variable Index [1] out of range [0]", in
   `c_TraidingSpot`, #55), for example leaving the elder's house. A town NPC whose doors were set aside for a moment
