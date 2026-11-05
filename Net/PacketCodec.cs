@@ -125,6 +125,8 @@ public static class PacketCodec
             EntranceUnlockedPacket.PacketId => EntranceUnlockedPacket.Read(ref reader),
             CartTravelPacket.PacketId => CartTravelPacket.Read(ref reader),
             LuteNotePacket.PacketId => LuteNotePacket.Read(ref reader),
+            MapFogPacket.PacketId => MapFogPacket.Read(ref reader),
+            StuckArrowPacket.PacketId => StuckArrowPacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

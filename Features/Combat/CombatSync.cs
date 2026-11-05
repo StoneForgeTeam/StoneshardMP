@@ -324,7 +324,8 @@ public sealed class CombatSync
     }
 
     // Owner: a follower's hit, dealt to our unit as the game deals damage (scr_simple_damage: the flash, its morale, its
-    // reaction to being hit), from their stand-in - the unit's last attacker, so it turns on them. Left with none, it
+    // reaction to being hit), from their stand-in - the unit's last attacker, so it turns on them, and its damage counted
+    // against them. Left with none, it
     // dies in its next step.
     private void ReceiveHit(RemotePlayer from, UnitHitPacket hit)
     {
@@ -343,6 +344,10 @@ public sealed class CombatSync
         if (!attacker.IsNone)
             unit["last_attacker"] = attacker;
         StoneForge.Combat.Hit(unit, hit.Damage, attacker);
+        // (Counted against them as the game counts a hit's damage - scr_save_damage_received - so the unit weighs them
+        // as it weighs our player choosing whom to fight: a follower hitting it from afar drew none of it, #47.)
+        if (!attacker.IsNone && unit.Exists)
+            Game.CallScript("scr_save_damage_received", unit, attacker, hit.Damage);
         // (Their copy had no health left: neither has ours - the two may have differed by a rounding.)
         if (hit.Killed && unit.Exists && unit.Get("HP").AsReal > 0)
             unit["HP"] = 0;

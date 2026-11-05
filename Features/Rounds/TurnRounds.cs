@@ -98,6 +98,9 @@ public sealed class TurnRounds
         }
     }
 
+    /// <summary>Whether rounds are on here for someone's combat (not only bleeding or burning).</summary>
+    public bool InCombat => Active && Seats.Any(s => s.Reason == (byte)TurnReason.Combat);
+
     /// <summary>Whether we're in the round.</summary>
     public bool InRound => Active && Seats.Any(s => s.Slot == _session.Slot);
 

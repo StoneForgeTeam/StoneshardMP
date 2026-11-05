@@ -5,6 +5,20 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Explored land on the world map is shared** (#46): a tile any player uncovers is uncovered on everyone's map, and
+  when someone joins, what each player had explored before is put together. No extra discovery XP: that stays with
+  whoever first visits a place.
+
+- **Enemies turn on the player beside them** (#47): one fighting a player across the room, with another player right
+  next to it, now goes for the one next to it, as it would after being hit by them. And a follower's hits count
+  towards whom an enemy goes for, as the host's always have, so a player attacking from range draws enemies too.
+
+- **Arrows and bolts stuck in an enemy drop when it dies, whoever's area it is** (#63): before, only the player who
+  ran the area got theirs back.
+
+- **Battle music plays while anyone there is fighting**, not only when an enemy is after you yourself - as the MSL
+  version did.
+
 - **Lutes are heard by everyone there** (#65): each note a player plays is played in the others' games from their
   character, with the floating music notes over them, and the music fades out while they play, back 10 seconds after
   their last note - as the MSL version did. A new message: protocol 45, so every player needs this version.

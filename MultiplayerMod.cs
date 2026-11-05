@@ -62,6 +62,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private SummonSync _summons = null!;
     private CaravanSync _caravan = null!;
     private LuteSync _lute = null!;
+    private BattleMusic _battleMusic = null!;
+    private MapFogSync _mapFog = null!;
     private MerchantSync _merchants = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
@@ -132,6 +134,10 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         new CartTravel(context, _session, () => _join.InSharedWorld);
         // The lute: each note played is heard from the player's character in the others' games.
         _lute = new LuteSync(context, _session, _players, () => _join.InSharedWorld);
+        // Battle music while anyone here fights, not only when the game's own moments ask.
+        _battleMusic = new BattleMusic(() => _join.InSharedWorld, () => _rounds.InCombat);
+        // The world map's explored land: what one player uncovers, everyone has.
+        _mapFog = new MapFogSync(context, _session, () => _join.InSharedWorld);
         // One stock per trader: a trade's end sends the trader's goods, gold and sold-out uniques to everyone.
         _merchants = new MerchantSync(context, _session, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
@@ -254,6 +260,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _death.Clear();
         _sleep.Clear();
         _recipes.Clear();
+        _mapFog.Clear();
         _summons.Clear();
         _caravan.Clear();
         _merchants.Clear();
@@ -305,6 +312,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "summons", _summons.Tick);
             Profiler.Measure(_context, "caravan", _caravan.Tick);
             Profiler.Measure(_context, "lute", _lute.Tick);
+            Profiler.Measure(_context, "battle music", _battleMusic.Tick);
+            Profiler.Measure(_context, "map fog", _mapFog.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);
