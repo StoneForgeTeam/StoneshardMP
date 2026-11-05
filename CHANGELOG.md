@@ -3,7 +3,7 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
-## Unreleased
+## 0.5.1
 
 - **Explored land on the world map is shared** (#46): a tile any player uncovers is uncovered on everyone's map, and
   when someone joins, what each player had explored before is put together. No extra discovery XP: that stays with
