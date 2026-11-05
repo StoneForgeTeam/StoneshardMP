@@ -3,6 +3,14 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Fixed: a crash entering or leaving a town or an inn** ("array_set :: variable Index [1] out of range [0]", in
+  `o_cameraController`, #56, #66, #67). Each time the player's sprite changed - every blink - the mod read the game's
+  array of the player's sprites, and one of those reads failed inside the game; its camera crashed on its next array.
+  The sprites' numbers are now kept and the array read again only when the game makes them anew (new gear), and the
+  player's shadow offset, which never changes, isn't read at all.
+
 ## 0.5.0
 
 - **Fixed: the game could still stop at a trader's stall in Osbrook** ("Variable Index [1] out of range [0]", in

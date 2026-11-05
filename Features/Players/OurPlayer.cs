@@ -14,16 +14,17 @@ internal static class OurPlayer
     private static long _stateFrame = -1;
     private static PlayerState? _state;
     private static long _frame;
-    // The animation row and shadow shift, read from the game's arrays only when the sprite drawn changes (or every
-    // ArraysEvery frames), and kept: handing a game array back in is what failed - a reference StoneForge no longer held,
-    // which (before StoneForge 0.9.6) raised an error inside the call and left the game's error handling broken, so the
-    // next array access anywhere crashed it: the second player out of the inn, every time. Kept as last read if a read
-    // fails.
-    private const int ArraysEvery = 60;
-    private static double _arraysSprite = double.NaN;
-    private static long _arraysFrame = long.MinValue;
+    // The animation row: which of the player's five sprites (global.playerSpriteArray) is drawn, found among their
+    // numbers as last read - the array itself is read again only when the sprite drawn isn't one of them (the game made
+    // the sprites again: new gear). Handing a game array back in is what fails: read whenever the sprite changed - every
+    // blink - a read raised "array_get :: Index [1] out of range [0]" inside the call, which left the game's error
+    // handling broken, and its camera's next array access crashed it, entering or leaving a town or an inn (#56, #66,
+    // #67). (Before StoneForge 0.9.6, a reference it no longer held did the same: the second player out of the inn.)
+    private static double[] _sprites = Array.Empty<double>();
     private static int _row;
-    private static double _shiftX, _shiftY;
+    // (A sprite that isn't one of the five - asleep, say - doesn't have the array read every frame: once a second.)
+    private const int ReadEvery = 60;
+    private static long _spritesFrame = long.MinValue;
 
     /// <summary>A new frame (the mod's Tick): what we worked out last frame is old now.</summary>
     public static void NewFrame() => _frame++;
@@ -56,14 +57,18 @@ internal static class OurPlayer
 
         double V(string name) => player.Get(name).AsReal;
         double sprite = V("sprite_index");
-        if (sprite != _arraysSprite || _frame - _arraysFrame >= ArraysEvery)
+        int found = Array.IndexOf(_sprites, sprite);
+        if (found < 0 && _frame - _spritesFrame >= ReadEvery)
         {
-            _arraysSprite = sprite;
-            _arraysFrame = _frame;
-            ReadArrays(player, sprite);
+            _spritesFrame = _frame;
+            ReadSprites();
+            found = Array.IndexOf(_sprites, sprite);
         }
+        if (found >= 0)
+            _row = found;
         int row = _row;
-        double shiftX = _shiftX, shiftY = _shiftY;
+        // (The player's shadow is never shifted: shadow_spr_shift is o_unit's [0, 0], and no character changes it.)
+        const double shiftX = 0, shiftY = 0;
         double shadowAlpha = 0;
         if (V("isGround") == 1 && !player.Get("hasFootwave").AsBool && !player.Get("is_sleeping").AsBool
             && (player.Get("is_life").AsBool || V("image_speed") == 0))
@@ -78,29 +83,18 @@ internal static class OurPlayer
             (float)V("HP"), (float)V("max_hp"), (float)V("MP"), (float)V("max_mp"));
     }
 
-    // Which of the 5 animation rows the sprite is (global.playerSpriteArray), and its shadow's shift (shadow_spr_shift) -
-    // every read within the array's length: one past its end is an error in the game. A read that fails keeps the last.
-    private static void ReadArrays(Instance player, double sprite)
+    // The player's five sprites' numbers (global.playerSpriteArray), each read within the array's length: one past its
+    // end is an error in the game. A read that fails keeps the last.
+    private static void ReadSprites()
     {
         try
         {
-            using (GmArray? rows = Game.Global["playerSpriteArray"].AsArray)
-            {
-                int length = rows == null ? 0 : Math.Min(rows.Length, 5), row = 0;
-                for (int i = 0; i < length; i++)
-                    if (rows![i].AsReal == sprite)
-                    {
-                        row = i;
-                        break;
-                    }
-                _row = row;
-            }
-            using (GmArray? shift = player.Get("shadow_spr_shift").AsArray)
-                if (shift != null && shift.Length >= 2)
-                {
-                    _shiftX = shift[0].AsReal;
-                    _shiftY = shift[1].AsReal;
-                }
+            using GmArray? sprites = Game.Global["playerSpriteArray"].AsArray;
+            int length = sprites == null ? 0 : Math.Min(sprites.Length, 5);
+            var read = new double[length];
+            for (int i = 0; i < length; i++)
+                read[i] = sprites![i].AsReal;
+            _sprites = read;
         }
         catch (GameCallException) { }
     }
