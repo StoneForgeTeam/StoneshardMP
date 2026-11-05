@@ -5,6 +5,10 @@ releases them: the release workflow titles that section with the version, sets i
 
 ## Unreleased
 
+- **Lutes are heard by everyone there** (#65): each note a player plays is played in the others' games from their
+  character, with the floating music notes over them, and the music fades out while they play, back 10 seconds after
+  their last note - as the MSL version did. A new message: protocol 45, so every player needs this version.
+
 - **Fixed: a crash entering or leaving a town or an inn** ("array_set :: variable Index [1] out of range [0]", in
   `o_cameraController`, #56, #66, #67). Each time the player's sprite changed - every blink - the mod read the game's
   array of the player's sprites, and one of those reads failed inside the game; its camera crashed on its next array.

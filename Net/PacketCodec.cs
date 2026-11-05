@@ -17,6 +17,7 @@ using StoneshardMP.Features.Dev;
 using StoneshardMP.Features.Doors;
 using StoneshardMP.Features.Effects;
 using StoneshardMP.Features.Gathering;
+using StoneshardMP.Features.Music;
 using StoneshardMP.Features.GroundEffects;
 using StoneshardMP.Features.Join;
 using StoneshardMP.Features.Loot;
@@ -123,6 +124,7 @@ public static class PacketCodec
             SituationsPacket.PacketId => SituationsPacket.Read(ref reader),
             EntranceUnlockedPacket.PacketId => EntranceUnlockedPacket.Read(ref reader),
             CartTravelPacket.PacketId => CartTravelPacket.Read(ref reader),
+            LuteNotePacket.PacketId => LuteNotePacket.Read(ref reader),
             _ => throw new InvalidDataException("Unknown packet ID")
         };
         if (reader.Position != reader.Length) throw new InvalidDataException("Trailing packet data");

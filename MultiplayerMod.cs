@@ -21,6 +21,7 @@ using StoneshardMP.Features.Death;
 using StoneshardMP.Features.Recipes;
 using StoneshardMP.Features.Summons;
 using StoneshardMP.Features.Caravan;
+using StoneshardMP.Features.Music;
 using StoneshardMP.Features.Trade;
 using StoneshardMP.Features.Gathering;
 using StoneshardMP.Features.Effects;
@@ -60,6 +61,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
     private RecipeSync _recipes = null!;
     private SummonSync _summons = null!;
     private CaravanSync _caravan = null!;
+    private LuteSync _lute = null!;
     private MerchantSync _merchants = null!;
     private TurnRounds _rounds = null!;
     private TurnTime _turnTime = null!;
@@ -128,6 +130,8 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
         _caravan = new CaravanSync(context, _session, () => _join.InSharedWorld);
         // Verren's cart: the players where it leaves ride along.
         new CartTravel(context, _session, () => _join.InSharedWorld);
+        // The lute: each note played is heard from the player's character in the others' games.
+        _lute = new LuteSync(context, _session, _players, () => _join.InSharedWorld);
         // One stock per trader: a trade's end sends the trader's goods, gold and sold-out uniques to everyone.
         _merchants = new MerchantSync(context, _session, () => _join.InSharedWorld);
         _turnTime = new TurnTime(context, _session, () => _join.InSharedWorld, () => _rounds.Active);
@@ -300,6 +304,7 @@ public sealed class MultiplayerMod : IStoneMod, ITickable
             Profiler.Measure(_context, "recipes", _recipes.Tick);
             Profiler.Measure(_context, "summons", _summons.Tick);
             Profiler.Measure(_context, "caravan", _caravan.Tick);
+            Profiler.Measure(_context, "lute", _lute.Tick);
             Profiler.Measure(_context, "chests", _chests.Tick);
             Profiler.Measure(_context, "breakables", _breakables.Tick);
             Profiler.Measure(_context, "stash", _stash.Tick);
