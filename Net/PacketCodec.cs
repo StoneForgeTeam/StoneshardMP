@@ -36,7 +36,9 @@ namespace StoneshardMP.Net;
 
 public static class PacketCodec
 {
-    public const int MaxBytes = 1024 * 1024;
+    // (LiteNetLib splits what's bigger than a datagram itself, into at most 65535 pieces of about 1 KB. A long game's
+    // save, compressed, outgrew the 1 MB this was: the host couldn't send it, and players were left waiting (#68).)
+    public const int MaxBytes = 32 * 1024 * 1024;
     public static byte[] Encode(IPacket packet, int from = 0, int to = Session.Everyone)
     {
         var writer = new SpanReadWrite();

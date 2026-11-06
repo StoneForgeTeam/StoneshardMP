@@ -5,7 +5,7 @@ using StoneshardMP.Memory;
 
 namespace StoneshardMP.Net.Packets;
 
-// Saves and characters travel as gzipped UTF-8 JSON - a save's few hundred KB of JSON is tens of KB - under
+// Saves and characters travel as gzipped UTF-8 JSON - a long game's save can be over a megabyte even so - under
 // PacketCodec.MaxBytes, LiteNetLib fragmenting it.
 public static class JoinCompression
 {

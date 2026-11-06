@@ -394,6 +394,7 @@ public sealed class JoinManager
                 continue;
             }
             byte[] data = JoinCompression.Compress(save);
+            _context.Log($"Sending {request.Name} the world: {save.Length / 1024} KB, {data.Length / 1024} KB compressed");
             _session.Send(new JoinReplyPacket(JoinReply.WorldFollows, SharedWorld.WorldSeed(), (byte)worldSlot), to: slot);
             _session.Send(new JoinWorldPacket(data), to: slot);
             // (Their checkpoint - what they come back as if they die: the character they join with, till we save.)
