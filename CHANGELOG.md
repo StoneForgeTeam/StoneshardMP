@@ -3,6 +3,13 @@
 Changes go under **## Unreleased** as they're made. Pushing a version tag (`git tag v0.2.0`, `git push origin v0.2.0`)
 releases them: the release workflow titles that section with the version, sets it in mod.json and publishes the zip.
 
+## Unreleased
+
+- **Fixed: a player listening in on someone else's conversation couldn't leave it** - neither Esc nor [Stop listening]
+  closed the listener's window, only the talker ending their conversation did. Esc is now read by the mod itself (the
+  game's own Esc on a dialogue goes through `scr_dialogue_advance`, which the listener's window doesn't take), and
+  [Stop listening] is also found by its label. Starting and stopping listening is now logged ("Talk: ...").
+
 ## 0.6.0
 
 - **Fixed: the game could still stop at a trader's stall** ("Variable Index [1] out of range [0]", in

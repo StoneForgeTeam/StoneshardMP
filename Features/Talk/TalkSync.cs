@@ -34,7 +34,7 @@ public sealed class TalkSync
 {
     private const int Interval = 3;
     private const long ResendMs = 3000, TieMs = 500;
-    private const string StopKey = "mp_listen_stop", AnswerKey = "mp_listen_";
+    private const string StopKey = "mp_listen_stop", AnswerKey = "mp_listen_", StopLabel = "[Stop listening]";
 
     private readonly ModContext _context;
     private readonly Session _session;
@@ -179,6 +179,7 @@ public sealed class TalkSync
         _listenSlot = slot;
         _built = "";
         _settle = 0;
+        _context.Log($"Talk: listening to {who} and {npcName}");
         Message($"Listening to {who} and {npcName} (Esc to stop).");
         Fill();
     }
@@ -194,6 +195,7 @@ public sealed class TalkSync
     private void CloseListening(string message)
     {
         Instance panel = _panel;
+        _context.Log("Talk: stopped listening" + (message.Length > 0 ? $" ({message})" : ""));
         StopListening();
         if (panel.Exists)
         {
@@ -210,7 +212,8 @@ public sealed class TalkSync
     {
         if (!_panel.Exists || !Instance.Of(button.Get("parent")).Persist().Equals(_panel))
             return false;
-        if (button.Get("func").AsString == StopKey)
+        // (By its func, or by its label: the button's func isn't always kept as given.)
+        if (button.Get("func").AsString == StopKey || button.Get("name").AsString == StopLabel)
             CloseListening("");
         return true;
     }
@@ -244,7 +247,7 @@ public sealed class TalkSync
             if (answer.Exists)
                 answer.Set("canPress", false);
         }
-        Game.CallScript("scr_create_contract_button", _panel, "[Stop listening]", StopKey);
+        Game.CallScript("scr_create_contract_button", _panel, StopLabel, StopKey);
         if (render.Exists)
         {
             render.Set("surfaceDraw", _panel.Get("is_activate"));
@@ -268,6 +271,13 @@ public sealed class TalkSync
                 _remote.Clear();
             if (_listenSlot >= 0)
                 CloseListening("");
+            return;
+        }
+        // Esc leaves a listener's window. Checked every frame (a key press lasts one) and by us: the game's own Esc on a
+        // dialogue goes through scr_dialogue_advance, which the listener's window doesn't take, so it never closed.
+        if (_listenSlot >= 0 && Keyboard.Pressed(Keyboard.Escape))
+        {
+            CloseListening("");
             return;
         }
         if (++_frame % Interval != 0)
